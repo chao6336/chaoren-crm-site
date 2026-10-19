@@ -11,10 +11,61 @@ export function canBrowseMembers(role) {
 }
 export const GENDERS = ["男", "女", "其他"];
 
+// ───── 手機：資料庫一律存國際格式（E.164，例如 +886912345678），畫面上台灣號碼顯示成 0912-345-678 ─────
+// 下拉選單的國碼；「其他」讓使用者自己輸入 + 開頭的完整號碼。
+export const COUNTRY_CODES = [
+  ["886", "台灣 +886"], ["852", "香港 +852"], ["853", "澳門 +853"], ["86", "中國 +86"], ["65", "新加坡 +65"],
+  ["60", "馬來西亞 +60"], ["81", "日本 +81"], ["1", "美國／加拿大 +1"], ["61", "澳洲 +61"]
+];
+const KNOWN_CODES = COUNTRY_CODES.map(([code]) => code).sort((a, b) => b.length - a.length);
+
+export function isValidPhone(value) {
+  return /^\+[1-9]\d{7,14}$/.test(String(value ?? ""));
+}
+
+// 接受：0912-345-678、912345678（Excel 吃掉 0）、+886 912 345 678、886912345678、+60 12-345 6789
+// countryCode：表單選的國碼（不含 +）；號碼若已帶 +、00 或 886 開頭則以號碼為準。回傳 E.164 或 null。
+export function normalizePhone(value, countryCode = "886") {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const hasPlus = raw.startsWith("+") || raw.startsWith("00");
+  let digits = raw.replace(/\D/g, "");
+  if (raw.startsWith("00")) digits = digits.slice(2);
+  let e164;
+  if (hasPlus) e164 = "+" + digits;
+  else if (/^886\d{9}$/.test(digits)) e164 = "+" + digits;
+  else if (String(countryCode) === "886") {
+    if (/^9\d{8}$/.test(digits)) digits = "0" + digits;
+    e164 = /^09\d{8}$/.test(digits) ? "+886" + digits.slice(1) : null;
+  } else e164 = "+" + countryCode + digits.replace(/^0+/, "");
+  if (!e164 || !isValidPhone(e164)) return null;
+  if (e164.startsWith("+886") && !/^\+8869\d{8}$/.test(e164)) return null; // 台灣只收手機
+  return e164;
+}
+
+export function splitPhone(e164 = "") {
+  if (!e164 || !e164.startsWith("+")) return { code: "886", local: e164 || "" };
+  const code = KNOWN_CODES.find(c => e164.startsWith("+" + c)) || "";
+  const rest = e164.slice(1 + code.length);
+  return code ? { code, local: code === "886" ? "0" + rest : rest } : { code: "other", local: e164 };
+}
+
+export function displayPhone(e164 = "") {
+  if (!e164) return "";
+  if (!String(e164).startsWith("+")) return e164; // 尚未轉換的舊格式照原樣顯示
+  if (/^\+8869\d{8}$/.test(e164)) { const d = "0" + e164.slice(4); return `${d.slice(0, 4)}-${d.slice(4, 7)}-${d.slice(7)}`; }
+  const { code, local } = splitPhone(e164);
+  return code && code !== "other" ? `+${code} ${local}` : e164;
+}
+
 export function maskPhone(value = "") {
-  const digits = value.replace(/\D/g, "");
-  if (digits.length < 6) return value ? "***" : "";
-  return `${digits.slice(0, 4)}***${digits.slice(-3)}`;
+  if (!value) return "";
+  if (String(value).includes("*")) return value; // 雲端已遮罩過
+  const shown = displayPhone(value);
+  const digits = shown.replace(/\D/g, "");
+  if (digits.length < 6) return "***";
+  const prefix = shown.startsWith("+") ? (shown.includes(" ") ? shown.split(" ")[0] : shown.slice(0, 3)) + " " : digits.slice(0, 4);
+  return `${prefix}***${digits.slice(-3)}`;
 }
 
 export function maskEmail(value = "") {
@@ -56,7 +107,7 @@ export function visibleContact(contact, role) {
   const { national_id, ...rest } = contact;
   const safe = { ...rest, national_id_masked: contact.national_id_masked || maskNationalId(national_id) };
   if (canViewPrivate(role)) return safe;
-  return { ...safe, phone: maskPhone(contact.phone), email: maskEmail(contact.email), address: maskAddress(contact.address) };
+  return { ...safe, phone: maskPhone(contact.phone), email: maskEmail(contact.email), address: maskAddress(contact.address), line_uid_hidden: true };
 }
 
 // 區負責人只看得到自己區的會員；沒有區域的會員只有總管理看得到。
@@ -75,7 +126,7 @@ export function rosterFor(registrations, contacts, viewer, regionName = () => ""
   const list = canManageEvents(viewer.role) ? registrations : scopeRegistrations(registrations, contacts, viewer);
   return list.map(r => {
     const c = byId.get(r.contact_id) || {};
-    return { ...r, name: c.name || "未知", region_id: c.region_id || null, region_name: c.region_id ? regionName(c.region_id) : "未分區", phone_last3: String(c.phone || "").slice(-3) };
+    return { ...r, member_no: c.member_no || "", name: c.name || "未知", region_id: c.region_id || null, region_name: c.region_id ? regionName(c.region_id) : "未分區", phone_last3: String(c.phone || "").slice(-3) };
   });
 }
 
@@ -146,14 +197,6 @@ export function findLegacyContact(contacts, { name, phone }) {
 export const ATTENDANCE_LABELS = { attended: "已參加", registered: "已報名", cancelled: "已取消", absent: "未出席" };
 
 // ───── Excel／CSV 匯入 ─────
-export function normalizePhone(value) {
-  let digits = String(value ?? "").replace(/[^\d+]/g, "");
-  if (digits.startsWith("+886")) digits = "0" + digits.slice(4);
-  else if (digits.startsWith("886") && digits.length === 12) digits = "0" + digits.slice(3);
-  digits = digits.replace(/\D/g, "");
-  if (/^9\d{8}$/.test(digits)) digits = "0" + digits; // Excel 把開頭的 0 吃掉
-  return /^09\d{8}$/.test(digits) ? digits : null;
-}
 
 // 接受：1962-03-18、1962/3/18、民國 51/03/18、510318、19620318、Excel 日期序號。回傳 YYYY-MM-DD 或 null。
 export function parseBirthDate(value) {
@@ -227,7 +270,19 @@ export function splitTags(value) {
   return [...new Set(tags)].slice(0, 300);
 }
 
-// 把一列原始資料整理成會員欄位，並標出狀態：new／duplicate／error。
+// 已存在的會員：只補空白欄位、加新標籤，不覆蓋既有資料。回傳要補的欄位與標籤；都沒有就是 null。
+export function fillPlan(existing, row) {
+  const fields = ["phone", "gender", "birth_date", "region_id", "address", "email"].filter(k => !existing[k] && row[k]);
+  if (row.national_id && !existing.national_id && !existing.national_id_masked) fields.push("national_id");
+  if (row.line_user_id && !existing.line_user_id) fields.push("line_user_id");
+  const have = new Set(existing.tags || []);
+  const tags = (row.tags || []).filter(t => !have.has(t));
+  return fields.length || tags.length ? { fields, tags } : null;
+}
+
+const FIELD_LABELS = { phone: "手機", gender: "性別", birth_date: "生日", region_id: "區域", address: "地址", email: "Email", national_id: "身分證", line_user_id: "LINE ID" };
+
+// 把一列原始資料整理成會員欄位，並標出狀態：new／update（補資料）／duplicate／error。
 export function prepareImportRow(raw, map, { regions = [], existing = [], seen = new Set() } = {}) {
   const cell = key => (map[key] === undefined || map[key] === "" ? "" : String(raw[map[key]] ?? "").trim());
   const errors = [], warnings = [];
@@ -252,8 +307,14 @@ export function prepareImportRow(raw, map, { regions = [], existing = [], seen =
   if (status === "new") {
     const key = `${name}|${phone || ""}`;
     if (seen.has(key) || (line_user_id && seen.has(line_user_id))) { status = "duplicate"; warnings.push("檔案內重複"); }
-    else if (line_user_id && existing.some(c => c.line_user_id === line_user_id)) { status = "duplicate"; warnings.push("系統已有此 LINE 帳號"); }
-    else if (existing.some(c => c.name?.replace(/\s/g, "") === name && (c.phone || null) === phone)) { status = "duplicate"; warnings.push("系統已有此人（姓名＋手機相同）"); }
+    else {
+      const match = (line_user_id && existing.find(c => c.line_user_id === line_user_id)) || existing.find(c => c.name?.replace(/\s/g, "") === name && (c.phone || null) === phone);
+      if (match) {
+        const plan = fillPlan(match, row);
+        if (plan) { status = "update"; row.existing_id = match.id; warnings.push(`系統已有此人，補上：${[...plan.fields.map(f => FIELD_LABELS[f]), ...(plan.tags.length ? [`${plan.tags.length} 個標籤`] : [])].join("、")}`); }
+        else { status = "duplicate"; warnings.push("系統已有此人，資料沒有需要補的"); }
+      }
+    }
     seen.add(key); if (line_user_id) seen.add(line_user_id);
   }
   return { row, status, errors, warnings };
