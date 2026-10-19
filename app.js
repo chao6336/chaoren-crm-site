@@ -2,7 +2,8 @@ import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toC
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
-const supabase = live ? window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey) : null;
+const supabase = live ? window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, { auth: { flowType: "implicit", detectSessionInUrl: true } }) : null;
+const SITE_BASE = (config.siteUrl || location.origin).replace(/\/$/, "");
 const liffReady = live && config.liffId ? window.liff.init({ liffId: config.liffId }) : Promise.resolve();
 const $ = selector => document.querySelector(selector);
 // 雲端模式但 LIFF 尚未設定時，學員端的 LINE 功能先顯示說明，不要直接出錯。
@@ -87,7 +88,8 @@ function pageHead(title,subtitle,actions=""){ return `<section class="page-head"
 
 async function boot(){
   $("#modeBadge").textContent=live?"已連雲端":"展示模式";
-  if(live && route()==="register") await loadPublicEvent();
+  if(live && await handleAuthLink()) { /* 已切到設定密碼頁或顯示錯誤 */ }
+  else if(live && route()==="register") await loadPublicEvent();
   else if(live && STUDENT_ROUTES.includes(route())) state.role="public";
   else if(live) await loadLiveData();
   else {
@@ -100,6 +102,19 @@ async function boot(){
   document.addEventListener("click",onClick);
   document.addEventListener("submit",onSubmit);
   render();
+}
+
+// 邀請／重設密碼連結：Supabase 會把使用者帶回 ?flow=set-password，並在網址 # 後面附上登入憑證或錯誤。
+async function handleAuthLink(){
+  const search=new URLSearchParams(location.search); const hash=new URLSearchParams(location.hash.slice(1));
+  const linkError=hash.get("error_description")||search.get("error_description");
+  if(search.get("flow")!=="set-password"&&!linkError) return false;
+  history.replaceState(null,"",location.pathname+"#set-password");
+  if(linkError){ state.authNotice="這個連結已失效或已經使用過，請總管理重新產生一次。"; return true; }
+  const {data:{session}}=await supabase.auth.getSession();
+  if(!session) state.authNotice="這個連結已失效或已經使用過，請總管理重新產生一次。";
+  else { state.authEmail=session.user.email; state.role="setting-password"; }
+  return true;
 }
 
 async function loadPublicEvent(){
@@ -133,14 +148,15 @@ function render(){
   const name=route();
   if(state.role!=="public"&&((ADMIN_ONLY_ROUTES.includes(name)&&!isAdmin())||(name==="contacts"&&!canBrowseMembers(state.role)))){ location.hash="dashboard"; return; }
   // 雲端模式未登入（或帳號未開通）：只能看登入頁與學員頁，後台選單整個藏起來。
-  const signedOut=live&&state.role==="none";
-  if(signedOut&&!["login","register",...STUDENT_ROUTES].includes(name)){ location.hash="login"; return; }
+  const signedOut=live&&["none","setting-password"].includes(state.role);
+  if(signedOut&&!["login","register","set-password",...STUDENT_ROUTES].includes(name)){ location.hash="login"; return; }
   document.body.classList.toggle("signed-out",signedOut);
   document.body.classList.toggle("student-view",STUDENT_ROUTES.includes(name));
   document.querySelectorAll(".sidebar a").forEach(a=>{ a.classList.toggle("active",a.dataset.route===name); if(!a.hasAttribute("data-demo-only"))a.hidden=(ADMIN_ONLY_ROUTES.includes(a.dataset.route)&&!isAdmin())||(a.dataset.route==="contacts"&&!canBrowseMembers(state.role)); });
-  const views={dashboard,events,contacts,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors};
+  const views={dashboard,events,contacts,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors,"set-password":setPassword};
   $("#app").innerHTML=(views[name]||dashboard)();
   if(name==="me")loadMe();
+  if(name==="users")loadStaffList();
   if(name==="scan")runScan();
   if(name==="register"&&window.qrcode&&$("#qr")){ const code=window.qrcode(0,"M");code.addData(location.href);code.make();$("#qr").innerHTML=code.createSvgTag(4,0); }
   $("#app").focus();
@@ -262,7 +278,7 @@ function governance(){
 
 function users(){
   if(!isAdmin())return `${pageHead("使用者","只有總管理可以管理帳號。")}<div class="notice">你沒有使用者管理權限。</div>`;
-  return `${pageHead("使用者管理","總管理看得到全部資料；活動幹部負責活動、報名與報到（只看報名名單）；區負責人只看得到指定區域的會員與報到。",`<button data-action="invite-user">＋ 邀請使用者</button>`)}<div class="table-wrap"><table><thead><tr><th>姓名</th><th>帳號</th><th>權限</th><th>負責區域</th><th>狀態</th></tr></thead><tbody>${(state.staff||[]).map(s=>`<tr><td>${escapeHtml(s.display_name)}</td><td>${escapeHtml(s.email||s.user_id||"")}</td><td>${ROLE_LABELS[s.role]||s.role}</td><td>${s.role==="region_lead"?escapeHtml(regionName(s.region_id)):s.role==="event_staff"?"全部（報名名單）":"全部"}</td><td>${s.active?"已開通":"待開通"}</td></tr>`).join("")}</tbody></table></div>`;
+  return `${pageHead("使用者管理","總管理看得到全部資料；活動幹部負責活動、報名與報到（只看報名名單）；區負責人只看得到指定區域的會員與報到。",`<button data-action="invite-user">＋ 邀請工作人員</button>`)}<div id="staffArea"><div class="empty">載入中…</div></div>`;
 }
 
 function register(){
@@ -403,6 +419,70 @@ async function showCheckinQr(eventId,{renew=false}={}){
     <div class="notice">可報到時間：${fmtDate(opensAt.toISOString())} ～ ${fmtDate(closesAt.toISOString())}。請把這張 QR Code 傳給各區負責人，或印出來貼在報到桌；學員掃碼後會自動歸到自己的區域。</div>
     <div class="actions"><button class="secondary" data-action="download-qr" data-event="${eventId}">下載圖檔</button><button class="danger" data-action="renew-qr" data-event="${eventId}">重新產生（舊的立即失效）</button></div>
     ${live?"":`<p class="muted">展示用：<a href="${escapeHtml(url)}" data-action="close-modal">直接開啟掃碼後的頁面</a></p>`}`);
+}
+
+// ───── 設定／重設密碼（邀請連結、重設連結共用）─────
+function setPassword(){
+  if(state.authNotice) return `<article class="card result-card fail" style="max-width:520px;margin:30px auto"><div class="result-icon" aria-hidden="true">!</div><h1>無法設定密碼</h1><p>${escapeHtml(state.authNotice)}</p><a class="button" href="#login">回到登入頁</a></article>`;
+  if(!live||state.role!=="setting-password") return `<article class="card" style="max-width:520px;margin:30px auto"><p>請從總管理傳給你的邀請或重設連結進入此頁。</p><a class="button" href="#login">回到登入頁</a></article>`;
+  return `${pageHead("設定登入密碼",`帳號：${escapeHtml(state.authEmail||"")}`)}<article class="card" style="max-width:460px;margin:auto"><form id="setPasswordForm">
+    <div class="field"><label>新密碼（至少 8 個字）</label><input type="password" name="password" minlength="8" required autocomplete="new-password"></div>
+    <div class="field" style="margin-top:12px"><label>再輸入一次</label><input type="password" name="confirm" minlength="8" required autocomplete="new-password"></div>
+    <button style="margin-top:16px;width:100%">儲存並登入</button></form></article>`;
+}
+async function savePassword(data){
+  if(data.password!==data.confirm) return toast("兩次輸入的密碼不一樣");
+  if(data.password.length<8) return toast("密碼至少 8 個字");
+  const {error}=await supabase.auth.updateUser({password:data.password});
+  if(error) return toast(/same|different/i.test(error.message)?"新密碼不能和舊密碼相同":"設定失敗："+error.message);
+  state.role="none"; await loadLiveData();
+  if(state.role==="none"){ await supabase.auth.signOut(); location.hash="login"; return toast("密碼已設定，但帳號尚未開通，請洽總管理"); }
+  location.hash="dashboard"; toast("密碼已設定，歡迎使用");
+}
+function forgotPassword(){
+  modal(`<h2>忘記密碼</h2><p class="muted">輸入登入用的 Email。若系統寄得到你的信箱，會收到重設密碼信；<strong>沒收到的話，請總管理在「使用者」頁幫你產生重設連結</strong>。</p><form id="forgotForm"><div class="field"><label>Email</label><input type="email" name="email" required></div><button style="margin-top:12px">寄出重設信</button></form>`);
+}
+async function sendResetEmail(data){
+  if(!live){ closeModal(); return toast("展示模式不會寄信"); }
+  await supabase.auth.resetPasswordForEmail(data.email.trim(),{redirectTo:`${SITE_BASE}/?flow=set-password`});
+  closeModal(); toast("如果這個 Email 有帳號，重設信已寄出；沒收到請找總管理");
+}
+
+// ───── 工作人員管理（只有總管理）：邀請與重設都產生連結，由總管理用 LINE 傳給對方 ─────
+async function callStaff(action,payload={}){
+  if(!live) return demoStaff(action,payload);
+  const {data,error}=await supabase.functions.invoke("manage-staff",{body:{action,...payload}});
+  if(error){ let message="暫時無法完成"; try{ message=(await error.context.json()).error||message; }catch{} return {error:message}; }
+  return data;
+}
+function demoStaff(action,payload){
+  const fakeLink=`${SITE_BASE}/?flow=set-password#展示用連結`;
+  if(action==="list") return {staff:state.staff.map(s=>({...s,user_id:s.id,invited_pending:false}))};
+  if(action==="invite"){ if(payload.role==="region_lead"&&!payload.region_id) return {error:"區負責人必須指定區域"}; const id=crypto.randomUUID(); state.staff.push({id,display_name:payload.display_name,email:payload.email,role:payload.role,region_id:payload.role==="region_lead"?payload.region_id:null,active:true}); persist(); return {ok:true,link:fakeLink,email:payload.email}; }
+  if(action==="reset") return {ok:true,link:fakeLink,email:state.staff.find(s=>s.id===payload.user_id)?.email};
+  if(action==="update"){ const s=state.staff.find(x=>x.id===payload.user_id); if(s.id===state.as&&(payload.active===false||(payload.role&&payload.role!=="admin"))) return {error:"不能停用或降級自己的帳號，避免沒有總管理"}; Object.assign(s,{...(payload.role?{role:payload.role,region_id:payload.role==="region_lead"?payload.region_id:null}:{}),...(typeof payload.active==="boolean"?{active:payload.active}:{})}); persist(); return {ok:true}; }
+}
+async function loadStaffList(){
+  if(!isAdmin()) return;
+  const area=$("#staffArea"); if(!area) return;
+  const res=await callStaff("list"); if(!$("#staffArea")) return;
+  if(res.error){ $("#staffArea").innerHTML=`<div class="notice">${escapeHtml(res.error)}</div>`; return; }
+  state.staffList=res.staff;
+  const status=s=>!s.active?"<span class='pill off'>已停用</span>":s.invited_pending?"<span class='pill warn'>等待設定密碼</span>":"<span class='pill'>使用中</span>";
+  $("#staffArea").innerHTML=`<div class="table-wrap"><table><thead><tr><th>姓名</th><th>Email</th><th>權限</th><th>負責區域</th><th>狀態</th><th></th></tr></thead><tbody>${res.staff.map(s=>`<tr><td>${escapeHtml(s.display_name)}</td><td>${escapeHtml(s.email||"")}</td><td>${ROLE_LABELS[s.role]||s.role}</td><td>${s.role==="region_lead"?escapeHtml(regionName(s.region_id)):s.role==="event_staff"?"全部（報名名單）":"全部"}</td><td>${status(s)}</td><td class="row-actions"><button class="secondary" data-action="staff-edit" data-id="${s.user_id}">修改</button><button class="secondary" data-action="staff-reset" data-id="${s.user_id}">${s.invited_pending?"重新產生邀請":"重設密碼連結"}</button></td></tr>`).join("")}</tbody></table></div>`;
+}
+function showLinkModal(title,email,link){
+  modal(`<h2>${title}</h2><p>請把下面這條連結<strong>用 LINE 私訊傳給 ${escapeHtml(email||"對方")}</strong>。對方點開後自己設定密碼就能登入。</p>
+    <div class="link-box"><input id="linkText" readonly value="${escapeHtml(link)}"><button data-action="copy-link">複製</button></div>
+    <div class="notice">這條連結等同一次性的登入鑰匙：只傳給本人、不要貼在群組；用過一次或超過約 24 小時就會失效，失效後再產生一次即可。</div>`);
+}
+async function staffEditForm(userId){
+  const s=(state.staffList||[]).find(x=>x.user_id===userId); if(!s) return;
+  modal(`<h2>修改：${escapeHtml(s.display_name)}</h2><form id="staffEditForm"><input type="hidden" name="user_id" value="${s.user_id}"><div class="form-grid">
+    <div class="field"><label>權限</label><select name="role">${Object.entries(ROLE_LABELS).map(([k,v])=>`<option value="${k}" ${s.role===k?"selected":""}>${v}</option>`).join("")}</select></div>
+    <div class="field"><label>負責區域（區負責人必填）</label><select name="region_id">${regionOptions(s.region_id)}</select></div>
+    <label class="field full"><span><input type="checkbox" name="active" ${s.active?"checked":""}> 帳號啟用中（取消勾選＝停用，對方將無法登入後台）</span></label>
+    <button class="field full">儲存</button></div></form>`);
 }
 
 // ───── 活動建立與編輯（總管理、活動幹部）─────
@@ -573,8 +653,9 @@ function exportSponsors(){
   download("贊助紀錄.csv",rowsToCsv(rows,[["會員","member"],["項目","item"],["金額","amount"],["狀態","status"],["收款日期","paid_at"],["備註","note"]]),"text/csv;charset=utf-8");
 }
 
-function login(){ return `${pageHead("工作人員登入","只有經管理者開通的帳號能查看 CRM。")}
-  <article class="card" style="max-width:460px;margin:auto"><form id="loginForm"><div class="field"><label>Email</label><input type="email" name="email" required></div><div class="field" style="margin-top:12px"><label>密碼</label><input type="password" name="password" required></div><button style="margin-top:16px;width:100%">登入</button></form></article>`; }
+function login(){ return `${pageHead("工作人員登入","只有經總管理開通的帳號能查看 CRM。")}
+  <article class="card" style="max-width:460px;margin:auto"><form id="loginForm"><div class="field"><label>Email</label><input type="email" name="email" required autocomplete="username"></div><div class="field" style="margin-top:12px"><label>密碼</label><input type="password" name="password" required autocomplete="current-password"></div><button style="margin-top:16px;width:100%">登入</button></form>
+  <p style="text-align:center;margin:14px 0 0"><button class="link" data-action="forgot-password">忘記密碼？</button></p></article>`; }
 
 async function onClick(event){
   const btn=event.target.closest("[data-action]");
@@ -583,7 +664,11 @@ async function onClick(event){
   if(action==="close-modal") return closeModal();
   if(action==="logout"){ await supabase?.auth.signOut(); location.hash="login"; return location.reload(); }
   if(action==="edit-event"){ event.preventDefault(); return eventForm(btn.dataset.id); }
-  if(action==="invite-user") return modal(`<h2>邀請使用者</h2><form id="inviteForm"><div class="field"><label>Email</label><input name="email" type="email" required></div><div class="field"><label>顯示名稱</label><input name="display_name" required></div><div class="field"><label>權限</label><select name="role"><option value="region_lead">區負責人</option><option value="event_staff">活動幹部</option><option value="admin">總管理</option></select></div><div class="field"><label>負責區域（區負責人必填）</label><select name="region_id">${regionOptions(null)}</select></div><button>寄出邀請</button></form>`);
+  if(action==="forgot-password") return forgotPassword();
+  if(action==="copy-link"){ const el=$("#linkText"); el.select(); try{ await navigator.clipboard.writeText(el.value); toast("已複製"); }catch{ document.execCommand("copy"); toast("已複製"); } return; }
+  if(action==="staff-edit") return staffEditForm(btn.dataset.id);
+  if(action==="staff-reset"){ const s=(state.staffList||[]).find(x=>x.user_id===btn.dataset.id); const res=s?.invited_pending?await callStaff("invite",{email:s.email,display_name:s.display_name,role:s.role,region_id:s.region_id}):await callStaff("reset",{user_id:btn.dataset.id}); if(res.error&&s?.invited_pending){ const again=await callStaff("reset",{user_id:btn.dataset.id}); if(again.error) return toast(again.error); return showLinkModal("邀請連結（重新產生）",again.email,again.link); } if(res.error) return toast(res.error); return showLinkModal(s?.invited_pending?"邀請連結（重新產生）":"重設密碼連結",res.email,res.link); }
+  if(action==="invite-user") return modal(`<h2>邀請工作人員</h2><p class="muted">建立後會產生一條邀請連結，請用 LINE 傳給對方；對方點開自己設定密碼。</p><form id="inviteForm"><div class="field"><label>Email</label><input name="email" type="email" required></div><div class="field"><label>顯示名稱</label><input name="display_name" required></div><div class="field"><label>權限</label><select name="role"><option value="region_lead">區負責人</option><option value="event_staff">活動幹部</option><option value="admin">總管理</option></select></div><div class="field"><label>負責區域（區負責人必填）</label><select name="region_id">${regionOptions(null)}</select></div><button style="margin-top:12px">建立並產生邀請連結</button></form>`);
   if(action==="view-contact") return viewContact(btn.dataset.id);
   if(action==="import-template") return download("會員名冊範本.csv",IMPORT_FIELDS.map(([,label])=>label).join(",")+"\r\n王小美,0912345678,女,51/03/18,北區,台北市大安區和平東路一段 1 號,may@example.com,,清明法會志工","text/csv;charset=utf-8");
   if(action==="import-run") return runImport();
@@ -628,7 +713,7 @@ document.addEventListener("change",event=>{
 });
 
 async function onSubmit(event){
-  if(!["eventForm","campaignForm","registrationForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","batchSponsorForm"].includes(event.target.id))return;
+  if(!["eventForm","campaignForm","registrationForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm"].includes(event.target.id))return;
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target));
   if(event.target.id==="contactForm") return saveContact(data);
   if(event.target.id==="signupForm") return submitSignup(data);
@@ -648,13 +733,14 @@ async function onSubmit(event){
     location.hash="dashboard";
   }
   if(event.target.id==="anonymizeForm") return executeAnonymize(data.confirmText);
+  if(event.target.id==="setPasswordForm") return savePassword(data);
+  if(event.target.id==="forgotForm") return sendResetEmail(data);
+  if(event.target.id==="staffEditForm"){ const res=await callStaff("update",{user_id:data.user_id,role:data.role,region_id:data.region_id||null,active:data.active==="on"}); if(res.error) return toast(res.error); closeModal(); audit("修改工作人員",data.user_id); persist(); render(); return toast("已更新"); }
   if(event.target.id==="inviteForm"){
-    if(live){const {error}=await supabase.functions.invoke("manage-staff",{body:data});if(error)return toast(error.message);await loadLiveData();}
-    else {
-      if(data.role==="region_lead"&&!data.region_id)return toast("區負責人必須指定區域");
-      state.staff.push({id:crypto.randomUUID(),...data,region_id:data.role==="region_lead"?data.region_id:null,active:true});
-    }
-    persist();closeModal();render();toast("邀請已建立");
+    if(data.role==="region_lead"&&!data.region_id) return toast("區負責人必須指定區域");
+    const res=await callStaff("invite",{...data,region_id:data.role==="region_lead"?data.region_id:null});
+    if(res.error) return toast(res.error);
+    audit("邀請工作人員",data.email); persist(); render(); showLinkModal("邀請連結",res.email,res.link);
   }
 }
 

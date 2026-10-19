@@ -25,3 +25,4 @@ body.student-view .field input,body.student-view .field select{font-size:17px;pa
 .tag-box{margin:10px 0}.tag-box summary{cursor:pointer;font-weight:700;color:var(--green);padding:6px 0}.tag-box div{display:flex;flex-wrap:wrap;gap:6px;max-height:240px;overflow:auto;padding:6px 0}
 body.signed-out .sidebar{display:none!important}body.signed-out .shell{display:block}
 #logoutBtn{padding:6px 10px;font-size:13px}
+.link-box{display:flex;gap:8px;margin:12px 0}.link-box input{flex:1;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px}.row-actions{display:flex;gap:6px;flex-wrap:wrap}.row-actions button{padding:6px 10px;font-size:13px}
