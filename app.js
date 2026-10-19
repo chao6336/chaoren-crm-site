@@ -5,6 +5,9 @@ const live = !config.demoMode && config.supabaseUrl && config.supabasePublishabl
 const supabase = live ? window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey) : null;
 const liffReady = live && config.liffId ? window.liff.init({ liffId: config.liffId }) : Promise.resolve();
 const $ = selector => document.querySelector(selector);
+// 雲端模式但 LIFF 尚未設定時，學員端的 LINE 功能先顯示說明，不要直接出錯。
+const LINE_NOT_READY = "LINE 登入尚未開放，請洽協會工作人員。";
+const lineReady = () => !live || Boolean(config.liffId);
 
 const SEED_VERSION = 6;
 // 展示資料全部是假的；區域名稱等協會提供真實清單後再換。
@@ -123,11 +126,16 @@ async function loadLiveData(){
   const sponsorships = profile.data?.role === "admin" ? await supabase.from("sponsorships").select("*").order("created_at",{ascending:false}) : {data:[]};
   state={role:profile.data?.role||"none",region_id:profile.data?.region_id||null,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:"工作人員",action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
   showUser(profile.data?.display_name||session.user.email);
+  $("#logoutBtn").hidden=state.role==="none";
 }
 
 function render(){
   const name=route();
   if(state.role!=="public"&&((ADMIN_ONLY_ROUTES.includes(name)&&!isAdmin())||(name==="contacts"&&!canBrowseMembers(state.role)))){ location.hash="dashboard"; return; }
+  // 雲端模式未登入（或帳號未開通）：只能看登入頁與學員頁，後台選單整個藏起來。
+  const signedOut=live&&state.role==="none";
+  if(signedOut&&!["login","register",...STUDENT_ROUTES].includes(name)){ location.hash="login"; return; }
+  document.body.classList.toggle("signed-out",signedOut);
   document.body.classList.toggle("student-view",STUDENT_ROUTES.includes(name));
   document.querySelectorAll(".sidebar a").forEach(a=>{ a.classList.toggle("active",a.dataset.route===name); if(!a.hasAttribute("data-demo-only"))a.hidden=(ADMIN_ONLY_ROUTES.includes(a.dataset.route)&&!isAdmin())||(a.dataset.route==="contacts"&&!canBrowseMembers(state.role)); });
   const views={dashboard,events,contacts,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors};
@@ -268,6 +276,7 @@ function register(){
 // 展示：用 state 模擬同一套回應格式，規則與資料庫函式一致（見 lib.js）。
 async function memberApi(action,payload={}){
   if(live){
+    if(!lineReady()) return {error:LINE_NOT_READY};
     await liffReady;
     if(!window.liff.isLoggedIn()){ window.liff.login({redirectUri:location.href}); return {pending:true}; }
     const res=await fetch(`${config.supabaseUrl}/functions/v1/member`,{method:"POST",headers:{"Content-Type":"application/json",apikey:config.supabasePublishableKey},body:JSON.stringify({...payload,action,idToken:window.liff.getIDToken()})});
@@ -572,6 +581,7 @@ async function onClick(event){
   if(!btn){ if(event.target.id==="contactSearch"||event.target.id==="checkinSearch")return; return; }
   const action=btn.dataset.action;
   if(action==="close-modal") return closeModal();
+  if(action==="logout"){ await supabase?.auth.signOut(); location.hash="login"; return location.reload(); }
   if(action==="edit-event"){ event.preventDefault(); return eventForm(btn.dataset.id); }
   if(action==="invite-user") return modal(`<h2>邀請使用者</h2><form id="inviteForm"><div class="field"><label>Email</label><input name="email" type="email" required></div><div class="field"><label>顯示名稱</label><input name="display_name" required></div><div class="field"><label>權限</label><select name="role"><option value="region_lead">區負責人</option><option value="event_staff">活動幹部</option><option value="admin">總管理</option></select></div><div class="field"><label>負責區域（區負責人必填）</label><select name="region_id">${regionOptions(null)}</select></div><button>寄出邀請</button></form>`);
   if(action==="view-contact") return viewContact(btn.dataset.id);
@@ -633,7 +643,9 @@ async function onSubmit(event){
   }
   if(event.target.id==="registrationForm") return submitRegistration(data);
   if(event.target.id==="loginForm"){
-    const {error}=await supabase.auth.signInWithPassword(data); if(error)return toast("登入失敗，請確認帳號與密碼"); await loadLiveData();location.hash="dashboard";
+    const {error}=await supabase.auth.signInWithPassword(data); if(error)return toast("登入失敗，請確認帳號與密碼"); await loadLiveData();
+    if(state.role==="none"){ await supabase.auth.signOut(); return toast("這個帳號尚未開通工作人員權限，請洽總管理"); }
+    location.hash="dashboard";
   }
   if(event.target.id==="anonymizeForm") return executeAnonymize(data.confirmText);
   if(event.target.id==="inviteForm"){
@@ -648,6 +660,7 @@ async function onSubmit(event){
 
 async function submitRegistration(data){
   if(live){
+    if(!lineReady()) return toast(LINE_NOT_READY);
     try{ await liffReady; if(!window.liff.isLoggedIn())return window.liff.login(); const idToken=window.liff.getIDToken(); const res=await fetch(`${config.supabaseUrl}/functions/v1/line-auth`,{method:"POST",headers:{"Content-Type":"application/json","apikey":config.supabasePublishableKey},body:JSON.stringify({...data,idToken,marketing:data.marketing==="on"})}); const body=await res.json(); if(!res.ok)throw new Error(body.error||"報名失敗"); }
     catch(error){return toast(error.message);}
   } else {
@@ -673,6 +686,7 @@ async function cancelRegistration(eventId){
     const e=state.events.find(x=>x.id===eventId); if(e&&e.registration_count>0)e.registration_count--;persist();toast("已取消報名");render();return;
   }
   try{
+    if(!lineReady()) return toast(LINE_NOT_READY);
     await liffReady;if(!window.liff.isLoggedIn())return window.liff.login();
     const res=await fetch(`${config.supabaseUrl}/functions/v1/line-auth`,{method:"POST",headers:{"Content-Type":"application/json",apikey:config.supabasePublishableKey},body:JSON.stringify({action:"cancel",event_id:eventId,idToken:window.liff.getIDToken()})});
     const body=await res.json();if(!res.ok)throw new Error(body.error||"取消失敗");toast("已取消報名");
