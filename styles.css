@@ -26,3 +26,7 @@ body.student-view .field input,body.student-view .field select{font-size:17px;pa
 body.signed-out .sidebar{display:none!important}body.signed-out .shell{display:block}
 #logoutBtn{padding:6px 10px;font-size:13px}
 .link-box{display:flex;gap:8px;margin:12px 0}.link-box input{flex:1;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px}.row-actions{display:flex;gap:6px;flex-wrap:wrap}.row-actions button{padding:6px 10px;font-size:13px}
+/* 關閉鈕必須在內容之上（#modalBody 也有定位，排在後面會蓋住 ×）；內容自己捲動，× 永遠留在右上角 */
+dialog{overflow:hidden;max-height:calc(100vh - 32px)}
+dialog #modalBody{max-height:calc(100vh - 32px);overflow:auto}
+.dialog-close{z-index:5;background:#fff!important;border-radius:50%;width:38px;height:38px;line-height:1}

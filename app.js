@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv } from "./lib.js?v=20261019-2";
+import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv } from "./lib.js?v=20261019-3";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -80,7 +80,9 @@ function persist(){ if(!live) localStorage.setItem("chaoren-crm-demo", JSON.stri
 function toast(message){ const el=$("#toast"); el.textContent=message; el.classList.add("show"); setTimeout(()=>el.classList.remove("show"),2200); }
 function escapeHtml(value=""){ return String(value).replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c])); }
 function fmtDate(value){ return new Intl.DateTimeFormat("zh-TW",{dateStyle:"medium",timeStyle:value?.includes("T")?"short":undefined}).format(new Date(value)); }
-function modal(html){ $("#modalBody").innerHTML=html; $("#modal").showModal(); }
+function modal(html){ $("#modalBody").innerHTML=html; $("#modalBody").scrollTop=0; $("#modal").showModal(); }
+// 點視窗外的暗色區域也能關閉（點擊目標是 dialog 本身時，代表點在 backdrop 上）
+document.getElementById("modal").addEventListener("click",event=>{ if(event.target.id==="modal") closeModal(); });
 function closeModal(){ $("#modal").close(); }
 function route(){ return (location.hash.slice(1).split("?")[0] || "dashboard"); }
 function query(){ return new URLSearchParams(location.hash.split("?")[1] || ""); }
