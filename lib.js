@@ -11,7 +11,7 @@ export function canBrowseMembers(role) {
 }
 export const GENDERS = ["男", "女", "其他"];
 
-// ───── 手機：資料庫一律存國際格式（E.164，例如 +886912345678），畫面上台灣號碼顯示成 0912-345-678 ─────
+// ───── 手機：資料庫一律存國際格式（E.164，例如 +886912345678），畫面上一律顯示國碼：+886 912-345-678 ─────
 // 下拉選單的國碼；「其他」讓使用者自己輸入 + 開頭的完整號碼。
 export const COUNTRY_CODES = [
   ["886", "台灣 +886"], ["852", "香港 +852"], ["853", "澳門 +853"], ["86", "中國 +86"], ["65", "新加坡 +65"],
@@ -47,13 +47,13 @@ export function splitPhone(e164 = "") {
   if (!e164 || !e164.startsWith("+")) return { code: "886", local: e164 || "" };
   const code = KNOWN_CODES.find(c => e164.startsWith("+" + c)) || "";
   const rest = e164.slice(1 + code.length);
-  return code ? { code, local: code === "886" ? "0" + rest : rest } : { code: "other", local: e164 };
+  return code ? { code, local: rest } : { code: "other", local: e164 };
 }
 
 export function displayPhone(e164 = "") {
   if (!e164) return "";
   if (!String(e164).startsWith("+")) return e164; // 尚未轉換的舊格式照原樣顯示
-  if (/^\+8869\d{8}$/.test(e164)) { const d = "0" + e164.slice(4); return `${d.slice(0, 4)}-${d.slice(4, 7)}-${d.slice(7)}`; }
+  if (/^\+8869\d{8}$/.test(e164)) { const d = e164.slice(4); return `+886 ${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`; }
   const { code, local } = splitPhone(e164);
   return code && code !== "other" ? `+${code} ${local}` : e164;
 }
@@ -64,6 +64,7 @@ export function maskPhone(value = "") {
   const shown = displayPhone(value);
   const digits = shown.replace(/\D/g, "");
   if (digits.length < 6) return "***";
+  if (/^\+8869\d{8}$/.test(value)) return `+886 ${value.slice(4, 7)}***${value.slice(-3)}`;
   const prefix = shown.startsWith("+") ? (shown.includes(" ") ? shown.split(" ")[0] : shown.slice(0, 3)) + " " : digits.slice(0, 4);
   return `${prefix}***${digits.slice(-3)}`;
 }

@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261019-5";
+import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261019-6";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -92,7 +92,7 @@ function query(){ return new URLSearchParams(location.hash.split("?")[1] || "");
 function phoneField(label,value="",{required=false,autocomplete=""}={}){
   const {code,local}=splitPhone(value||"");
   const options=COUNTRY_CODES.map(([c,text])=>`<option value="${c}" ${c===code?"selected":""}>${text}</option>`).join("")+`<option value="other" ${code==="other"?"selected":""}>其他（號碼請以 + 開頭）</option>`;
-  return `<div class="field"><label>${label}${required?" *":""}</label><div class="phone-input"><select name="phone_code" aria-label="國碼">${options}</select><input name="phone" inputmode="tel" ${required?"required":""} ${autocomplete?`autocomplete="${autocomplete}"`:""} placeholder="0912345678" value="${escapeHtml(local)}"></div></div>`;
+  return `<div class="field"><label>${label}${required?" *":""}</label><div class="phone-input"><select name="phone_code" aria-label="國碼">${options}</select><input name="phone" inputmode="tel" ${required?"required":""} ${autocomplete?`autocomplete="${autocomplete}"`:""} placeholder="912345678" value="${escapeHtml(local)}"></div></div>`;
 }
 function readPhone(data){
   if(!String(data.phone||"").trim()) return {phone:null};
