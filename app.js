@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv } from "./lib.js?v=20261019-1";
+import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv } from "./lib.js?v=20261019-2";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -110,6 +110,8 @@ async function handleAuthLink(){
   const linkError=hash.get("error_description")||search.get("error_description");
   if(search.get("flow")!=="set-password"&&!linkError) return false;
   history.replaceState(null,"",location.pathname+"#set-password");
+  // 總管理產生的連結只帶 token_hash：要等本人按下按鈕才兌換，避免 LINE 預覽機器人先把一次性連結用掉。
+  if(search.get("th")&&["invite","recovery"].includes(search.get("type"))){ state.pendingLink={token_hash:search.get("th"),type:search.get("type")}; state.role="link-pending"; return true; }
   if(linkError){ state.authNotice="這個連結已失效或已經使用過，請總管理重新產生一次。"; return true; }
   const {data:{session}}=await supabase.auth.getSession();
   if(!session) state.authNotice="這個連結已失效或已經使用過，請總管理重新產生一次。";
@@ -148,7 +150,7 @@ function render(){
   const name=route();
   if(state.role!=="public"&&((ADMIN_ONLY_ROUTES.includes(name)&&!isAdmin())||(name==="contacts"&&!canBrowseMembers(state.role)))){ location.hash="dashboard"; return; }
   // 雲端模式未登入（或帳號未開通）：只能看登入頁與學員頁，後台選單整個藏起來。
-  const signedOut=live&&["none","setting-password"].includes(state.role);
+  const signedOut=live&&["none","setting-password","link-pending"].includes(state.role);
   if(signedOut&&!["login","register","set-password",...STUDENT_ROUTES].includes(name)){ location.hash="login"; return; }
   document.body.classList.toggle("signed-out",signedOut);
   document.body.classList.toggle("student-view",STUDENT_ROUTES.includes(name));
@@ -424,11 +426,19 @@ async function showCheckinQr(eventId,{renew=false}={}){
 // ───── 設定／重設密碼（邀請連結、重設連結共用）─────
 function setPassword(){
   if(state.authNotice) return `<article class="card result-card fail" style="max-width:520px;margin:30px auto"><div class="result-icon" aria-hidden="true">!</div><h1>無法設定密碼</h1><p>${escapeHtml(state.authNotice)}</p><a class="button" href="#login">回到登入頁</a></article>`;
+  if(live&&state.role==="link-pending") return `${pageHead(state.pendingLink.type==="invite"?"歡迎加入晁人活動 CRM":"重設登入密碼","按下按鈕後，就可以設定你自己的登入密碼。")}<article class="card" style="max-width:460px;margin:auto;text-align:center"><p>這條連結只能使用一次。</p><button class="big" style="width:100%" data-action="redeem-link">開始設定密碼</button></article>`;
   if(!live||state.role!=="setting-password") return `<article class="card" style="max-width:520px;margin:30px auto"><p>請從總管理傳給你的邀請或重設連結進入此頁。</p><a class="button" href="#login">回到登入頁</a></article>`;
   return `${pageHead("設定登入密碼",`帳號：${escapeHtml(state.authEmail||"")}`)}<article class="card" style="max-width:460px;margin:auto"><form id="setPasswordForm">
     <div class="field"><label>新密碼（至少 8 個字）</label><input type="password" name="password" minlength="8" required autocomplete="new-password"></div>
     <div class="field" style="margin-top:12px"><label>再輸入一次</label><input type="password" name="confirm" minlength="8" required autocomplete="new-password"></div>
     <button style="margin-top:16px;width:100%">儲存並登入</button></form></article>`;
+}
+async function redeemLink(btn){
+  btn.disabled=true; btn.textContent="確認中…";
+  const {data,error}=await supabase.auth.verifyOtp({token_hash:state.pendingLink.token_hash,type:state.pendingLink.type});
+  state.pendingLink=null;
+  if(error||!data?.session){ state.role="none"; state.authNotice="這個連結已失效或已經使用過，請總管理重新產生一次。"; return render(); }
+  state.authEmail=data.session.user.email; state.role="setting-password"; render();
 }
 async function savePassword(data){
   if(data.password!==data.confirm) return toast("兩次輸入的密碼不一樣");
@@ -665,6 +675,7 @@ async function onClick(event){
   if(action==="logout"){ await supabase?.auth.signOut(); location.hash="login"; return location.reload(); }
   if(action==="edit-event"){ event.preventDefault(); return eventForm(btn.dataset.id); }
   if(action==="forgot-password") return forgotPassword();
+  if(action==="redeem-link") return redeemLink(btn);
   if(action==="copy-link"){ const el=$("#linkText"); el.select(); try{ await navigator.clipboard.writeText(el.value); toast("已複製"); }catch{ document.execCommand("copy"); toast("已複製"); } return; }
   if(action==="staff-edit") return staffEditForm(btn.dataset.id);
   if(action==="staff-reset"){ const s=(state.staffList||[]).find(x=>x.user_id===btn.dataset.id); const res=s?.invited_pending?await callStaff("invite",{email:s.email,display_name:s.display_name,role:s.role,region_id:s.region_id}):await callStaff("reset",{user_id:btn.dataset.id}); if(res.error&&s?.invited_pending){ const again=await callStaff("reset",{user_id:btn.dataset.id}); if(again.error) return toast(again.error); return showLinkModal("邀請連結（重新產生）",again.email,again.link); } if(res.error) return toast(res.error); return showLinkModal(s?.invited_pending?"邀請連結（重新產生）":"重設密碼連結",res.email,res.link); }
