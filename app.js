@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-1";
+import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-2";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -108,6 +108,8 @@ function pageHead(title,subtitle,actions=""){ return `<section class="page-head"
 
 async function boot(){
   $("#modeBadge").textContent=live?"已連雲端":"展示模式";
+  // 從 liff.line.me/… 進來時，真正的頁面（例如 #me、#scan）放在 liff.state，要等 LIFF 初始化把網址還原後再判斷路由
+  if(live && new URLSearchParams(location.search).has("liff.state")) { try { await liffReady; } catch {} }
   if(live && await handleAuthLink()) { /* 已切到設定密碼頁或顯示錯誤 */ }
   else if(live && route()==="register") await loadPublicEvent();
   else if(live && STUDENT_ROUTES.includes(route())) state.role="public";
