@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-4";
+import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-5";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -144,7 +144,7 @@ async function handleAuthLink(){
 async function loadPublicEvent(){
   // 載入所有公開活動：連結裡的活動找不到時，至少能列出目前可報名的活動，不讓學員卡在死路
   const {data}=await supabase.from("public_events").select("*").order("starts_at");
-  state={role:"public",region_id:null,regions:[],staff:[],events:data||[],contacts:[],registrations:[],campaigns:[],audit:[]};
+  state={role:"public",eventsLoaded:true,region_id:null,regions:[],staff:[],events:data||[],contacts:[],registrations:[],campaigns:[],audit:[]};
 }
 
 async function loadLiveData(){
@@ -163,7 +163,7 @@ async function loadLiveData(){
   ]);
   const staff = profile.data?.role === "admin" ? await supabase.from("staff_profiles").select("user_id,display_name,role,region_id,active") : {data:[]};
   const sponsorships = profile.data?.role === "admin" ? await supabase.from("sponsorships").select("*").order("created_at",{ascending:false}) : {data:[]};
-  state={role:profile.data?.role||"none",region_id:profile.data?.region_id||null,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:"工作人員",action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
+  state={role:profile.data?.role||"none",eventsLoaded:true,region_id:profile.data?.region_id||null,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:"工作人員",action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
   showUser(profile.data?.display_name||session.user.email);
   $("#logoutBtn").hidden=state.role==="none";
 }
@@ -178,6 +178,8 @@ function render(){
   document.body.classList.toggle("signed-out",signedOut);
   document.body.classList.toggle("student-view",STUDENT_ROUTES.includes(name));
   document.querySelectorAll(".sidebar a").forEach(a=>{ a.classList.toggle("active",a.dataset.route===name); if(!a.hasAttribute("data-demo-only"))a.hidden=(ADMIN_ONLY_ROUTES.includes(a.dataset.route)&&!isAdmin())||(a.dataset.route==="contacts"&&!canBrowseMembers(state.role)); });
+  // 學員從個人頁點「報名」進來時，報名頁還沒載入過活動資料：先去雲端抓再畫
+  if(live&&name==="register"&&!state.eventsLoaded){ $("#app").innerHTML="<div class='empty'>載入活動中…</div>"; loadPublicEvent().then(render); return; }
   const views={dashboard,events,contacts,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors,"set-password":setPassword};
   $("#app").innerHTML=(views[name]||dashboard)();
   if(name==="me")loadMe();
