@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-6";
+import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-7";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -363,7 +363,7 @@ async function memberApi(action,payload={}){
 }
 
 function demoMemberApi(action,payload){
-  const line=state.demoLine; const me=state.contacts.find(c=>c.line_user_id===line&&!c.anonymized_at);
+  const line=state.demoLine; let me=state.contacts.find(c=>c.line_user_id===line&&!c.anonymized_at);
   const notMember={code:"NOT_MEMBER",displayName:"LINE 新朋友",regions:state.regions};
   if(action==="me"){
     if(!me)return notMember;
@@ -384,12 +384,14 @@ function demoMemberApi(action,payload){
     const event=state.events.find(e=>e.id===payload.event_id);
     const problem=checkinProblem(event,payload.token,state.checkin_codes?.[payload.event_id]);
     if(problem)return {error:CHECKIN_MESSAGES[problem],code:problem};
+    let joined=false;
+    if(!me&&payload.quickJoin){ me={id:crypto.randomUUID(),member_no:nextMemberNo(),name:"LINE 新朋友",phone:"",email:"",gender:null,birth_date:null,region_id:null,address:"",national_id:"",notes:"LINE 掃碼快速報到建立，尚未填電話等資料",display_name:"LINE 新朋友",line_user_id:line,line_status:"active",marketing_consent:false,tags:[],last_interaction_at:new Date().toISOString(),created_at:new Date().toISOString()}; state.contacts.push(me); joined=true; }
     if(!me)return notMember;
     let reg=state.registrations.find(r=>r.event_id===event.id&&r.contact_id===me.id); let already=false;
     if(!reg){ reg={id:crypto.randomUUID(),event_id:event.id,contact_id:me.id,payment_status:"pending",source:"walk-in",registered_at:new Date().toISOString()}; state.registrations.push(reg); event.registration_count=(event.registration_count||0)+1; }
     else if(reg.attendance_status==="attended"&&!reg.cancelled_at) already=true;
     if(!already){ Object.assign(reg,{attendance_status:"attended",cancelled_at:null,checked_in_at:new Date().toISOString()}); me.last_interaction_at=new Date().toISOString(); }
-    persist(); return {ok:true,already,checkedInAt:reg.checked_in_at,name:me.name,eventTitle:event.title,region:me.region_id?regionName(me.region_id):null};
+    persist(); return {ok:true,already,joined,checkedInAt:reg.checked_in_at,name:me.name,eventTitle:event.title,region:me.region_id?regionName(me.region_id):null};
   }
 }
 const CHECKIN_MESSAGES={INVALID_TOKEN:"這個報到 QR Code 已失效，請洽現場工作人員",NOT_OPEN:"報到尚未開放（活動開始前 3 小時開放）",CHECKIN_CLOSED:"這場活動的報到已結束",EVENT_CLOSED:"這場活動目前未開放"};
@@ -421,15 +423,16 @@ async function loadMe(){
     <section class="card student-card"><h2>近期活動</h2>${(data.events||[]).length?`<ul class="student-list">${data.events.map(e=>item(e.title,`${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・${escapeHtml(e.fee_note||"")}`,mine.has(e.id)?`<span class="pill">已報名</span>`:eventState(e)==="報名中"?`<a class="button" href="#register?event=${e.id}">報名</a>`:`<span class="pill off">${eventState(e)}</span>`)).join("")}</ul>`:`<p class="muted">近期沒有公開活動。</p>`}</section>`;
 }
 
-async function runScan(){
+async function runScan({quickJoin=false}={}){
   const q=query(); const eventId=q.get("event"); const token=q.get("t");
   const area=$("#studentArea"); if(!area)return;
   if(!eventId||!token){ area.innerHTML=`<div class="notice">QR Code 內容不完整，請重新掃描或洽現場工作人員。</div>`; return; }
-  const data=await memberApi("checkin",{event_id:eventId,token}); if(data.pending)return;
+  const data=await memberApi("checkin",{event_id:eventId,token,quickJoin}); if(data.pending)return;
   if(!$("#studentArea"))return;
-  if(data.code==="NOT_MEMBER"){ $("#studentArea").innerHTML=`<div class="notice">第一次參加嗎？填好基本資料，就會自動完成報到。</div>${signupForm(data,"scan")}`; return; }
+  // 第一次來：不用填資料，按一下同意個資告知就完成報到（電話等資料之後再補）
+  if(data.code==="NOT_MEMBER"){ $("#studentArea").innerHTML=`<article class="card result-card"><h1>歡迎第一次來！</h1><p>${data.displayName?`${escapeHtml(data.displayName)}，`:""}按下按鈕就完成報到，不用填資料。</p><button class="big" style="width:100%" data-action="quick-join">同意並完成報到</button><p class="muted" style="margin-top:12px">按下即表示同意<a href="privacy.html" target="_blank">個資告知</a>：協會會記錄你的 LINE 名稱與參加紀錄，僅用於活動與會員服務。</p></article>`; return; }
   if(data.error){ $("#studentArea").innerHTML=`<article class="card result-card fail"><div class="result-icon" aria-hidden="true">!</div><h1>無法報到</h1><p>${escapeHtml(data.error)}</p></article>`; return; }
-  $("#studentArea").innerHTML=`<article class="card result-card ok"><div class="result-icon" aria-hidden="true">✓</div><h1>${data.already?"你已經報到過了":"報到成功"}</h1><p class="result-name">${escapeHtml(data.name)}${data.region?`・${escapeHtml(data.region)}`:""}</p><p>${escapeHtml(data.eventTitle)}</p><p class="muted">報到時間 ${fmtDate(data.checkedInAt)}</p><a class="button" href="#me">看我的活動紀錄</a></article>`;
+  $("#studentArea").innerHTML=`<article class="card result-card ok"><div class="result-icon" aria-hidden="true">✓</div><h1>${data.already?"你已經報到過了":data.joined?"報到成功，歡迎加入！":"報到成功"}</h1><p class="result-name">${escapeHtml(data.name)}${data.region?`・${escapeHtml(data.region)}`:""}</p><p>${escapeHtml(data.eventTitle)}</p><p class="muted">報到時間 ${fmtDate(data.checkedInAt)}</p><a class="button" href="#me">看我的活動紀錄</a></article>`;
 }
 
 function signupForm(data,next){
@@ -456,7 +459,9 @@ async function submitSignup(data){
 }
 
 // ───── 總管理：產生報到 QR Code ─────
+// 雲端用 liff.line.me 網址：手機相機或 LINE 掃描後直接在 LINE 裡開啟、自動登入，不必另外按 LINE 登入
 function checkinUrl(eventId,token){
+  if(live&&config.liffId) return `https://liff.line.me/${config.liffId}/#scan?event=${encodeURIComponent(eventId)}&t=${encodeURIComponent(token)}`;
   const base=live&&config.siteUrl?config.siteUrl.replace(/\/$/,"")+"/":location.origin+location.pathname;
   return `${base}#scan?event=${encodeURIComponent(eventId)}&t=${encodeURIComponent(token)}`;
 }
@@ -771,6 +776,7 @@ async function onClick(event){
   if(action==="new-campaign") return modal(`<h2>新增 LINE 訊息草稿</h2><form id="campaignForm"><div class="field"><label>草稿名稱</label><input name="name" required></div><div class="field"><label>關聯活動</label><select name="event_id">${state.events.map(e=>`<option value="${e.id}">${escapeHtml(e.title)}</option>`).join("")}</select></div><div class="field"><label>訊息內容</label><textarea name="body" required maxlength="500"></textarea></div><button>儲存草稿</button></form>`);
   if(action==="review-campaign") return reviewCampaign(btn.dataset.id);
   if(action==="cancel-registration") return cancelRegistration(btn.dataset.event);
+  if(action==="quick-join"){ btn.disabled=true; btn.textContent="報到中…"; return runScan({quickJoin:true}); }
 }
 
 document.addEventListener("input",event=>{
