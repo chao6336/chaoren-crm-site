@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-2";
+import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-3";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -229,7 +229,7 @@ function viewContact(id){
   const history=myRegistrations().filter(r=>r.contact_id===id).map(r=>({...r,event:state.events.find(e=>e.id===r.event_id)}));
   const line=(label,value)=>`<div class="kpi-line"><span>${label}</span><strong>${escapeHtml(value||"—")}</strong></div>`;
   const nid=c.national_id_masked?`${escapeHtml(c.national_id_masked)}${isAdmin()?` <button class="link" data-action="reveal-nid" data-id="${id}">查看</button>`:""}`:"—";
-  modal(`<div class="profile-head"><div class="avatar" aria-hidden="true">${escapeHtml((c.name||"?").slice(0,1))}</div><div><h2>${escapeHtml(c.name)}</h2><p class="muted">${escapeHtml(c.display_name||"尚未綁定 LINE")}</p></div></div>
+  modal(`<div class="profile-head"><div class="avatar" aria-hidden="true">${escapeHtml((c.name||"?").slice(0,1))}</div><div><h2>${escapeHtml(c.name)}</h2><p class="muted">${raw.line_user_id||raw.line_status==="active"?`已綁定 LINE${c.display_name?`（${escapeHtml(c.display_name)}）`:""}`:"尚未綁定 LINE"}</p></div></div>
     ${line("會員編號",c.member_no)}${line("性別",c.gender)}${line("出生年月日",c.birth_date?`${c.birth_date}（${age} 歲）`:"")}${line("區域",c.region_name||regionName(c.region_id))}${line("手機",showPhone(c.phone))}${line("Email",c.email)}${line("地址",c.address)}
     <div class="kpi-line"><span>身分證</span><strong id="nidValue">${nid}</strong></div>${isAdmin()?line("LINE UID",raw.line_user_id||"未綁定"):""}${line("備註",c.notes)}${(raw.tags||[]).length?`<details class="tag-box"><summary>標籤與參加紀錄（${raw.tags.length}）</summary><div>${raw.tags.map(t=>`<span class="pill">${escapeHtml(t)}</span>`).join(" ")}</div></details>`:""}
     <h3>活動與課程</h3>${history.length?`<ul class="plain">${history.map(h=>`<li>${escapeHtml(h.event?.title||"已刪除的活動")}・${({attended:"已參加",registered:"已報名",cancelled:"已取消",absent:"未出席"})[h.attendance_status]||h.attendance_status}</li>`).join("")}</ul>`:`<p class="muted">尚無紀錄</p>`}
