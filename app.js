@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-5";
+import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-6";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -268,6 +268,7 @@ async function saveContact(data){
     await loadLiveData();
   } else if(data.contact_id){
     const c=state.contacts.find(x=>x.id===data.contact_id); Object.assign(c,fields); if(nid)c.national_id=nid;
+    const em=String(c.email||"").toLowerCase(); if(em) state.staff.filter(x=>String(x.email||"").toLowerCase()===em).forEach(x=>x.display_name=c.name);
   } else {
     state.contacts.push({id:crypto.randomUUID(),member_no:nextMemberNo(),...fields,national_id:nid,display_name:"",line_user_id:null,line_status:"unknown",marketing_consent:false,tags:[],last_interaction_at:new Date().toISOString(),created_at:new Date().toISOString()});
   }
@@ -537,8 +538,10 @@ async function loadStaffList(){
   if(res.error){ $("#staffArea").innerHTML=`<div class="notice">${escapeHtml(res.error)}</div>`; return; }
   state.staffList=res.staff;
   const status=s=>!s.active?"<span class='pill off'>已停用</span>":s.invited_pending?"<span class='pill warn'>等待設定密碼</span>":"<span class='pill'>使用中</span>";
-  $("#staffArea").innerHTML=`<div class="table-wrap"><table><thead><tr><th>姓名</th><th>Email</th><th>權限</th><th>負責區域</th><th>狀態</th><th></th></tr></thead><tbody>${res.staff.map(s=>`<tr><td>${escapeHtml(s.display_name)}</td><td>${escapeHtml(s.email||"")}</td><td>${ROLE_LABELS[s.role]||s.role}</td><td>${s.role==="region_lead"?escapeHtml(regionName(s.region_id)):s.role==="event_staff"?"全部（報名名單）":"全部"}</td><td>${status(s)}</td><td class="row-actions"><button class="secondary" data-action="staff-edit" data-id="${s.user_id}">修改</button><button class="secondary" data-action="staff-reset" data-id="${s.user_id}">${s.invited_pending?"重新產生邀請":"重設密碼連結"}</button></td></tr>`).join("")}</tbody></table></div>`;
+  $("#staffArea").innerHTML=`<div class="table-wrap"><table><thead><tr><th>姓名</th><th>Email</th><th>權限</th><th>負責區域</th><th>狀態</th><th></th></tr></thead><tbody>${res.staff.map(s=>{ const m=memberByEmail(s.email); return `<tr><td>${escapeHtml(s.display_name)}${m?`<br><small class="muted">會員 ${escapeHtml(m.member_no||"")}・姓名已同步</small>`:""}</td><td>${escapeHtml(s.email||"")}</td><td>${ROLE_LABELS[s.role]||s.role}</td><td>${s.role==="region_lead"?escapeHtml(regionName(s.region_id)):s.role==="event_staff"?"全部（報名名單）":"全部"}</td><td>${status(s)}</td><td class="row-actions"><button class="secondary" data-action="staff-edit" data-id="${s.user_id}">修改</button><button class="secondary" data-action="staff-reset" data-id="${s.user_id}">${s.invited_pending?"重新產生邀請":"重設密碼連結"}</button></td></tr>`+""; }).join("")}</tbody></table></div>`;
 }
+// 工作人員與會員以 Email 對應（不分大小寫）；資料庫會自動把工作人員名稱同步成會員姓名
+function memberByEmail(email){ const e=String(email||"").trim().toLowerCase(); return e?state.contacts.find(c=>String(c.email||"").trim().toLowerCase()===e&&!c.anonymized_at):null; }
 function showLinkModal(title,email,link){
   modal(`<h2>${title}</h2><p>請把下面這條連結<strong>用 LINE 私訊傳給 ${escapeHtml(email||"對方")}</strong>。對方點開後自己設定密碼就能登入。</p>
     <div class="link-box"><input id="linkText" readonly value="${escapeHtml(link)}"><button data-action="copy-link">複製</button></div>
