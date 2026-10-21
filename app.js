@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-7";
+import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-8";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -206,7 +206,7 @@ function dashboard(){
 
 function events(){
   const create=canEvents()?`<button data-action="edit-event">＋ 建立活動</button>`:"";
-  return `${pageHead("活動管理","建立活動、查看報名進度並取得公開連結。",create)}<div class="table-wrap"><table><thead><tr><th>活動</th><th>日期</th><th>地點</th><th>報名</th><th>狀態</th><th>操作</th></tr></thead><tbody>${state.events.map(e=>`<tr><td><strong>${escapeHtml(e.title)}</strong><br><small>${escapeHtml(e.theme)}</small></td><td>${fmtDate(e.starts_at)}</td><td>${escapeHtml(e.location)}</td><td>${e.registration_count}/${e.capacity}</td><td><span class="pill">${eventState(e)}</span></td><td><a href="#register?event=${e.id}">報名頁</a>　<a href="#checkin?event=${e.id}">報到</a>${canEvents()?`　<a href="#events" data-action="edit-event" data-id="${e.id}">編輯</a>`:""}</td></tr>`).join("")}</tbody></table></div>`;
+  return `${pageHead("活動管理","建立活動、查看報名進度並取得公開連結。",create)}<div class="table-wrap"><table><thead><tr><th>活動</th><th>日期</th><th>地點</th><th>報名</th><th>狀態</th><th>操作</th></tr></thead><tbody>${state.events.map(e=>`<tr><td><strong>${escapeHtml(e.title)}</strong><br><small>${escapeHtml(e.theme)}</small></td><td>${fmtDate(e.starts_at)}</td><td>${escapeHtml(e.location)}</td><td>${e.registration_count}/${e.capacity}</td><td><span class="pill">${eventState(e)}</span></td><td><a href="#register?event=${e.id}">報名頁</a>　<a href="#checkin?event=${e.id}">報到</a>${canEvents()?`　<a href="#events" data-action="edit-event" data-id="${e.id}">編輯</a>　<a href="#events" class="danger-link" data-action="delete-event" data-id="${e.id}">刪除</a>`:""}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
 function regionOptions(selected,{withAll=false,withNone=false}={}){
@@ -578,7 +578,32 @@ function eventForm(id){
     <div class="field"><label>地點 *</label><input name="location" required value="${v("location")}"></div>
     <div class="field"><label>費用說明</label><input name="fee_note" value="${v("fee_note")}"></div>
     <div class="field full"><label>狀態</label><select name="status">${Object.entries(EVENT_STATUS_LABELS).map(([k,label])=>`<option value="${k}" ${e.status===k?"selected":""}>${label}</option>`).join("")}</select></div>
-    <button class="field full">儲存活動</button></div></form>`);
+    <button class="field full">儲存活動</button>${id?`<button type="button" class="field full danger" data-action="delete-event" data-id="${id}">刪除活動</button>`:""}</div></form>`);
+}
+// 刪除活動：沒有報名紀錄的，總管理與活動幹部都可刪；有報名／報到紀錄的只限總管理，且要輸入活動名稱確認（資料庫也會再檢查一次）
+function deleteEventForm(id){
+  if(!canEvents())return toast("沒有權限");
+  const e=state.events.find(x=>x.id===id); if(!e)return;
+  const regs=Math.max(state.registrations.filter(r=>r.event_id===id).length,e.registration_count||0);
+  if(regs&&!isAdmin()) return modal(`<h2>無法刪除</h2><p><strong>${escapeHtml(e.title)}</strong> 已有 ${regs} 筆報名／報到紀錄，只有總管理可以刪除。<br>如果只是活動不辦了，可以在「編輯」把狀態改成「已取消」，紀錄會保留。</p><button value="cancel" data-action="close-modal">知道了</button>`);
+  modal(`<h2>刪除活動</h2><p><strong>${escapeHtml(e.title)}</strong><br><span class="muted">${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}</span></p>
+    <div class="notice">刪除後<strong>無法復原</strong>${regs?`：這場活動的 ${regs} 筆報名／報到紀錄會一起移除。如果只是活動不辦了，建議改用「編輯」把狀態改成「已取消」，紀錄會保留`:"。這場活動還沒有人報名"}。</div>
+    <form id="deleteEventForm"><input type="hidden" name="event_id" value="${id}">${regs?`<div class="field"><label>請輸入活動名稱「${escapeHtml(e.title)}」確認</label><input name="confirm_title" required autocomplete="off"></div>`:""}
+    <div class="actions" style="margin-top:14px"><button class="danger">確認刪除</button><button type="button" class="secondary" data-action="close-modal">取消</button></div></form>`);
+}
+async function deleteEvent(data){
+  const e=state.events.find(x=>x.id===data.event_id); if(!e)return;
+  if(data.confirm_title!==undefined&&data.confirm_title.trim()!==e.title.trim()) return toast("活動名稱不符，未刪除");
+  if(live){
+    const {error}=await supabase.rpc("admin_delete_event",{p_event_id:e.id,p_confirm_title:data.confirm_title?.trim()||null});
+    if(error) return toast(error.message.includes("HAS_REGISTRATIONS")?"已有報名紀錄，只有總管理可以刪除":error.message.includes("TITLE_MISMATCH")?"活動名稱不符，未刪除":error.message.includes("FORBIDDEN")?"沒有權限":"刪除失敗："+error.message);
+    await loadLiveData();
+  } else {
+    state.registrations=state.registrations.filter(r=>r.event_id!==e.id);
+    if(state.checkin_codes) delete state.checkin_codes[e.id];
+    state.events=state.events.filter(x=>x.id!==e.id);
+  }
+  audit("刪除活動",e.title); persist(); closeModal(); location.hash="#events"; render(); toast("已刪除活動");
 }
 async function saveEvent(data){
   if(!canEvents())return toast("沒有權限");
@@ -752,6 +777,7 @@ async function onClick(event){
   if(action==="invite-user") return modal(`<h2>邀請工作人員</h2><p class="muted">建立後會產生一條邀請連結，請用 LINE 傳給對方；對方點開自己設定密碼。</p><form id="inviteForm"><div class="field"><label>Email</label><input name="email" type="email" required></div><div class="field"><label>顯示名稱</label><input name="display_name" required></div><div class="field"><label>權限</label><select name="role"><option value="region_lead">區負責人</option><option value="event_staff">活動幹部</option><option value="admin">總管理</option></select></div><div class="field"><label>負責區域（區負責人必填）</label><select name="region_id">${regionOptions(null)}</select></div><button style="margin-top:12px">建立並產生邀請連結</button></form>`);
   if(action==="view-contact") return viewContact(btn.dataset.id);
   if(action==="delete-contact") return deleteContactForm(btn.dataset.id);
+  if(action==="delete-event"){ event.preventDefault(); return deleteEventForm(btn.dataset.id); }
   if(action==="import-template") return download("會員名冊範本.csv",IMPORT_FIELDS.map(([,label])=>label).join(",")+"\r\n王小美,0912345678,女,51/03/18,北區,台北市大安區和平東路一段 1 號,may@example.com,,清明法會志工","text/csv;charset=utf-8");
   if(action==="import-run") return runImport();
   if(action==="import-reset"){ importState=null; return render(); }
@@ -796,7 +822,7 @@ document.addEventListener("change",event=>{
 });
 
 async function onSubmit(event){
-  if(!["eventForm","campaignForm","registrationForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","deleteContactForm"].includes(event.target.id))return;
+  if(!["eventForm","campaignForm","registrationForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","deleteContactForm","deleteEventForm"].includes(event.target.id))return;
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target));
   if(event.target.id==="contactForm") return saveContact(data);
   if(event.target.id==="signupForm") return submitSignup(data);
@@ -818,6 +844,7 @@ async function onSubmit(event){
   if(event.target.id==="anonymizeForm") return executeAnonymize(data.confirmText);
   if(event.target.id==="setPasswordForm") return savePassword(data);
   if(event.target.id==="deleteContactForm") return deleteContact(data);
+  if(event.target.id==="deleteEventForm") return deleteEvent(data);
   if(event.target.id==="forgotForm") return sendResetEmail(data);
   if(event.target.id==="staffEditForm"){ const res=await callStaff("update",{user_id:data.user_id,role:data.role,region_id:data.region_id||null,active:data.active==="on"}); if(res.error) return toast(res.error); closeModal(); audit("修改工作人員",data.user_id); persist(); render(); return toast("已更新"); }
   if(event.target.id==="inviteForm"){
