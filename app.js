@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-8";
+import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261022-1";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -179,12 +179,16 @@ function render(){
   document.body.classList.toggle("student-view",STUDENT_ROUTES.includes(name));
   document.querySelectorAll(".sidebar a").forEach(a=>{ a.classList.toggle("active",a.dataset.route===name); if(!a.hasAttribute("data-demo-only"))a.hidden=(ADMIN_ONLY_ROUTES.includes(a.dataset.route)&&!isAdmin())||(a.dataset.route==="contacts"&&!canBrowseMembers(state.role)); });
   // 學員從個人頁點「報名」進來時，報名頁還沒載入過活動資料：先去雲端抓再畫
-  if(live&&name==="register"&&!state.eventsLoaded){ $("#app").innerHTML="<div class='empty'>載入活動中…</div>"; loadPublicEvent().then(render); return; }
+  // 左上角：學員回自己的個人頁，工作人員回總覽（學員按到總覽會被帶去工作人員登入頁）
+  $(".brand").setAttribute("href",live&&state.role==="public"?"#me":"#dashboard");
+  // 工作人員已有完整活動資料，不能被公開活動資料蓋掉
+  if(live&&name==="register"&&!state.eventsLoaded&&!STAFF_ROLES.includes(state.role)){ $("#app").innerHTML="<div class='empty'>載入活動中…</div>"; loadPublicEvent().then(render); return; }
   const views={dashboard,events,contacts,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors,"set-password":setPassword};
   $("#app").innerHTML=(views[name]||dashboard)();
   if(name==="me")loadMe();
   if(name==="users")loadStaffList();
   if(name==="scan")runScan();
+  if(name==="register"){ const id=query().get("event")||(live?"":state.events[0]?.id); if(id&&$("#regAction")&&regMember?.eventId!==id) checkRegisterMember(id); }
   if(name==="register"&&window.qrcode&&$("#qr")){ const code=window.qrcode(0,"M");code.addData(location.href);code.make();$("#qr").innerHTML=code.createSvgTag(4,0); }
   $("#app").focus();
 }
@@ -344,7 +348,47 @@ function register(){
     const open=state.events.filter(e=>eventState(e)==="報名中");
     return `<article class="card student-card" style="max-width:640px;margin:20px auto"><h1>${wanted?"找不到這場活動":"選擇要報名的活動"}</h1>${wanted?`<p class="muted">連結可能已過期，或活動已下架。以下是目前開放報名的活動：</p>`:""}${open.length?`<ul class="student-list">${open.map(e=>`<li class="student-item"><div><strong>${escapeHtml(e.title)}</strong><small>${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・${escapeHtml(e.fee_note||"")}</small></div><a class="button" href="#register?event=${e.id}">報名</a></li>`).join("")}</ul>`:`<p class="muted">目前沒有開放報名的活動。</p>`}</article>`;
   }
-  return `${pageHead(event.title,event.theme)}<section class="two-col"><article class="card"><h2>活動資訊</h2><div class="kpi-line"><span>時間</span><strong>${fmtDate(event.starts_at)}</strong></div><div class="kpi-line"><span>地點</span><strong>${escapeHtml(event.location)}</strong></div><div class="kpi-line"><span>費用</span><strong>${escapeHtml(event.fee_note)}</strong></div><div class="kpi-line"><span>名額</span><strong>${event.registration_count}/${event.capacity}</strong></div><p class="muted">分享報名 QR Code</p><div id="qr" aria-label="活動報名 QR Code"></div></article><article class="card"><h2>LINE 登入＋簡短報名</h2>${eventState(event)!=="報名中"?`<div class="notice">目前${eventState(event)}，暫停接受報名。</div>`:`<form id="registrationForm"><input type="hidden" name="event_id" value="${event.id}"><div class="form-grid"><div class="field"><label>姓名 *</label><input name="name" required maxlength="40"></div>${phoneField("手機","",{required:true,autocomplete:"tel"})}<div class="field full"><label>Email</label><input name="email" type="email"></div><div class="field full"><label>有興趣的主題</label><select name="interest"><option>閱讀</option><option>冥想</option><option>身心放鬆</option><option>節氣生活</option></select></div><label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="privacy.html" target="_blank">個資告知</a>，資料僅用於活動與會員服務。</span></label><label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收後續活動與課程訊息，可隨時撤回。</span></label><button class="field full" type="submit">使用 LINE 身分送出報名</button><button class="field full secondary" type="button" data-action="cancel-registration" data-event="${event.id}">取消我的報名</button></div></form>`}</article></section>`;
+  return `${demoLinePicker()}${pageHead(event.title,event.theme)}<section class="two-col"><article class="card"><h2>活動資訊</h2><div class="kpi-line"><span>時間</span><strong>${fmtDate(event.starts_at)}</strong></div><div class="kpi-line"><span>地點</span><strong>${escapeHtml(event.location)}</strong></div><div class="kpi-line"><span>費用</span><strong>${escapeHtml(event.fee_note)}</strong></div><div class="kpi-line"><span>名額</span><strong>${event.registration_count}/${event.capacity}</strong></div><p class="muted">分享報名 QR Code</p><div id="qr" aria-label="活動報名 QR Code"></div></article><article class="card" id="regAction">${registerAction(event,`<form id="registrationForm"><input type="hidden" name="event_id" value="${event.id}"><div class="form-grid"><div class="field"><label>姓名 *</label><input name="name" required maxlength="40"></div>${phoneField("手機","",{required:true,autocomplete:"tel"})}<div class="field full"><label>Email</label><input name="email" type="email"></div><div class="field full"><label>有興趣的主題</label><select name="interest"><option>閱讀</option><option>冥想</option><option>身心放鬆</option><option>節氣生活</option></select></div><label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="privacy.html" target="_blank">個資告知</a>，資料僅用於活動與會員服務。</span></label><label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收後續活動與課程訊息，可隨時撤回。</span></label><button class="field full" type="submit">使用 LINE 身分送出報名</button></div></form>`)}</article></section>`;
+}
+
+// 報名頁右側：先用 LINE 確認身分。會員一鍵報名（不用再填資料）、已報名顯示狀態與取消；不是會員才顯示報名表。
+let regMember=null; // {eventId, status:"checking"|"member"|"guest", name, registered, loggedOut}
+const STAFF_ROLES=["admin","event_staff","region_lead"];
+function registerAction(event,formHtml){
+  const m=regMember?.eventId===event.id?regMember:{status:"checking"};
+  if(m.status==="checking") return `<h2>報名</h2><div class="empty">正在用 LINE 確認你的會員身分…</div>`;
+  if(m.status==="member"&&m.registered) return `<h2>會員報名</h2><div class="notice">✓ ${escapeHtml(m.name)}，你已報名這場活動，活動前會透過 LINE 提醒你。</div><div class="actions" style="margin-top:14px"><a class="button" href="#me">看我的活動</a><button class="secondary" data-action="cancel-registration" data-event="${event.id}">取消報名</button></div>`;
+  if(eventState(event)!=="報名中") return `<h2>報名</h2><div class="notice">目前${eventState(event)}，暫停接受報名。</div>`;
+  if(m.status==="member") return `<h2>會員報名</h2><p>${escapeHtml(m.name)}，你已經是會員，不用再填資料。</p><button class="big" style="width:100%" data-action="quick-register" data-event="${event.id}">一鍵報名</button><p class="muted" style="margin-top:10px">報名後，活動前會透過 LINE 提醒你。</p>`;
+  return `<h2>LINE 登入＋簡短報名</h2>${live&&m.loggedOut?`<div class="notice">已經是會員？<button type="button" class="secondary small" data-action="line-login-register">用 LINE 登入一鍵報名</button></div>`:""}${formHtml}`;
+}
+async function checkRegisterMember(eventId){
+  regMember={eventId,status:"checking"};
+  if(live){
+    let loggedIn=false;
+    if(lineReady()){ try{ await liffReady; loggedIn=window.liff.isLoggedIn(); }catch{} }
+    if(!loggedIn){ regMember={eventId,status:"guest",loggedOut:true}; return route()==="register"&&render(); }
+  }
+  const data=await memberApi("me"); if(data.pending)return;
+  regMember=data.ok&&data.contact?{eventId,status:"member",name:data.contact.name,registered:(data.registrations||[]).some(r=>r.event_id===eventId&&!r.cancelled_at)}:{eventId,status:"guest"};
+  if(route()==="register") render();
+}
+// 報名或取消後重新抓名額，避免畫面上的人數停在舊的
+async function refreshEventCounts(){
+  if(!live) return;
+  if(STAFF_ROLES.includes(state.role)) return loadLiveData();
+  const {data}=await supabase.from("public_events").select("*").order("starts_at"); if(data) state.events=data;
+}
+async function quickRegister(btn){
+  const eventId=btn.dataset.event; btn.disabled=true; btn.textContent="報名中…";
+  const data=await memberApi("register",{event_id:eventId}); if(data.pending)return;
+  if(data.error){ btn.disabled=false; btn.textContent="一鍵報名"; return toast(data.error); }
+  if(data.code==="NOT_MEMBER"){ regMember={eventId,status:"guest"}; return render(); }
+  await refreshEventCounts(); regMember={...regMember,registered:true};
+  registeredView(eventId,data.already?"你已經報名過了":"報名完成");
+}
+function registeredView(eventId,title){
+  $("#app").innerHTML=`<article class="card" style="max-width:560px;margin:40px auto;text-align:center"><h1>${title}</h1><p>活動前會透過 LINE 提醒你。</p><div class="actions" style="justify-content:center"><a class="button" href="#me">看我的活動</a><a class="button secondary" href="#register?event=${eventId}" data-action="back-to-event">回到活動頁</a></div></article>`;
 }
 
 // ───── 學員頁面 ─────
@@ -379,6 +423,17 @@ function demoMemberApi(action,payload){
     if(legacy){ id=legacy.id; for(const [k,v] of Object.entries(fields)) if(!legacy[k]&&v)legacy[k]=v; Object.assign(legacy,{line_user_id:line,display_name:"LINE 新朋友",line_status:"active",marketing_consent:Boolean(payload.marketing),last_interaction_at:new Date().toISOString()}); }
     else { id=crypto.randomUUID(); state.contacts.push({id,member_no:nextMemberNo(),name:payload.name.trim(),phone:payload.phone,...fields,address:"",national_id:"",notes:"",display_name:"LINE 新朋友",line_user_id:line,line_status:"active",marketing_consent:Boolean(payload.marketing),tags:[],last_interaction_at:new Date().toISOString(),created_at:new Date().toISOString()}); }
     persist(); return {ok:true,contactId:id,linked:Boolean(legacy)};
+  }
+  if(action==="register"){
+    if(!me)return notMember;
+    const event=state.events.find(e=>e.id===payload.event_id);
+    let reg=state.registrations.find(r=>r.event_id===event.id&&r.contact_id===me.id);
+    if(reg&&!reg.cancelled_at)return {ok:true,already:true,name:me.name,eventTitle:event.title};
+    if(event.registration_count>=event.capacity)return {error:"活動已額滿"};
+    if(reg) Object.assign(reg,{attendance_status:"registered",cancelled_at:null,registered_at:new Date().toISOString()});
+    else state.registrations.push({id:crypto.randomUUID(),event_id:event.id,contact_id:me.id,attendance_status:"registered",payment_status:"pending",source:"line",registered_at:new Date().toISOString(),cancelled_at:null});
+    event.registration_count=(event.registration_count||0)+1; persist();
+    return {ok:true,already:false,name:me.name,eventTitle:event.title};
   }
   if(action==="checkin"){
     const event=state.events.find(e=>e.id===payload.event_id);
@@ -802,6 +857,9 @@ async function onClick(event){
   if(action==="new-campaign") return modal(`<h2>新增 LINE 訊息草稿</h2><form id="campaignForm"><div class="field"><label>草稿名稱</label><input name="name" required></div><div class="field"><label>關聯活動</label><select name="event_id">${state.events.map(e=>`<option value="${e.id}">${escapeHtml(e.title)}</option>`).join("")}</select></div><div class="field"><label>訊息內容</label><textarea name="body" required maxlength="500"></textarea></div><button>儲存草稿</button></form>`);
   if(action==="review-campaign") return reviewCampaign(btn.dataset.id);
   if(action==="cancel-registration") return cancelRegistration(btn.dataset.event);
+  if(action==="quick-register") return quickRegister(btn);
+  if(action==="back-to-event"){ event.preventDefault(); if(location.hash===btn.getAttribute("href")) return render(); location.hash=btn.getAttribute("href"); return; }
+  if(action==="line-login-register"){ if(!lineReady()) return toast(LINE_NOT_READY); await liffReady; return window.liff.login({redirectUri:location.href}); }
   if(action==="quick-join"){ btn.disabled=true; btn.textContent="報到中…"; return runScan({quickJoin:true}); }
 }
 
@@ -818,7 +876,7 @@ document.addEventListener("change",event=>{
   if(event.target.id==="importFile")readImportFile(event.target.files[0]);
   if(event.target.dataset.mapField){ importState.map[event.target.dataset.mapField]=event.target.value===""?undefined:Number(event.target.value); render(); }
   if(event.target.id==="sponsorItemFilter"||event.target.id==="sponsorPaidFilter"){ const p=new URLSearchParams(); const i=$("#sponsorItemFilter").value, pd=$("#sponsorPaidFilter").value; if(i)p.set("item",i); if(pd)p.set("paid",pd); location.hash="sponsors"+(p.toString()?"?"+p:""); }
-  if(event.target.id==="demoLine"){ state.demoLine=event.target.value==="new"?`Unew${Date.now()}`:event.target.value; persist(); render(); }
+  if(event.target.id==="demoLine"){ regMember=null; state.demoLine=event.target.value==="new"?`Unew${Date.now()}`:event.target.value; persist(); render(); }
 });
 
 async function onSubmit(event){
@@ -861,6 +919,7 @@ async function submitRegistration(data){
     if(!lineReady()) return toast(LINE_NOT_READY);
     try{ await liffReady; if(!window.liff.isLoggedIn())return window.liff.login(); const idToken=window.liff.getIDToken(); const res=await fetch(`${config.supabaseUrl}/functions/v1/line-auth`,{method:"POST",headers:{"Content-Type":"application/json","apikey":config.supabasePublishableKey},body:JSON.stringify({...data,idToken,marketing:data.marketing==="on"})}); const body=await res.json(); if(!res.ok)throw new Error(body.error||"報名失敗"); }
     catch(error){return toast(error.message);}
+    await refreshEventCounts(); regMember=null;
   } else {
     // 展示：以目前選定的學員 LINE 身分報名，和雲端一樣「同一個 LINE＝同一位會員」
     let contact=state.contacts.find(c=>c.line_user_id===state.demoLine);
@@ -872,7 +931,7 @@ async function submitRegistration(data){
     else state.registrations.push({id:crypto.randomUUID(),event_id:data.event_id,contact_id:contact.id,attendance_status:"registered",payment_status:"pending",registered_at:new Date().toISOString(),cancelled_at:null});
     e.registration_count++;
   }
-  persist(); $("#app").innerHTML=`<article class="card" style="max-width:560px;margin:40px auto;text-align:center"><h1>報名完成</h1><p>我們已收到你的資料，活動前會透過 LINE 提醒你。</p><div class="actions" style="justify-content:center"><a class="button" href="#me">看我的活動</a><a class="button secondary" href="#register?event=${data.event_id}">回到活動頁</a></div></article>`;
+  regMember=null; persist(); $("#app").innerHTML=`<article class="card" style="max-width:560px;margin:40px auto;text-align:center"><h1>報名完成</h1><p>我們已收到你的資料，活動前會透過 LINE 提醒你。</p><div class="actions" style="justify-content:center"><a class="button" href="#me">看我的活動</a><a class="button secondary" href="#register?event=${data.event_id}" data-action="back-to-event">回到活動頁</a></div></article>`;
 }
 
 async function cancelRegistration(eventId){
@@ -881,13 +940,15 @@ async function cancelRegistration(eventId){
     const reg=contact&&state.registrations.find(r=>r.event_id===eventId&&r.contact_id===contact.id&&!r.cancelled_at);
     if(!reg)return toast("找不到可取消的報名");
     reg.cancelled_at=new Date().toISOString();reg.attendance_status="cancelled";
-    const e=state.events.find(x=>x.id===eventId); if(e&&e.registration_count>0)e.registration_count--;persist();toast("已取消報名");render();return;
+    const e=state.events.find(x=>x.id===eventId); if(e&&e.registration_count>0)e.registration_count--;persist();toast("已取消報名");
+    if(regMember?.eventId===eventId) regMember.registered=false; render();return;
   }
   try{
     if(!lineReady()) return toast(LINE_NOT_READY);
     await liffReady;if(!window.liff.isLoggedIn())return window.liff.login();
     const res=await fetch(`${config.supabaseUrl}/functions/v1/line-auth`,{method:"POST",headers:{"Content-Type":"application/json",apikey:config.supabasePublishableKey},body:JSON.stringify({action:"cancel",event_id:eventId,idToken:window.liff.getIDToken()})});
     const body=await res.json();if(!res.ok)throw new Error(body.error||"取消失敗");toast("已取消報名");
+    await refreshEventCounts(); if(regMember?.eventId===eventId) regMember.registered=false; render();
   }catch(error){toast(error.message);}
 }
 
