@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-3";
+import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261021-4";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -142,9 +142,9 @@ async function handleAuthLink(){
 }
 
 async function loadPublicEvent(){
-  const eventId=query().get("event");
-  const {data,error}=await supabase.from("public_events").select("*").eq("id",eventId).single();
-  state={role:"public",region_id:null,regions:[],staff:[],events:error?[]:[data],contacts:[],registrations:[],campaigns:[],audit:[]};
+  // 載入所有公開活動：連結裡的活動找不到時，至少能列出目前可報名的活動，不讓學員卡在死路
+  const {data}=await supabase.from("public_events").select("*").order("starts_at");
+  state={role:"public",region_id:null,regions:[],staff:[],events:data||[],contacts:[],registrations:[],campaigns:[],audit:[]};
 }
 
 async function loadLiveData(){
@@ -172,7 +172,8 @@ function render(){
   const name=route();
   if(state.role!=="public"&&((ADMIN_ONLY_ROUTES.includes(name)&&!isAdmin())||(name==="contacts"&&!canBrowseMembers(state.role)))){ location.hash="dashboard"; return; }
   // 雲端模式未登入（或帳號未開通）：只能看登入頁與學員頁，後台選單整個藏起來。
-  const signedOut=live&&["none","setting-password","link-pending"].includes(state.role);
+  // 未登入、設定密碼中、或是學員（public）：都不顯示工作人員選單
+  const signedOut=live&&["none","setting-password","link-pending","public"].includes(state.role);
   if(signedOut&&!["login","register","set-password",...STUDENT_ROUTES].includes(name)){ location.hash="login"; return; }
   document.body.classList.toggle("signed-out",signedOut);
   document.body.classList.toggle("student-view",STUDENT_ROUTES.includes(name));
@@ -334,8 +335,12 @@ function users(){
 }
 
 function register(){
-  const event=state.events.find(e=>e.id===(query().get("event")||state.events[0]?.id));
-  if(!event)return `<div class="empty">找不到這場活動。</div>`;
+  const wanted=query().get("event");
+  const event=state.events.find(e=>e.id===(wanted||(live?"":state.events[0]?.id)));
+  if(!event){
+    const open=state.events.filter(e=>eventState(e)==="報名中");
+    return `<article class="card student-card" style="max-width:640px;margin:20px auto"><h1>${wanted?"找不到這場活動":"選擇要報名的活動"}</h1>${wanted?`<p class="muted">連結可能已過期，或活動已下架。以下是目前開放報名的活動：</p>`:""}${open.length?`<ul class="student-list">${open.map(e=>`<li class="student-item"><div><strong>${escapeHtml(e.title)}</strong><small>${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・${escapeHtml(e.fee_note||"")}</small></div><a class="button" href="#register?event=${e.id}">報名</a></li>`).join("")}</ul>`:`<p class="muted">目前沒有開放報名的活動。</p>`}</article>`;
+  }
   return `${pageHead(event.title,event.theme)}<section class="two-col"><article class="card"><h2>活動資訊</h2><div class="kpi-line"><span>時間</span><strong>${fmtDate(event.starts_at)}</strong></div><div class="kpi-line"><span>地點</span><strong>${escapeHtml(event.location)}</strong></div><div class="kpi-line"><span>費用</span><strong>${escapeHtml(event.fee_note)}</strong></div><div class="kpi-line"><span>名額</span><strong>${event.registration_count}/${event.capacity}</strong></div><p class="muted">分享報名 QR Code</p><div id="qr" aria-label="活動報名 QR Code"></div></article><article class="card"><h2>LINE 登入＋簡短報名</h2>${eventState(event)!=="報名中"?`<div class="notice">目前${eventState(event)}，暫停接受報名。</div>`:`<form id="registrationForm"><input type="hidden" name="event_id" value="${event.id}"><div class="form-grid"><div class="field"><label>姓名 *</label><input name="name" required maxlength="40"></div>${phoneField("手機","",{required:true,autocomplete:"tel"})}<div class="field full"><label>Email</label><input name="email" type="email"></div><div class="field full"><label>有興趣的主題</label><select name="interest"><option>閱讀</option><option>冥想</option><option>身心放鬆</option><option>節氣生活</option></select></div><label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="privacy.html" target="_blank">個資告知</a>，資料僅用於活動與會員服務。</span></label><label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收後續活動與課程訊息，可隨時撤回。</span></label><button class="field full" type="submit">使用 LINE 身分送出報名</button><button class="field full secondary" type="button" data-action="cancel-registration" data-event="${event.id}">取消我的報名</button></div></form>`}</article></section>`;
 }
 
