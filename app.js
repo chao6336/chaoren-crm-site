@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261022-1";
+import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261022-2";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -210,7 +210,7 @@ function dashboard(){
 
 function events(){
   const create=canEvents()?`<button data-action="edit-event">＋ 建立活動</button>`:"";
-  return `${pageHead("活動管理","建立活動、查看報名進度並取得公開連結。",create)}<div class="table-wrap"><table><thead><tr><th>活動</th><th>日期</th><th>地點</th><th>報名</th><th>狀態</th><th>操作</th></tr></thead><tbody>${state.events.map(e=>`<tr><td><strong>${escapeHtml(e.title)}</strong><br><small>${escapeHtml(e.theme)}</small></td><td>${fmtDate(e.starts_at)}</td><td>${escapeHtml(e.location)}</td><td>${e.registration_count}/${e.capacity}</td><td><span class="pill">${eventState(e)}</span></td><td><a href="#register?event=${e.id}">報名頁</a>　<a href="#checkin?event=${e.id}">報到</a>${canEvents()?`　<a href="#events" data-action="edit-event" data-id="${e.id}">編輯</a>　<a href="#events" class="danger-link" data-action="delete-event" data-id="${e.id}">刪除</a>`:""}</td></tr>`).join("")}</tbody></table></div>`;
+  return `${pageHead("活動管理","建立活動、查看報名進度並取得公開連結。",create)}<div class="table-wrap"><table><thead><tr><th>活動</th><th>日期</th><th>地點</th><th>報名</th><th>狀態</th><th>操作</th></tr></thead><tbody>${state.events.map(e=>`<tr><td><strong>${escapeHtml(e.title)}</strong><br><small>${escapeHtml(e.theme)}</small></td><td>${fmtDate(e.starts_at)}</td><td>${escapeHtml(e.location)}</td><td>${e.registration_count}/${e.capacity}</td><td><span class="pill">${eventState(e)}</span></td><td><a href="#events" data-action="event-roster" data-id="${e.id}">名單</a>　<a href="#register?event=${e.id}">報名頁</a>　<a href="#checkin?event=${e.id}">報到</a>${canEvents()?`　<a href="#events" data-action="edit-event" data-id="${e.id}">編輯</a>　<a href="#events" class="danger-link" data-action="delete-event" data-id="${e.id}">刪除</a>`:""}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
 function regionOptions(selected,{withAll=false,withNone=false}={}){
@@ -228,6 +228,22 @@ function contacts(){
 }
 // 從舊系統匯入的會員常有幾十個標籤：清單只顯示前 3 個，其餘在詳細頁展開。
 function tagPills(tags=[],limit=3){ const shown=tags.slice(0,limit).map(t=>`<span class="pill">${escapeHtml(t)}</span>`).join(" "); return tags.length>limit?`${shown} <span class="pill off">＋${tags.length-limit}</span>`:shown; }
+// 活動名單：分「已報到」「已報名、未報到」「已取消」三區；範圍和報到頁一樣（區負責人只看自己區域）
+function eventRoster(id){
+  const e=state.events.find(x=>x.id===id); if(!e)return;
+  const regs=roster().filter(r=>r.event_id===id);
+  const attended=regs.filter(r=>!r.cancelled_at&&r.attendance_status==="attended");
+  const waiting=regs.filter(r=>!r.cancelled_at&&r.attendance_status!=="attended");
+  const cancelled=regs.filter(r=>r.cancelled_at);
+  const item=(r,when)=>`<li class="student-item"><div><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span><small>${escapeHtml(r.region_name||"未分區")}・手機末三碼 ${escapeHtml(r.phone_last3||"---")}${r.source==="walk-in"?"・現場報名":""}${when?`・${when}`:""}</small></div></li>`;
+  const list=(title,rows,when)=>`<h3>${title}（${rows.length}）</h3>${rows.length?`<ul class="student-list">${rows.map(r=>item(r,when(r))).join("")}</ul>`:`<p class="muted">沒有</p>`}`;
+  const scope=canEvents()?"":`<p class="muted">只顯示${escapeHtml(regionName(state.region_id))}的會員</p>`;
+  modal(`<h2>${escapeHtml(e.title)}</h2><p class="muted">${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・報名 ${attended.length+waiting.length}／${e.capacity}</p>${scope}
+    ${list("已報到",attended,r=>r.checked_in_at?`報到 ${fmtDate(r.checked_in_at)}`:"")}
+    ${list("已報名、未報到",waiting,r=>r.registered_at?`報名 ${fmtDate(r.registered_at)}`:"")}
+    ${cancelled.length?list("已取消",cancelled,r=>r.cancelled_at?`取消 ${fmtDate(r.cancelled_at)}`:""):""}
+    <div class="actions" style="margin-top:14px"><a class="button" href="#checkin?event=${e.id}" data-action="close-modal">到報到頁</a><button type="button" class="secondary" data-action="close-modal">關閉</button></div>`);
+}
 function contactRows(rows){ return rows.map(c=>`<tr class="clickable" data-action="view-contact" data-id="${c.id}" data-search="${escapeHtml([c.member_no,c.name,c.display_name,...(c.tags||[])].join(" ").toLowerCase())}"><td class="member-no">${escapeHtml(c.member_no||"")}</td><td><strong>${escapeHtml(c.name)}</strong><br><small>${escapeHtml(c.display_name)}</small></td><td>${escapeHtml(c.gender||"—")}／${c.age??"—"}</td><td>${escapeHtml(c.region_name||regionName(c.region_id))}</td><td>${escapeHtml(showPhone(c.phone))}</td><td>${tagPills(c.tags)}</td><td><span class="pill ${c.line_status!=="active"?"off":""}">${({active:"可聯絡",blocked:"已封鎖"})[c.line_status]||"未綁定"}</span></td></tr>`).join(""); }
 
 function viewContact(id){
@@ -833,6 +849,7 @@ async function onClick(event){
   if(action==="view-contact") return viewContact(btn.dataset.id);
   if(action==="delete-contact") return deleteContactForm(btn.dataset.id);
   if(action==="delete-event"){ event.preventDefault(); return deleteEventForm(btn.dataset.id); }
+  if(action==="event-roster"){ event.preventDefault(); return eventRoster(btn.dataset.id); }
   if(action==="import-template") return download("會員名冊範本.csv",IMPORT_FIELDS.map(([,label])=>label).join(",")+"\r\n王小美,0912345678,女,51/03/18,北區,台北市大安區和平東路一段 1 號,may@example.com,,清明法會志工","text/csv;charset=utf-8");
   if(action==="import-run") return runImport();
   if(action==="import-reset"){ importState=null; return render(); }
