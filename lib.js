@@ -11,6 +11,26 @@ export function canBrowseMembers(role) {
 }
 export const GENDERS = ["男", "女", "其他"];
 
+// 居住縣市：和「所屬區域」（決定由哪位區負責人管）分開，只記住在哪裡、方便統計。順序同內政部縣市排列。
+export const CITIES = ["臺北市", "新北市", "基隆市", "桃園市", "新竹市", "新竹縣", "宜蘭縣", "苗栗縣", "臺中市", "彰化縣", "南投縣", "雲林縣",
+  "嘉義市", "嘉義縣", "臺南市", "高雄市", "屏東縣", "花蓮縣", "臺東縣", "澎湖縣", "金門縣", "連江縣", "海外"];
+
+// 改制前的舊縣名（舊名冊地址常見）
+const OLD_COUNTIES = { "臺北縣": "新北市", "桃園縣": "桃園市", "臺中縣": "臺中市", "臺南縣": "臺南市", "高雄縣": "高雄市" };
+
+// 「台北」「台北市大安區…」「100 臺北市…」「臺北縣板橋市…」都對到正式名稱；對不上或分不出（「新竹」「嘉義」）回傳 ""。
+export function normalizeCity(value) {
+  const text = String(value ?? "").trim().replace(/台/g, "臺").replace(/^\d{3,6}\s*/, "");
+  if (!text) return "";
+  if (["國外", "海外", "外國"].includes(text)) return "海外";
+  const old = Object.keys(OLD_COUNTIES).find(k => text.startsWith(k));
+  if (old) return OLD_COUNTIES[old];
+  const hit = CITIES.find(c => text.startsWith(c));
+  if (hit) return hit;
+  const short = CITIES.filter(c => c !== "海外" && c.slice(0, 2) === text);
+  return short.length === 1 ? short[0] : "";
+}
+
 // ───── 手機：資料庫一律存國際格式（E.164，例如 +886912345678），畫面上一律顯示國碼：+886 912-345-678 ─────
 // 下拉選單的國碼；「其他」讓使用者自己輸入 + 開頭的完整號碼。
 export const COUNTRY_CODES = [
@@ -149,6 +169,33 @@ export function campaignEligible(contact) {
   return Boolean(contact.line_user_id && contact.marketing_consent && contact.line_status === "active" && !contact.anonymized_at);
 }
 
+export const OUTDOOR_CITIES = ["台中", "大台北", "高雄"];
+export const CONTACT_MODES = ["正式參加者", "現場圍觀者", "親友介紹"];
+export const SELF_CHECK_VALUES = ["經常", "偶爾", "很少"];
+
+// 戶外招生標籤由後端依白名單欄位產生，避免把任意網址參數直接寫成會員標籤。
+export function outdoorLeadTags({ lead_city = "", contact_mode = "", theme = "", online_trial_interest = false } = {}) {
+  const tags = ["戶外體驗"];
+  if (OUTDOOR_CITIES.includes(lead_city)) tags.push(lead_city);
+  if (CONTACT_MODES.includes(contact_mode)) tags.push(contact_mode);
+  if (theme) tags.push(theme);
+  if (online_trial_interest) tags.push("免費線上課意願");
+  return [...new Set(tags)];
+}
+
+export function snsAttribution({ utm_source = "", utm_medium = "", utm_campaign = "", utm_content = "" } = {}) {
+  const clean = value => String(value || "").trim().slice(0, 80);
+  return { utm_source: clean(utm_source), utm_medium: clean(utm_medium), utm_campaign: clean(utm_campaign), utm_content: clean(utm_content) };
+}
+
+export function leadFunnelStats(registrations = []) {
+  const valid = registrations.filter(r => !r.cancelled_at && r.marketing_consent !== false);
+  const online = valid.filter(r => r.online_trial_attended_at).length;
+  const paid = valid.filter(r => r.paid_course_purchased_at).length;
+  const pct = (n, d) => d ? Math.round(n / d * 100) : 0;
+  return { leads: valid.length, onlineAttendees: online, buyers: paid, leadToOnlineRate: pct(online, valid.length), onlineToBuyerRate: pct(paid, online) };
+}
+
 export function csvEscape(value) {
   const text = String(value ?? "");
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
@@ -236,6 +283,8 @@ export const IMPORT_FIELDS = [
   ["phone", "手機", ["手機", "行動電話", "手機號碼", "電話", "聯絡電話", "mobile", "phone"]],
   ["gender", "性別", ["性別", "gender"]],
   ["birth_date", "出生年月日", ["出生年月日", "生日", "出生日期", "生年月日", "birthday"]],
+  // 居住縣市要排在「區域」前面：表頭「居住區域」才不會被「區域」搶走
+  ["residence_city", "居住縣市", ["居住縣市", "居住區域", "居住地", "縣市", "city"]],
   ["region", "區域", ["區域", "地區", "分區", "所屬區域", "區別", "region"]],
   ["address", "地址", ["地址", "住址", "通訊地址", "address"]],
   ["email", "Email", ["email", "e-mail", "電子郵件", "信箱"]],
@@ -273,7 +322,7 @@ export function splitTags(value) {
 
 // 已存在的會員：只補空白欄位、加新標籤，不覆蓋既有資料。回傳要補的欄位與標籤；都沒有就是 null。
 export function fillPlan(existing, row) {
-  const fields = ["phone", "gender", "birth_date", "region_id", "address", "email"].filter(k => !existing[k] && row[k]);
+  const fields = ["phone", "gender", "birth_date", "region_id", "residence_city", "address", "email"].filter(k => !existing[k] && row[k]);
   if (row.national_id && !existing.national_id && !existing.national_id_masked) fields.push("national_id");
   if (row.line_user_id && !existing.line_user_id) fields.push("line_user_id");
   const have = new Set(existing.tags || []);
@@ -281,7 +330,7 @@ export function fillPlan(existing, row) {
   return fields.length || tags.length ? { fields, tags } : null;
 }
 
-const FIELD_LABELS = { phone: "手機", gender: "性別", birth_date: "生日", region_id: "區域", address: "地址", email: "Email", national_id: "身分證", line_user_id: "LINE ID" };
+const FIELD_LABELS = { phone: "手機", gender: "性別", birth_date: "生日", region_id: "區域", residence_city: "居住縣市", address: "地址", email: "Email", national_id: "身分證", line_user_id: "LINE ID" };
 
 // 把一列原始資料整理成會員欄位，並標出狀態：new／update（補資料）／duplicate／error。
 export function prepareImportRow(raw, map, { regions = [], existing = [], seen = new Set() } = {}) {
@@ -297,13 +346,17 @@ export function prepareImportRow(raw, map, { regions = [], existing = [], seen =
   const regionText = cell("region");
   const region = regionText ? regions.find(r => r.name === regionText || r.name.replace(/區$/, "") === regionText.replace(/區$/, "")) : null;
   if (regionText && !region) warnings.push(`找不到區域「${regionText}」，先列為未分區`);
+  // 沒有居住縣市欄位時，從地址開頭推得出來就順便填上
+  const cityText = cell("residence_city");
+  const residence_city = normalizeCity(cityText) || normalizeCity(cell("address"));
+  if (cityText && !normalizeCity(cityText)) warnings.push(`看不懂居住縣市「${cityText}」${residence_city ? `，改用地址的${residence_city}` : "，先留空"}`);
   const nid = cell("national_id").toUpperCase();
   const national_id = nid && isValidNationalId(nid) ? nid : "";
   if (nid && !national_id) warnings.push("身分證格式不正確，未匯入");
   const lineText = cell("line_user_id");
   const line_user_id = /^U[0-9a-f]{32}$/.test(lineText) ? lineText : null;
   if (lineText && !line_user_id) warnings.push("LINE ID 格式不正確，未匯入");
-  const row = { name, phone, gender: normalizeGender(cell("gender")), birth_date, region_id: region?.id || null, address: cell("address"), email: cell("email"), national_id, line_user_id, tags: splitTags(cell("tags")), notes: cell("notes") };
+  const row = { name, phone, gender: normalizeGender(cell("gender")), birth_date, region_id: region?.id || null, residence_city: residence_city || null, address: cell("address"), email: cell("email"), national_id, line_user_id, tags: splitTags(cell("tags")), notes: cell("notes") };
   let status = errors.length ? "error" : "new";
   if (status === "new") {
     const key = `${name}|${phone || ""}`;

@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone } from "./lib.js?v=20261022-2";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution } from "./lib.js?v=20261023-1";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -10,7 +10,7 @@ const $ = selector => document.querySelector(selector);
 const LINE_NOT_READY = "LINE 登入尚未開放，請洽協會工作人員。";
 const lineReady = () => !live || Boolean(config.liffId);
 
-const SEED_VERSION = 8;
+const SEED_VERSION = 9;
 // 展示資料全部是假的；區域名稱等協會提供真實清單後再換。
 const seed = {
   version: SEED_VERSION,
@@ -25,10 +25,10 @@ const seed = {
     { id:"evt-2", title:"24 節氣冥想體驗", theme:"給第一次接觸冥想的你", starts_at:"2026-12-06T10:00:00+08:00", registration_deadline:"2026-12-03T23:59:00+08:00", location:"線上＋實體", capacity:30, status:"draft", registration_count:1, fee_note:"免費" }
   ],
   contacts: [
-    { id:"c1", member_no:"T0001", name:"王小美", display_name:"May", phone:"+886912345678", email:"may@example.com", gender:"女", birth_date:"1962-03-18", region_id:"north", address:"台北市大安區和平東路一段 1 號", national_id:"A223456781", notes:"清明法會固定志工", line_user_id:"Udemo01", line_status:"active", marketing_consent:true, tags:["閱讀","睡眠"], last_interaction_at:"2026-10-15", created_at:"2026-10-01" },
-    { id:"c2", member_no:"T0002", name:"陳志明", display_name:"Jim", phone:"+886987654321", email:"jim@example.com", gender:"男", birth_date:"1958-11-02", region_id:"north", address:"新北市板橋區文化路二段 2 號", national_id:"F123456782", notes:"", line_user_id:"Udemo02", line_status:"active", marketing_consent:true, tags:["冥想"], last_interaction_at:"2026-10-12", created_at:"2026-10-05" },
-    { id:"c3", member_no:"T0003", name:"林雅婷", display_name:"Ting", phone:"+886922111222", email:"ting@example.com", gender:"女", birth_date:"1975-07-21", region_id:"central", address:"台中市西區公益路 3 號", national_id:"B223456783", notes:"行動不便，需安排座位", line_user_id:"Udemo03", line_status:"blocked", marketing_consent:true, tags:["閱讀"], last_interaction_at:"2026-10-08", created_at:"2026-10-08" },
-    { id:"c4", member_no:"T0004", name:"周文豪", display_name:"Howard", phone:"+886933000111", email:"howard@example.com", gender:"男", birth_date:"1949-01-30", region_id:"south", address:"高雄市苓雅區四維三路 4 號", national_id:"E123456784", notes:"", line_user_id:"Udemo04", line_status:"active", marketing_consent:false, tags:["冥想"], last_interaction_at:"2026-10-10", created_at:"2026-10-10" },
+    { id:"c1", member_no:"T0001", name:"王小美", display_name:"May", phone:"+886912345678", email:"may@example.com", gender:"女", birth_date:"1962-03-18", region_id:"north", residence_city:"臺北市", address:"台北市大安區和平東路一段 1 號", national_id:"A223456781", notes:"清明法會固定志工", line_user_id:"Udemo01", line_status:"active", marketing_consent:true, tags:["閱讀","睡眠"], last_interaction_at:"2026-10-15", created_at:"2026-10-01" },
+    { id:"c2", member_no:"T0002", name:"陳志明", display_name:"Jim", phone:"+886987654321", email:"jim@example.com", gender:"男", birth_date:"1958-11-02", region_id:"north", residence_city:"新北市", address:"新北市板橋區文化路二段 2 號", national_id:"F123456782", notes:"", line_user_id:"Udemo02", line_status:"active", marketing_consent:true, tags:["冥想"], last_interaction_at:"2026-10-12", created_at:"2026-10-05" },
+    { id:"c3", member_no:"T0003", name:"林雅婷", display_name:"Ting", phone:"+886922111222", email:"ting@example.com", gender:"女", birth_date:"1975-07-21", region_id:"central", residence_city:"臺中市", address:"台中市西區公益路 3 號", national_id:"B223456783", notes:"行動不便，需安排座位", line_user_id:"Udemo03", line_status:"blocked", marketing_consent:true, tags:["閱讀"], last_interaction_at:"2026-10-08", created_at:"2026-10-08" },
+    { id:"c4", member_no:"T0004", name:"周文豪", display_name:"Howard", phone:"+886933000111", email:"howard@example.com", gender:"男", birth_date:"1949-01-30", region_id:"south", residence_city:"高雄市", address:"高雄市苓雅區四維三路 4 號", national_id:"E123456784", notes:"", line_user_id:"Udemo04", line_status:"active", marketing_consent:false, tags:["冥想"], last_interaction_at:"2026-10-10", created_at:"2026-10-10" },
     { id:"c5", member_no:"T0005", name:"黃淑芬", display_name:"Fen", phone:"+886955666777", email:"", gender:"女", birth_date:"1968-09-09", region_id:null, address:"", national_id:"", notes:"舊名冊匯入，尚未分區", line_user_id:null, line_status:"unknown", marketing_consent:false, tags:[], last_interaction_at:"2026-09-30", created_at:"2026-09-30" }
   ],
   registrations: [
@@ -253,12 +253,16 @@ function viewContact(id){
   const line=(label,value)=>`<div class="kpi-line"><span>${label}</span><strong>${escapeHtml(value||"—")}</strong></div>`;
   const nid=c.national_id_masked?`${escapeHtml(c.national_id_masked)}${isAdmin()?` <button class="link" data-action="reveal-nid" data-id="${id}">查看</button>`:""}`:"—";
   modal(`<div class="profile-head"><div class="avatar" aria-hidden="true">${escapeHtml((c.name||"?").slice(0,1))}</div><div><h2>${escapeHtml(c.name)}</h2><p class="muted">${raw.line_user_id||raw.line_status==="active"?`已綁定 LINE${c.display_name?`（${escapeHtml(c.display_name)}）`:""}`:"尚未綁定 LINE"}</p></div></div>
-    ${line("會員編號",c.member_no)}${line("性別",c.gender)}${line("出生年月日",c.birth_date?`${c.birth_date}（${age} 歲）`:"")}${line("區域",c.region_name||regionName(c.region_id))}${line("手機",showPhone(c.phone))}${line("Email",c.email)}${line("地址",c.address)}
+    ${line("會員編號",c.member_no)}${line("性別",c.gender)}${line("出生年月日",c.birth_date?`${c.birth_date}（${age} 歲）`:"")}${line("區域",c.region_name||regionName(c.region_id))}${line("居住縣市",c.residence_city)}${line("手機",showPhone(c.phone))}${line("Email",c.email)}${line("地址",c.address)}
     <div class="kpi-line"><span>身分證</span><strong id="nidValue">${nid}</strong></div>${isAdmin()?line("LINE UID",raw.line_user_id||"未綁定"):""}${line("備註",c.notes)}${(raw.tags||[]).length?`<details class="tag-box"><summary>標籤與參加紀錄（${raw.tags.length}）</summary><div>${raw.tags.map(t=>`<span class="pill">${escapeHtml(t)}</span>`).join(" ")}</div></details>`:""}
     <h3>活動與課程</h3>${history.length?`<ul class="plain">${history.map(h=>`<li>${escapeHtml(h.event?.title||"已刪除的活動")}・${({attended:"已參加",registered:"已報名",cancelled:"已取消",absent:"未出席"})[h.attendance_status]||h.attendance_status}</li>`).join("")}</ul>`:`<p class="muted">尚無紀錄</p>`}
     ${isAdmin()?sponsorBlock(id):""}
     ${isAdmin()?`<div class="actions"><button data-action="edit-contact" data-id="${id}">編輯資料</button><button class="danger" data-action="delete-contact" data-id="${id}">刪除會員</button></div>`:""}`);
 }
+
+// 性別必填（員工表單、學員首次填資料、新人報名表共用）；LINE 一鍵報到與匯入舊名冊不擋，之後再補。
+function genderField(selected){ return `<div class="field"><label>性別 *</label><select name="gender" required><option value="">請選擇</option>${GENDERS.map(g=>`<option ${selected===g?"selected":""}>${g}</option>`).join("")}</select></div>`; }
+function cityField(selected){ return `<div class="field"><label>居住縣市</label><select name="residence_city"><option value="">未填</option>${CITIES.map(c=>`<option ${selected===c?"selected":""}>${c}</option>`).join("")}</select></div>`; }
 
 function contactForm(id){
   if(!isAdmin())return toast("只有總管理可以修改會員資料");
@@ -267,9 +271,10 @@ function contactForm(id){
   modal(`<h2>${id?"編輯會員":"新增會員"}</h2><form id="contactForm"><input type="hidden" name="contact_id" value="${id||""}"><div class="form-grid">
     <div class="field"><label>姓名 *</label><input name="name" required maxlength="40" value="${v("name")}"></div>
     ${phoneField("手機",c?.phone||"")}
-    <div class="field"><label>性別</label><select name="gender"><option value="">未填</option>${GENDERS.map(g=>`<option ${c?.gender===g?"selected":""}>${g}</option>`).join("")}</select></div>
+    ${genderField(c?.gender)}
     <div class="field"><label>出生年月日</label><input name="birth_date" type="date" min="1900-01-01" value="${v("birth_date")}"></div>
     <div class="field"><label>區域</label><select name="region_id">${regionOptions(c?.region_id,{withNone:true})}</select></div>
+    ${cityField(c?.residence_city)}
     <div class="field"><label>Email</label><input name="email" type="email" value="${v("email")}"></div>
     <div class="field full"><label>地址</label><input name="address" maxlength="200" value="${v("address")}"></div>
     <div class="field full"><label>身分證字號</label><input name="national_id" maxlength="10" autocomplete="off" placeholder="${c?.national_id_masked||maskNationalId(c?.national_id)||"A123456789"}"><small class="muted">${id?"留空＝不變更；":""}只有總管理看得到完整號碼，存檔後加密保存。</small></div>
@@ -278,10 +283,11 @@ function contactForm(id){
 }
 
 async function saveContact(data){
+  if(!GENDERS.includes(data.gender))return toast("請選擇性別");
   const ph=readPhone(data); if(ph.error) return toast(ph.error); data.phone=ph.phone||"";
   const nid=data.national_id.trim().toUpperCase();
   if(nid&&!isValidNationalId(nid))return toast("身分證格式不正確，例如 A123456789");
-  const fields={name:data.name.trim(),phone:data.phone,email:data.email,gender:data.gender,birth_date:data.birth_date,region_id:data.region_id||null,address:data.address,notes:data.notes};
+  const fields={name:data.name.trim(),phone:data.phone,email:data.email,gender:data.gender,birth_date:data.birth_date,region_id:data.region_id||null,residence_city:data.residence_city||null,address:data.address,notes:data.notes};
   if(live){
     const {error}=await supabase.rpc("admin_save_contact",{p_contact_id:data.contact_id||null,p_data:fields,p_national_id:nid||null});
     if(error)return toast(error.message.includes("FORBIDDEN")?"沒有權限":"儲存失敗："+error.message);
@@ -359,12 +365,16 @@ function users(){
 
 function register(){
   const wanted=query().get("event");
+  const q=query(); const outdoor=q.get("campaign")==="outdoor";
+  const leadCity=q.get("city")||""; const contactMode=q.get("mode")||"現場圍觀者"; const sourceTheme=q.get("theme")||"";
   const event=state.events.find(e=>e.id===(wanted||(live?"":state.events[0]?.id)));
   if(!event){
     const open=state.events.filter(e=>eventState(e)==="報名中");
     return `<article class="card student-card" style="max-width:640px;margin:20px auto"><h1>${wanted?"找不到這場活動":"選擇要報名的活動"}</h1>${wanted?`<p class="muted">連結可能已過期，或活動已下架。以下是目前開放報名的活動：</p>`:""}${open.length?`<ul class="student-list">${open.map(e=>`<li class="student-item"><div><strong>${escapeHtml(e.title)}</strong><small>${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・${escapeHtml(e.fee_note||"")}</small></div><a class="button" href="#register?event=${e.id}">報名</a></li>`).join("")}</ul>`:`<p class="muted">目前沒有開放報名的活動。</p>`}</article>`;
   }
-  return `${demoLinePicker()}${pageHead(event.title,event.theme)}<section class="two-col"><article class="card"><h2>活動資訊</h2><div class="kpi-line"><span>時間</span><strong>${fmtDate(event.starts_at)}</strong></div><div class="kpi-line"><span>地點</span><strong>${escapeHtml(event.location)}</strong></div><div class="kpi-line"><span>費用</span><strong>${escapeHtml(event.fee_note)}</strong></div><div class="kpi-line"><span>名額</span><strong>${event.registration_count}/${event.capacity}</strong></div><p class="muted">分享報名 QR Code</p><div id="qr" aria-label="活動報名 QR Code"></div></article><article class="card" id="regAction">${registerAction(event,`<form id="registrationForm"><input type="hidden" name="event_id" value="${event.id}"><div class="form-grid"><div class="field"><label>姓名 *</label><input name="name" required maxlength="40"></div>${phoneField("手機","",{required:true,autocomplete:"tel"})}<div class="field full"><label>Email</label><input name="email" type="email"></div><div class="field full"><label>有興趣的主題</label><select name="interest"><option>閱讀</option><option>冥想</option><option>身心放鬆</option><option>節氣生活</option></select></div><label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="privacy.html" target="_blank">個資告知</a>，資料僅用於活動與會員服務。</span></label><label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收後續活動與課程訊息，可隨時撤回。</span></label><button class="field full" type="submit">使用 LINE 身分送出報名</button></div></form>`)}</article></section>`;
+  const tracking=["utm_source","utm_medium","utm_campaign","utm_content"].map(k=>`<input type="hidden" name="${k}" value="${escapeHtml(q.get(k)||"")}">`).join("");
+  const outdoorFields=outdoor?`<input type="hidden" name="campaign_type" value="outdoor"><input type="hidden" name="lead_city" value="${escapeHtml(leadCity)}"><input type="hidden" name="source_theme" value="${escapeHtml(sourceTheme)}"><div class="field full"><label>你是從哪裡認識我們？</label><select name="contact_mode"><option ${contactMode==="正式參加者"?"selected":""}>正式參加者</option><option ${contactMode==="現場圍觀者"?"selected":""}>現場圍觀者</option><option ${contactMode==="親友介紹"?"selected":""}>親友介紹</option></select></div><div class="field full"><h3>30 秒自我狀態了解</h3><p class="muted">這不是醫療診斷，只協助你了解最近的狀態。</p></div><div class="field full"><label>最近是否難入睡、睡不飽或醒來仍疲累？</label><select name="sleep_issue" required><option value="">請選擇</option><option>經常</option><option>偶爾</option><option>很少</option></select></div><div class="field full"><label>最近是否容易緊繃、煩躁或腦袋停不下來？</label><select name="stress_issue" required><option value="">請選擇</option><option>經常</option><option>偶爾</option><option>很少</option></select></div><label class="field full"><span><input type="checkbox" name="weekly_practice_interest"> 我願意每週留一小段時間練習放鬆。</span></label><label class="field full"><span><input type="checkbox" name="online_trial_interest" checked> 我想預約免費、限額的新手線上體驗課。</span></label>`:"";
+  return `${demoLinePicker()}${pageHead(event.title,event.theme)}<section class="two-col"><article class="card"><h2>活動資訊</h2><div class="kpi-line"><span>時間</span><strong>${fmtDate(event.starts_at)}</strong></div><div class="kpi-line"><span>地點</span><strong>${escapeHtml(event.location)}</strong></div><div class="kpi-line"><span>費用</span><strong>${escapeHtml(event.fee_note)}</strong></div><div class="kpi-line"><span>名額</span><strong>${event.registration_count}/${event.capacity}</strong></div><p class="muted">分享報名 QR Code</p><div id="qr" aria-label="活動報名 QR Code"></div></article><article class="card" id="regAction">${registerAction(event,`<form id="registrationForm"><input type="hidden" name="event_id" value="${event.id}">${tracking}<div class="form-grid"><div class="field"><label>姓名 *</label><input name="name" required maxlength="40"></div>${phoneField("手機","",{required:true,autocomplete:"tel"})}${genderField()}${cityField()}<div class="field full"><label>Email</label><input name="email" type="email"></div><div class="field full"><label>有興趣的主題</label><select name="interest"><option>閱讀</option><option>冥想</option><option>身心放鬆</option><option>節氣生活</option></select></div>${outdoorFields}<label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="privacy.html" target="_blank">個資告知</a>，資料僅用於活動與會員服務。</span></label><label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收後續活動與課程訊息，可隨時撤回。</span></label><button class="field full" type="submit">使用 LINE 身分送出報名</button></div></form>`)}</article></section>`;
 }
 
 // 報名頁右側：先用 LINE 確認身分。會員一鍵報名（不用再填資料）、已報名顯示狀態與取消；不是會員才顯示報名表。
@@ -434,7 +444,7 @@ function demoMemberApi(action,payload){
   if(action==="signup"){
     if(me)return {ok:true,contactId:me.id,existing:true};
     const legacy=findLegacyContact(state.contacts,payload);
-    const fields={gender:payload.gender||null,birth_date:payload.birth_date||null,region_id:payload.region_id||null,email:payload.email||""};
+    const fields={gender:payload.gender||null,birth_date:payload.birth_date||null,region_id:payload.region_id||null,residence_city:payload.residence_city||null,email:payload.email||""};
     let id;
     if(legacy){ id=legacy.id; for(const [k,v] of Object.entries(fields)) if(!legacy[k]&&v)legacy[k]=v; Object.assign(legacy,{line_user_id:line,display_name:"LINE 新朋友",line_status:"active",marketing_consent:Boolean(payload.marketing),last_interaction_at:new Date().toISOString()}); }
     else { id=crypto.randomUUID(); state.contacts.push({id,member_no:nextMemberNo(),name:payload.name.trim(),phone:payload.phone,...fields,address:"",national_id:"",notes:"",display_name:"LINE 新朋友",line_user_id:line,line_status:"active",marketing_consent:Boolean(payload.marketing),tags:[],last_interaction_at:new Date().toISOString(),created_at:new Date().toISOString()}); }
@@ -511,9 +521,10 @@ function signupForm(data,next){
   <form id="signupForm"><input type="hidden" name="next" value="${next}"><div class="form-grid">
     <div class="field"><label>姓名 *</label><input name="name" required maxlength="40" autocomplete="name"></div>
     ${phoneField("手機","",{required:true,autocomplete:"tel"})}
-    <div class="field"><label>性別</label><select name="gender"><option value="">不填</option>${GENDERS.map(g=>`<option>${g}</option>`).join("")}</select></div>
+    ${genderField()}
     <div class="field"><label>出生年月日</label><input name="birth_date" type="date" min="1900-01-01"></div>
     <div class="field"><label>所屬區域</label><select name="region_id"><option value="">不確定</option>${(data.regions||[]).map(r=>`<option value="${r.id}">${escapeHtml(r.name)}</option>`).join("")}</select></div>
+    ${cityField()}
     <div class="field"><label>Email</label><input name="email" type="email" autocomplete="email"></div>
     <label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="privacy.html" target="_blank">個資告知</a>。</span></label>
     <label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收活動與課程訊息，可隨時撤回。</span></label>
@@ -521,6 +532,7 @@ function signupForm(data,next){
 }
 
 async function submitSignup(data){
+  if(!GENDERS.includes(data.gender))return toast("請選擇性別");
   const ph=readPhone(data); if(ph.error) return toast(ph.error); data.phone=ph.phone;
   const btn=$("#signupForm button"); if(btn)btn.disabled=true;
   const result=await memberApi("signup",{...data,privacy:data.privacy==="on",marketing:data.marketing==="on"}); if(result.pending)return;
@@ -751,7 +763,7 @@ async function runImport(){
   } else {
     for(const p of todo){
       const ex=p.status==="update"&&state.contacts.find(c=>c.id===p.row.existing_id);
-      if(ex){ for(const k of ["phone","gender","birth_date","region_id","address","email","national_id","line_user_id"]) if(!ex[k]&&p.row[k]) ex[k]=p.row[k]; ex.tags=[...new Set([...(ex.tags||[]),...p.row.tags])]; if(ex.line_user_id&&ex.line_status==="unknown") ex.line_status="active"; result.updated++; continue; }
+      if(ex){ for(const k of ["phone","gender","birth_date","region_id","residence_city","address","email","national_id","line_user_id"]) if(!ex[k]&&p.row[k]) ex[k]=p.row[k]; ex.tags=[...new Set([...(ex.tags||[]),...p.row.tags])]; if(ex.line_user_id&&ex.line_status==="unknown") ex.line_status="active"; result.updated++; continue; }
       const {existing_id,...row}=p.row; state.contacts.push({id:crypto.randomUUID(),member_no:nextMemberNo(),display_name:"",...row,line_status:row.line_user_id?"active":"unknown",marketing_consent:false,last_interaction_at:new Date().toISOString(),created_at:new Date().toISOString()}); result.created++;
     }
   }
@@ -931,6 +943,7 @@ async function onSubmit(event){
 }
 
 async function submitRegistration(data){
+  if(!GENDERS.includes(data.gender))return toast("請選擇性別");
   const ph=readPhone(data); if(ph.error) return toast(ph.error); data.phone=ph.phone;
   if(live){
     if(!lineReady()) return toast(LINE_NOT_READY);
@@ -940,12 +953,13 @@ async function submitRegistration(data){
   } else {
     // 展示：以目前選定的學員 LINE 身分報名，和雲端一樣「同一個 LINE＝同一位會員」
     let contact=state.contacts.find(c=>c.line_user_id===state.demoLine);
-    if(contact) Object.assign(contact,{name:data.name,phone:data.phone,email:data.email||contact.email,marketing_consent:data.marketing==="on",last_interaction_at:new Date().toISOString()});
-    else { contact={id:crypto.randomUUID(),member_no:nextMemberNo(),name:data.name,display_name:"LINE 新朋友",phone:data.phone,email:data.email,gender:null,birth_date:null,region_id:null,address:"",national_id:"",notes:"",line_user_id:state.demoLine,line_status:"active",marketing_consent:data.marketing==="on",tags:[data.interest],last_interaction_at:new Date().toISOString(),created_at:new Date().toISOString()}; state.contacts.push(contact); }
+    const leadTags=data.campaign_type==="outdoor"?outdoorLeadTags({...data,theme:data.source_theme,online_trial_interest:data.online_trial_interest==="on"}):[];
+    if(contact) Object.assign(contact,{gender:contact.gender||data.gender,residence_city:contact.residence_city||data.residence_city||null,name:data.name,phone:data.phone,email:data.email||contact.email,marketing_consent:data.marketing==="on",tags:[...new Set([...(contact.tags||[]),data.interest,...leadTags])],last_interaction_at:new Date().toISOString()});
+    else { contact={id:crypto.randomUUID(),member_no:nextMemberNo(),name:data.name,display_name:"LINE 新朋友",phone:data.phone,email:data.email,gender:data.gender,birth_date:null,region_id:null,residence_city:data.residence_city||null,address:"",national_id:"",notes:"",line_user_id:state.demoLine,line_status:"active",marketing_consent:data.marketing==="on",tags:[data.interest,...leadTags],last_interaction_at:new Date().toISOString(),created_at:new Date().toISOString()}; state.contacts.push(contact); }
     const existing=state.registrations.find(r=>r.event_id===data.event_id&&r.contact_id===contact.id); const e=state.events.find(x=>x.id===data.event_id);
     if(existing&&!existing.cancelled_at) return toast("你已經報名過這場活動");
     if(existing) Object.assign(existing,{attendance_status:"registered",cancelled_at:null,registered_at:new Date().toISOString()});
-    else state.registrations.push({id:crypto.randomUUID(),event_id:data.event_id,contact_id:contact.id,attendance_status:"registered",payment_status:"pending",registered_at:new Date().toISOString(),cancelled_at:null});
+    else state.registrations.push({id:crypto.randomUUID(),event_id:data.event_id,contact_id:contact.id,attendance_status:"registered",payment_status:"pending",registered_at:new Date().toISOString(),cancelled_at:null,lead_city:data.lead_city||null,contact_mode:data.contact_mode||null,sleep_issue:data.sleep_issue||null,stress_issue:data.stress_issue||null,weekly_practice_interest:data.weekly_practice_interest==="on",online_trial_interest:data.online_trial_interest==="on",...snsAttribution(data)});
     e.registration_count++;
   }
   regMember=null; persist(); $("#app").innerHTML=`<article class="card" style="max-width:560px;margin:40px auto;text-align:center"><h1>報名完成</h1><p>我們已收到你的資料，活動前會透過 LINE 提醒你。</p><div class="actions" style="justify-content:center"><a class="button" href="#me">看我的活動</a><a class="button secondary" href="#register?event=${data.event_id}" data-action="back-to-event">回到活動頁</a></div></article>`;
