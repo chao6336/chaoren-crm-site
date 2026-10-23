@@ -1,19 +1,23 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution } from "./lib.js?v=20261023-4";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution } from "./lib.js?v=20261023-5";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
 const supabase = live ? window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, { auth: { flowType: "implicit", detectSessionInUrl: true } }) : null;
 const SITE_BASE = (config.siteUrl || location.origin).replace(/\/$/, "");
+// 網址分流：/admin/ 是工作人員後台；根目錄是學員前台（活動清單、報名、我的活動、報到）
+const IS_ADMIN = /\/admin(\/|\/index\.html)?$/.test(location.pathname);
+const STUDENT_HOME = new URL(IS_ADMIN ? "../" : "./", location.origin + location.pathname).href;
+const ADMIN_HOME = STUDENT_HOME + "admin/";
 const liffReady = live && config.liffId ? window.liff.init({ liffId: config.liffId }) : Promise.resolve();
 const $ = selector => document.querySelector(selector);
 // 雲端模式但 LIFF 尚未設定時，學員端的 LINE 功能先顯示說明，不要直接出錯。
 const LINE_NOT_READY = "LINE 登入尚未開放，請洽協會工作人員。";
 const lineReady = () => !live || Boolean(config.liffId);
-// LINE 登入會離開本站：沒指定回來的網址時，LINE 會把人送回首頁（工作人員登入頁）。
-// 報名表的資料先存在這個分頁，登入回來後回到同一個報名頁並自動送出。
+// LINE 登入會離開本站：回來的網址指定為目前這頁，並記下 # 後面的頁面以防被丟掉。
+// 報名表的資料也先存在這個分頁，登入回來後回到同一個報名頁並自動送出。
 const REG_DRAFT_KEY = "chaoren-reg-draft";
 function lineLogin(draft){
-  if(draft) try{ sessionStorage.setItem(REG_DRAFT_KEY,JSON.stringify({...draft,hash:location.hash,at:Date.now()})); }catch{}
+  try{ sessionStorage.setItem(REG_DRAFT_KEY,JSON.stringify({...draft,hash:location.hash,at:Date.now()})); }catch{}
   window.liff.login({redirectUri:location.href});
 }
 function readRegDraft(){
@@ -81,6 +85,10 @@ function roster(){ return live ? (state.roster||[]).map(r=>({...r,id:r.registrat
 const ADMIN_ONLY_ROUTES=["messages","governance","users","import","sponsors"];
 // 學員看的頁面：不顯示後台選單，資料只走 LINE 身分。
 const STUDENT_ROUTES=["me","scan"];
+// 學員前台只開放這些頁面，其他頁面一律轉到 /admin/
+const PUBLIC_ROUTES=["register",...STUDENT_ROUTES];
+// 對外分享的報名網址一律指向學員前台，工作人員在後台打開報名頁也一樣
+const publicUrl=(hash=location.hash)=>STUDENT_HOME+hash;
 function switchDemoUser(staffId){
   const s=state.staff.find(x=>x.id===staffId); if(!s)return;
   Object.assign(state,{as:s.id,role:s.role,region_id:s.region_id||null});
@@ -97,7 +105,7 @@ function modal(html){ $("#modalBody").innerHTML=html; $("#modalBody").scrollTop=
 // 點視窗外的暗色區域也能關閉（點擊目標是 dialog 本身時，代表點在 backdrop 上）
 document.getElementById("modal").addEventListener("click",event=>{ if(event.target.id==="modal") closeModal(); });
 function closeModal(){ $("#modal").close(); }
-function route(){ return (location.hash.slice(1).split("?")[0] || "dashboard"); }
+function route(){ return (location.hash.slice(1).split("?")[0] || (IS_ADMIN?"dashboard":"register")); }
 function query(){ return new URLSearchParams(location.hash.split("?")[1] || ""); }
 // 手機欄位：國碼下拉＋號碼。存檔時用 readPhone 組成國際格式（+886912345678）。
 function phoneField(label,value="",{required=false,autocomplete=""}={}){
@@ -118,19 +126,26 @@ const showPhone=v=>!v?"":String(v).includes("*")?v:displayPhone(v);
 function pageHead(title,subtitle,actions=""){ return `<section class="page-head"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="actions">${actions}</div></section>`; }
 
 async function boot(){
-  $("#modeBadge").textContent=live?"已連雲端":"展示模式";
+  $("#modeBadge").textContent=live?"已連雲端":"展示模式"; $("#modeBadge").hidden=live&&!IS_ADMIN;
   // LINE 登入回來時網址的 # 可能被丟掉，用存下來的報名頁補回來
   const draft=live&&readRegDraft();
-  if(draft&&route()==="dashboard") history.replaceState(null,"",location.pathname+location.search+draft.hash);
+  if(draft&&!location.hash) history.replaceState(null,"",location.pathname+location.search+draft.hash);
+  if(draft&&!draft.data) clearRegDraft();
   // 從 liff.line.me/… 進來時，真正的頁面（例如 #me、#scan）放在 liff.state，要等 LIFF 初始化把網址還原後再判斷路由
   if(live && new URLSearchParams(location.search).has("liff.state")) { try { await liffReady; } catch {} }
-  if(live && await handleAuthLink()) { /* 已切到設定密碼頁或顯示錯誤 */ }
-  else if(live && route()==="register") await loadPublicEvent();
-  else if(live && STUDENT_ROUTES.includes(route())) state.role="public";
-  else if(live) await loadLiveData();
+  // 走錯邊就換邊：舊書籤（#dashboard 等）到後台；學員的「我的活動」「報到」回前台
+  if(!IS_ADMIN&&!PUBLIC_ROUTES.includes(route())) return location.replace(ADMIN_HOME+location.search+location.hash);
+  if(IS_ADMIN&&STUDENT_ROUTES.includes(route())) return location.replace(publicUrl());
+  if(live && !IS_ADMIN){ if(route()==="register") await loadPublicEvent(); else state.role="public"; }
+  else if(live && await handleAuthLink()) { /* 已切到設定密碼頁或顯示錯誤 */ }
+  else if(live){
+    // 後台的報名頁只給工作人員看；學員拿到這種網址，送回前台的同一個報名頁
+    const hash=location.hash; await loadLiveData();
+    if(hash.startsWith("#register")&&!STAFF_ROLES.includes(state.role)) return location.replace(publicUrl(hash));
+  }
   else {
-    document.querySelectorAll("[data-demo-only]").forEach(el=>el.hidden=false);
-    const picker=$("#demoUser"); picker.hidden=false;
+    if(IS_ADMIN) document.querySelectorAll("[data-demo-only]").forEach(el=>el.hidden=false);
+    const picker=$("#demoUser"); picker.hidden=!IS_ADMIN;
     picker.innerHTML=state.staff.filter(s=>s.active).map(s=>`<option value="${s.id}" ${s.id===state.as?"selected":""}>以「${escapeHtml(s.display_name)}」身分檢視</option>`).join("");
     showUser(state.staff.find(s=>s.id===state.as)?.display_name||"");
   }
@@ -184,17 +199,19 @@ async function loadLiveData(){
 
 function render(){
   const name=route();
+  if(!IS_ADMIN&&!PUBLIC_ROUTES.includes(name)){ location.replace(ADMIN_HOME+location.hash); return; }
+  if(IS_ADMIN&&(STUDENT_ROUTES.includes(name)||live&&name==="register"&&!STAFF_ROLES.includes(state.role))){ location.replace(publicUrl()); return; }
   if(state.role!=="public"&&((ADMIN_ONLY_ROUTES.includes(name)&&!isAdmin())||(name==="contacts"&&!canBrowseMembers(state.role)))){ location.hash="dashboard"; return; }
   // 雲端模式未登入（或帳號未開通）：只能看登入頁與學員頁，後台選單整個藏起來。
-  // 未登入、設定密碼中、或是學員（public）：都不顯示工作人員選單
-  const signedOut=live&&["none","setting-password","link-pending","public"].includes(state.role);
+  // 未登入、設定密碼中、或是學員（public）：都不顯示工作人員選單；學員前台永遠不顯示
+  const signedOut=!IS_ADMIN||live&&["none","setting-password","link-pending","public"].includes(state.role);
   if(signedOut&&!["login","register","set-password",...STUDENT_ROUTES].includes(name)){ location.hash="login"; return; }
   document.body.classList.toggle("signed-out",signedOut);
   document.body.classList.toggle("student-view",STUDENT_ROUTES.includes(name));
   document.querySelectorAll(".sidebar a").forEach(a=>{ a.classList.toggle("active",a.dataset.route===name); if(!a.hasAttribute("data-demo-only"))a.hidden=(ADMIN_ONLY_ROUTES.includes(a.dataset.route)&&!isAdmin())||(a.dataset.route==="contacts"&&!canBrowseMembers(state.role)); });
   // 學員從個人頁點「報名」進來時，報名頁還沒載入過活動資料：先去雲端抓再畫
-  // 左上角：學員回自己的個人頁，工作人員回總覽（學員按到總覽會被帶去工作人員登入頁）
-  $(".brand").setAttribute("href",live&&state.role==="public"?"#me":"#dashboard");
+  // 左上角：學員前台回活動清單，後台回總覽
+  $(".brand").setAttribute("href",IS_ADMIN?"#dashboard":"#register");
   // 工作人員已有完整活動資料，不能被公開活動資料蓋掉
   if(live&&name==="register"&&!state.eventsLoaded&&!STAFF_ROLES.includes(state.role)){ $("#app").innerHTML="<div class='empty'>載入活動中…</div>"; loadPublicEvent().then(render); return; }
   const views={dashboard,events,contacts,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors,"set-password":setPassword};
@@ -202,8 +219,8 @@ function render(){
   if(name==="me")loadMe();
   if(name==="users")loadStaffList();
   if(name==="scan")runScan();
-  if(name==="register"){ const id=query().get("event")||(live?"":state.events[0]?.id); if(id&&$("#regAction")&&regMember?.eventId!==id) checkRegisterMember(id); }
-  if(name==="register"&&window.qrcode&&$("#qr")){ const code=window.qrcode(0,"M");code.addData(location.href);code.make();$("#qr").innerHTML=code.createSvgTag(4,0); }
+  if(name==="register"){ const id=query().get("event")||(live||!IS_ADMIN?"":state.events[0]?.id); if(id&&$("#regAction")&&regMember?.eventId!==id) checkRegisterMember(id); }
+  if(name==="register"&&window.qrcode&&$("#qr")){ const code=window.qrcode(0,"M");code.addData(publicUrl());code.make();$("#qr").innerHTML=code.createSvgTag(4,0); }
   $("#app").focus();
 }
 
@@ -381,11 +398,11 @@ function register(){
   const wanted=query().get("event");
   const q=query(); const outdoor=q.get("campaign")==="outdoor";
   const leadCity=q.get("city")||""; const contactMode=q.get("mode")||"現場圍觀者"; const sourceTheme=q.get("theme")||"";
-  const event=state.events.find(e=>e.id===(wanted||(live?"":state.events[0]?.id)));
+  const event=state.events.find(e=>e.id===(wanted||(live||!IS_ADMIN?"":state.events[0]?.id)));
   if(!event){
     // 同名活動只列一次（報名頁裡再選場次）
     const open=state.events.filter(e=>eventState(e)==="報名中").filter((e,i,all)=>all.findIndex(x=>(x.series_id||x.title.trim())===(e.series_id||e.title.trim()))===i);
-    return `<article class="card student-card" style="max-width:640px;margin:20px auto"><h1>${wanted?"找不到這場活動":"選擇要報名的活動"}</h1>${wanted?`<p class="muted">連結可能已過期，或活動已下架。以下是目前開放報名的活動：</p>`:""}${open.length?`<ul class="student-list">${open.map(e=>{const n=eventSessions(state.events,e).length;return `<li class="student-item"><div><strong>${escapeHtml(e.title)}</strong><small>${n>1?`共 ${n} 場・從 ${fmtDate(e.starts_at)} 起`:`${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}`}・${escapeHtml(e.fee_note||"")}</small></div><a class="button" href="#register?event=${e.id}">報名</a></li>`}).join("")}</ul>`:`<p class="muted">目前沒有開放報名的活動。</p>`}</article>`;
+    return `<article class="card student-card" style="max-width:640px;margin:20px auto"><h1>${wanted?"找不到這場活動":"選擇要報名的活動"}</h1>${IS_ADMIN?"":`<p><a href="#me">已報名過？看我的活動 →</a></p>`}${wanted?`<p class="muted">連結可能已過期，或活動已下架。以下是目前開放報名的活動：</p>`:""}${open.length?`<ul class="student-list">${open.map(e=>{const n=eventSessions(state.events,e).length;return `<li class="student-item"><div><strong>${escapeHtml(e.title)}</strong><small>${n>1?`共 ${n} 場・從 ${fmtDate(e.starts_at)} 起`:`${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}`}・${escapeHtml(e.fee_note||"")}</small></div><a class="button" href="#register?event=${e.id}">報名</a></li>`}).join("")}</ul>`:`<p class="muted">目前沒有開放報名的活動。</p>`}</article>`;
   }
   const sessions=eventSessions(state.events,event), multi=sessions.length>1;
   const info=multi
@@ -393,7 +410,7 @@ function register(){
     :`<h2>活動資訊</h2><div class="kpi-line"><span>時間</span><strong>${fmtDate(event.starts_at)}</strong></div><div class="kpi-line"><span>地點</span><strong>${escapeHtml(event.location)}</strong></div><div class="kpi-line"><span>費用</span><strong>${escapeHtml(event.fee_note)}</strong></div><div class="kpi-line"><span>名額</span><strong>${event.registration_count}/${event.capacity}</strong></div>`;
   const tracking=["utm_source","utm_medium","utm_campaign","utm_content"].map(k=>`<input type="hidden" name="${k}" value="${escapeHtml(q.get(k)||"")}">`).join("");
   const outdoorFields=outdoor?`<input type="hidden" name="campaign_type" value="outdoor"><input type="hidden" name="lead_city" value="${escapeHtml(leadCity)}"><input type="hidden" name="source_theme" value="${escapeHtml(sourceTheme)}"><div class="field full"><label>你是從哪裡認識我們？</label><select name="contact_mode"><option ${contactMode==="正式參加者"?"selected":""}>正式參加者</option><option ${contactMode==="現場圍觀者"?"selected":""}>現場圍觀者</option><option ${contactMode==="親友介紹"?"selected":""}>親友介紹</option></select></div><div class="field full"><h3>30 秒自我狀態了解</h3><p class="muted">這不是醫療診斷，只協助你了解最近的狀態。</p></div><div class="field full"><label>最近是否難入睡、睡不飽或醒來仍疲累？</label><select name="sleep_issue" required><option value="">請選擇</option><option>經常</option><option>偶爾</option><option>很少</option></select></div><div class="field full"><label>最近是否容易緊繃、煩躁或腦袋停不下來？</label><select name="stress_issue" required><option value="">請選擇</option><option>經常</option><option>偶爾</option><option>很少</option></select></div><label class="field full"><span><input type="checkbox" name="weekly_practice_interest"> 我願意每週留一小段時間練習放鬆。</span></label><label class="field full"><span><input type="checkbox" name="online_trial_interest" checked> 我想預約免費、限額的新手線上體驗課。</span></label>`:"";
-  return `${demoLinePicker()}${pageHead(multi?event.title:eventLabel(event),event.theme)}<section class="two-col"><article class="card">${info}<p class="muted">分享報名 QR Code${multi?"（所有場次共用這一張）":""}</p><div id="qr" aria-label="活動報名 QR Code"></div></article><article class="card" id="regAction">${registerAction(event,sessions,`<form id="registrationForm">${multi?"":`<input type="hidden" name="event_id" value="${event.id}">`}${tracking}<div class="form-grid">${multi?sessionPicker(sessions):""}<div class="field"><label>姓名 *</label><input name="name" required maxlength="40"></div>${phoneField("手機","",{required:true,autocomplete:"tel"})}${genderField()}${cityField()}<div class="field full"><label>Email</label><input name="email" type="email"></div><div class="field full"><label>有興趣的主題</label><select name="interest"><option>閱讀</option><option>冥想</option><option>身心放鬆</option><option>節氣生活</option></select></div>${outdoorFields}<label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="privacy.html" target="_blank">個資告知</a>，資料僅用於活動與會員服務。</span></label><label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收後續活動與課程訊息，可隨時撤回。</span></label><button class="field full" type="submit">使用 LINE 身分送出報名</button></div></form>`)}</article></section>`;
+  return `${demoLinePicker()}${pageHead(multi?event.title:eventLabel(event),event.theme)}<section class="two-col"><article class="card">${info}<p class="muted">分享報名 QR Code${multi?"（所有場次共用這一張）":""}</p><div id="qr" aria-label="活動報名 QR Code"></div><div class="link-box"><input id="linkText" readonly aria-label="報名網址" value="${escapeHtml(publicUrl())}"><button type="button" class="secondary small" data-action="copy-link">複製</button></div></article><article class="card" id="regAction">${registerAction(event,sessions,`<form id="registrationForm">${multi?"":`<input type="hidden" name="event_id" value="${event.id}">`}${tracking}<div class="form-grid">${multi?sessionPicker(sessions):""}<div class="field"><label>姓名 *</label><input name="name" required maxlength="40"></div>${phoneField("手機","",{required:true,autocomplete:"tel"})}${genderField()}${cityField()}<div class="field full"><label>Email</label><input name="email" type="email"></div><div class="field full"><label>有興趣的主題</label><select name="interest"><option>閱讀</option><option>冥想</option><option>身心放鬆</option><option>節氣生活</option></select></div>${outdoorFields}<label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="${STUDENT_HOME}privacy.html" target="_blank">個資告知</a>，資料僅用於活動與會員服務。</span></label><label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收後續活動與課程訊息，可隨時撤回。</span></label><button class="field full" type="submit">使用 LINE 身分送出報名</button></div></form>`)}</article></section>`;
 }
 
 // 報名頁右側：先用 LINE 確認身分。會員一鍵報名（不用再填資料）、已報名顯示狀態與取消；不是會員才顯示報名表。
@@ -427,7 +444,7 @@ async function checkRegisterMember(eventId){
   const regIds=new Set((data.registrations||[]).filter(r=>!r.cancelled_at).map(r=>r.event_id));
   regMember=data.ok&&data.contact?{eventId,status:"member",name:data.contact.name,registered:regIds.has(eventId),regIds}:{eventId,status:"guest"};
   const draft=live&&readRegDraft();
-  if(draft&&route()==="register"){ clearRegDraft(); $("#app").innerHTML="<div class='empty'>已用 LINE 登入，正在送出報名…</div>"; return submitRegistration(draft.data,draft.ids); }
+  if(draft?.data&&route()==="register"){ clearRegDraft(); $("#app").innerHTML="<div class='empty'>已用 LINE 登入，正在送出報名…</div>"; return submitRegistration(draft.data,draft.ids); }
   if(route()==="register") render();
 }
 // 報名或取消後重新抓名額，避免畫面上的人數停在舊的
@@ -563,7 +580,7 @@ async function runScan({quickJoin=false}={}){
   const data=await memberApi("checkin",{event_id:eventId,token,quickJoin}); if(data.pending)return;
   if(!$("#studentArea"))return;
   // 第一次來：不用填資料，按一下同意個資告知就完成報到（電話等資料之後再補）
-  if(data.code==="NOT_MEMBER"){ $("#studentArea").innerHTML=`<article class="card result-card"><h1>歡迎第一次來！</h1><p>${data.displayName?`${escapeHtml(data.displayName)}，`:""}按下按鈕就完成報到，不用填資料。</p><button class="big" style="width:100%" data-action="quick-join">同意並完成報到</button><p class="muted" style="margin-top:12px">按下即表示同意<a href="privacy.html" target="_blank">個資告知</a>：協會會記錄你的 LINE 名稱與參加紀錄，僅用於活動與會員服務。</p></article>`; return; }
+  if(data.code==="NOT_MEMBER"){ $("#studentArea").innerHTML=`<article class="card result-card"><h1>歡迎第一次來！</h1><p>${data.displayName?`${escapeHtml(data.displayName)}，`:""}按下按鈕就完成報到，不用填資料。</p><button class="big" style="width:100%" data-action="quick-join">同意並完成報到</button><p class="muted" style="margin-top:12px">按下即表示同意<a href="${STUDENT_HOME}privacy.html" target="_blank">個資告知</a>：協會會記錄你的 LINE 名稱與參加紀錄，僅用於活動與會員服務。</p></article>`; return; }
   if(data.error){ $("#studentArea").innerHTML=`<article class="card result-card fail"><div class="result-icon" aria-hidden="true">!</div><h1>無法報到</h1><p>${escapeHtml(data.error)}</p></article>`; return; }
   $("#studentArea").innerHTML=`<article class="card result-card ok"><div class="result-icon" aria-hidden="true">✓</div><h1>${data.already?"你已經報到過了":data.joined?"報到成功，歡迎加入！":"報到成功"}</h1><p class="result-name">${escapeHtml(data.name)}${data.region?`・${escapeHtml(data.region)}`:""}</p><p>${escapeHtml(data.eventTitle)}</p><p class="muted">報到時間 ${fmtDate(data.checkedInAt)}</p><a class="button" href="#me">看我的活動紀錄</a></article>`;
 }
@@ -578,7 +595,7 @@ function signupForm(data,next){
     <div class="field"><label>所屬區域</label><select name="region_id"><option value="">不確定</option>${(data.regions||[]).map(r=>`<option value="${r.id}">${escapeHtml(r.name)}</option>`).join("")}</select></div>
     ${cityField()}
     <div class="field"><label>Email</label><input name="email" type="email" autocomplete="email"></div>
-    <label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="privacy.html" target="_blank">個資告知</a>。</span></label>
+    <label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="${STUDENT_HOME}privacy.html" target="_blank">個資告知</a>。</span></label>
     <label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收活動與課程訊息，可隨時撤回。</span></label>
     <button class="field full big">${next==="scan"?"送出並完成報到":"送出"}</button></div></form></article>`;
 }
@@ -597,7 +614,7 @@ async function submitSignup(data){
 // 雲端用 liff.line.me 網址：手機相機或 LINE 掃描後直接在 LINE 裡開啟、自動登入，不必另外按 LINE 登入
 function checkinUrl(eventId,token){
   if(live&&config.liffId) return `https://liff.line.me/${config.liffId}/#scan?event=${encodeURIComponent(eventId)}&t=${encodeURIComponent(token)}`;
-  const base=live&&config.siteUrl?config.siteUrl.replace(/\/$/,"")+"/":location.origin+location.pathname;
+  const base=live&&config.siteUrl?config.siteUrl.replace(/\/$/,"")+"/":STUDENT_HOME;
   return `${base}#scan?event=${encodeURIComponent(eventId)}&t=${encodeURIComponent(token)}`;
 }
 async function showCheckinQr(eventId,{renew=false}={}){
