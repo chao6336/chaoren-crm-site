@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#16231e">
-  <title>晁人活動報名</title>
+  <meta name="theme-color" content="#00694a">
+  <link rel="icon" href="assets/sw-ii-icon.png">
+  <title>SW-II 活動報名</title>
   <meta name="description" content="晁人文鼎協會活動報名">
   <script>
     // 學員前台只有報名、我的活動、報到。工作人員舊書籤與邀請／重設密碼連結，在載入任何程式前就轉到 /admin/，
@@ -13,14 +14,14 @@
       if(/[?&]flow=set-password/.test(location.search)||/access_token=|error_description=/.test(location.hash)||/^(dashboard|events|contacts|checkin|sponsors|import|messages|governance|users|login|set-password)$/.test(r))
         location.replace("admin/"+location.search+location.hash); })();
   </script>
-  <link rel="stylesheet" href="styles.css?v=20261023-6">
+  <link rel="stylesheet" href="styles.css?v=20261023-7">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 </head>
-<body>
+<body class="signed-out">
   <header class="topbar">
-    <a class="brand" href="#register" aria-label="回到活動清單"><span>晁人</span><strong>活動報名</strong></a>
+    <a class="brand" href="#register" aria-label="回到活動清單"><img src="assets/sw-ii-logo.png" alt="SW-II" width="124" height="30"><strong>活動報名</strong></a>
     <div class="userbox"><a id="homeBtn" class="button secondary small" href="#register" hidden>回首頁</a><span id="modeBadge" class="badge">展示模式</span><select id="demoUser" hidden aria-label="展示模式：切換檢視身分"></select><span id="userLabel"></span><button id="logoutBtn" class="secondary small" data-action="logout" hidden>登出</button></div>
   </header>
 
@@ -43,7 +44,7 @@
   <dialog id="modal"><button type="button" class="dialog-close" data-action="close-modal" aria-label="關閉">×</button><div id="modalBody"></div></dialog>
   <div id="toast" role="status" aria-live="polite"></div>
 
-  <script src="config.js?v=20261023-6"></script>
-  <script type="module" src="app.js?v=20261023-6"></script>
+  <script src="config.js?v=20261023-7"></script>
+  <script type="module" src="app.js?v=20261023-7"></script>
 </body>
 </html>
