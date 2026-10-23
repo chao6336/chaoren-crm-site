@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin } from "./lib.js?v=20261023-8";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus } from "./lib.js?v=20261023-9";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -521,6 +521,12 @@ function demoMemberApi(action,payload){
     const events=state.events.filter(e=>e.status==="published"&&new Date(e.starts_at)>new Date()).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
     return {ok:true,contact:{...me,region_name:regionName(me.region_id)},registrations:regs,events};
   }
+  if(action==="update_profile"){
+    if(!me)return notMember;
+    const checked=checkProfile(payload); if(checked.error)return {error:checked.error};
+    Object.assign(me,checked.value,{last_interaction_at:new Date().toISOString()}); audit("學員自行修改資料",me.name); persist();
+    return {ok:true};
+  }
   if(action==="signup"){
     if(me)return {ok:true,contactId:me.id,existing:true};
     const legacy=findLegacyContact(state.contacts,payload);
@@ -567,20 +573,47 @@ function demoLinePicker(){
 function me(){ return `${demoLinePicker()}<div id="studentArea"><div class="empty">正在用 LINE 確認身分…</div></div>`; }
 function scan(){ return `${demoLinePicker()}<div id="studentArea"><div class="empty">正在用 LINE 確認身分並報到…</div></div>`; }
 
+// 「我的資料」：修改表單用上一次載入的本人資料預先填好
+let myProfile=null;
+function profileForm(){
+  const c=myProfile||{};
+  modal(`<h2>修改我的資料</h2><form id="profileForm"><div class="form-grid">
+    <div class="field"><label>姓名 *</label><input name="name" required maxlength="40" autocomplete="name" value="${escapeHtml(c.name||"")}"></div>
+    ${phoneField("手機",c.phone||"",{required:true,autocomplete:"tel"})}
+    <div class="field"><label>Email</label><input name="email" type="email" maxlength="120" autocomplete="email" value="${escapeHtml(c.email||"")}"></div>
+    ${genderField(c.gender)}
+    <div class="field"><label>生日</label><input name="birth_date" type="date" min="1900-01-01" value="${escapeHtml(c.birth_date||"")}"></div>
+    ${cityField(c.residence_city)}
+    <div class="field full"><label>地址</label><input name="address" maxlength="200" autocomplete="street-address" value="${escapeHtml(c.address||"")}"></div>
+    <button class="field full" type="submit">儲存</button></div></form>`);
+}
+async function saveProfile(form,data){
+  const ph=readPhone(data); if(ph.error) return toast(ph.error);
+  const checked=checkProfile({...data,phone:ph.phone}); if(checked.error) return toast(checked.error);
+  const btn=form.querySelector("button[type=submit]"); btn.disabled=true; btn.textContent="儲存中…";
+  const res=await memberApi("update_profile",checked.value); if(res.pending) return;
+  btn.disabled=false; btn.textContent="儲存";
+  if(res.error) return toast(res.error);
+  closeModal(); toast("資料已更新"); loadMe();
+}
+
 async function loadMe(){
   const data=await memberApi("me"); if(data.pending)return;
   const area=$("#studentArea"); if(!area)return;
   if(data.error){ area.innerHTML=`<div class="notice">${escapeHtml(data.error)}</div>`; return; }
   if(data.code==="NOT_MEMBER"){ area.innerHTML=signupForm(data,"me"); return; }
-  const c=data.contact; const now=new Date();
+  const c=data.contact; const now=new Date(); myProfile=c;
   const regs=(data.registrations||[]).filter(r=>r.events);
-  const upcoming=regs.filter(r=>!r.cancelled_at&&r.attendance_status!=="attended"&&new Date(r.events.starts_at)>=now).sort((a,b)=>new Date(a.events.starts_at)-new Date(b.events.starts_at));
-  const attended=regs.filter(r=>r.attendance_status==="attended").sort((a,b)=>new Date(b.events.starts_at)-new Date(a.events.starts_at));
+  const upcoming=regs.filter(r=>historyStatus(r,now)==="registered").sort((a,b)=>new Date(a.events.starts_at)-new Date(b.events.starts_at));
+  const history=[...regs].sort((a,b)=>new Date(b.events.starts_at)-new Date(a.events.starts_at));
   const mine=new Set(regs.filter(r=>!r.cancelled_at).map(r=>r.event_id));
   const item=(title,sub,right="")=>`<li class="student-item"><div><strong>${escapeHtml(title)}</strong><small>${sub}</small></div>${right}</li>`;
-  area.innerHTML=`<section class="card profile-head student-card"><div class="avatar" aria-hidden="true">${escapeHtml((c.name||"?").slice(0,1))}</div><div><h1>${escapeHtml(c.name)}</h1><p class="muted">${escapeHtml(c.region_name||"尚未分區")}・LINE：${escapeHtml(c.display_name||"")}</p></div></section>
-    <section class="card student-card"><h2>我報名的活動</h2>${upcoming.length?`<ul class="student-list">${upcoming.map(r=>item(r.events.title,`${fmtDate(r.events.starts_at)}・${escapeHtml(r.events.location||"")}`,`<span class="pill">已報名</span>`)).join("")}</ul>`:`<p class="muted">目前沒有報名中的活動。</p>`}</section>
-    <section class="card student-card"><h2>參加紀錄</h2>${attended.length?`<ul class="student-list">${attended.map(r=>item(r.events.title,`${fmtDate(r.events.starts_at)}${r.checked_in_at?`・報到 ${fmtDate(r.checked_in_at)}`:""}`,`<span class="pill">${ATTENDANCE_LABELS.attended}</span>`)).join("")}</ul>`:`<p class="muted">還沒有參加紀錄，期待在活動見到你。</p>`}</section>
+  const row=(label,value)=>`<div class="kpi-line"><span>${label}</span><strong>${value?escapeHtml(value):`<span class="muted">未填</span>`}</strong></div>`;
+  const pillClass={attended:"",registered:"",cancelled:" off",absent:" warn"};
+  area.innerHTML=`<section class="card profile-head student-card"><div class="avatar" aria-hidden="true">${escapeHtml((c.name||"?").slice(0,1))}</div><div><h1>${escapeHtml(c.name)}</h1><p class="muted">會員編號 ${escapeHtml(c.member_no||"")}・${escapeHtml(c.region_name||"尚未分區")}${c.display_name?`・LINE：${escapeHtml(c.display_name)}`:""}</p></div></section>
+    <section class="card student-card"><div class="card-title"><h2>我的資料</h2><button class="secondary small" data-action="edit-profile">修改資料</button></div>${row("姓名",c.name)}${row("手機",showPhone(c.phone))}${row("Email",c.email)}${row("性別",c.gender)}${row("生日",c.birth_date)}${row("居住縣市",c.residence_city)}${row("地址",c.address)}<p class="muted" style="margin-top:10px">會員編號、所屬區域需要更改時，請洽工作人員。</p></section>
+    <section class="card student-card"><h2>我報名的活動</h2>${upcoming.length?`<ul class="student-list">${upcoming.map(r=>item(eventLabel(r.events),`${fmtDate(r.events.starts_at)}・${escapeHtml(r.events.location||"")}`,`<span class="pill">已報名</span>`)).join("")}</ul>`:`<p class="muted">目前沒有報名中的活動。</p>`}</section>
+    <section class="card student-card"><h2>活動紀錄</h2>${history.length?`<ul class="student-list">${history.map(r=>{const st=historyStatus(r,now);return item(eventLabel(r.events),`${fmtDate(r.events.starts_at)}・${escapeHtml(r.events.location||"")}${st==="attended"&&r.checked_in_at?`・報到 ${fmtDate(r.checked_in_at)}`:""}`,`<span class="pill${pillClass[st]}">${ATTENDANCE_LABELS[st]}</span>`)}).join("")}</ul>`:`<p class="muted">還沒有活動紀錄，期待在活動見到你。</p>`}</section>
     <section class="card student-card"><h2>近期活動</h2>${(data.events||[]).length?`<ul class="student-list">${data.events.map(e=>item(eventLabel(e),`${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・${escapeHtml(e.fee_note||"")}`,mine.has(e.id)?`<span class="pill">已報名</span>`:eventState(e)==="報名中"?`<a class="button" href="#register?event=${e.id}">報名</a>`:`<span class="pill off">${eventState(e)}</span>`)).join("")}</ul>`:`<p class="muted">近期沒有公開活動。</p>`}</section>`;
 }
 
@@ -965,6 +998,7 @@ async function onClick(event){
   if(!btn){ if(event.target.id==="contactSearch"||event.target.id==="checkinSearch")return; return; }
   const action=btn.dataset.action;
   if(action==="close-modal") return closeModal();
+  if(action==="edit-profile") return profileForm();
   if(action==="logout"){ await supabase?.auth.signOut(); location.hash="login"; return location.reload(); }
   if(action==="edit-event"){ event.preventDefault(); return eventForm(btn.dataset.id); }
   if(action==="add-session") return addSessionRow();
@@ -1026,9 +1060,10 @@ document.addEventListener("change",event=>{
 });
 
 async function onSubmit(event){
-  if(!["eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","deleteContactForm","deleteEventForm"].includes(event.target.id))return;
+  if(!["eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","deleteContactForm","deleteEventForm","profileForm"].includes(event.target.id))return;
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target));
   if(event.target.id==="contactForm") return saveContact(data);
+  if(event.target.id==="profileForm") return saveProfile(event.target,data);
   if(event.target.id==="signupForm") return submitSignup(data);
   if(event.target.id==="sponsorForm") return saveSponsor(data);
   if(event.target.id==="batchSponsorForm") return saveBatchSponsor(data);

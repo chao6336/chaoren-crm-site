@@ -413,3 +413,29 @@ export function eventTagsAfterCheckin(tags = [], title = "", attended, otherAtte
   if (attended) return tags.includes(name) ? tags : [...tags, name];
   return otherAttendedTitles.some(t => String(t).trim().slice(0, 40) === name) ? tags : tags.filter(t => t !== name);
 }
+
+// 學員在「我的活動」自己修改基本資料：只開放這幾欄，規則與後端 member 函式（update_profile）相同。
+// 會員編號、所屬區域、標籤、備註、身分證不開放學員修改。
+export function checkProfile(p = {}, today = new Date()) {
+  const name = String(p.name || "").trim();
+  if (!name || name.length > 40) return { error: "請填寫姓名（40 字以內）" };
+  if (!/^\+[1-9]\d{7,14}$/.test(p.phone || "")) return { error: "手機號碼格式不正確" };
+  const email = String(p.email || "").trim();
+  if (email && (email.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return { error: "Email 格式不正確" };
+  if (!GENDERS.includes(p.gender)) return { error: "請選擇性別" };
+  const birth = p.birth_date || "";
+  if (birth && (!/^\d{4}-\d{2}-\d{2}$/.test(birth) || birth < "1900-01-01" || new Date(birth) > today)) return { error: "生日不正確" };
+  const city = p.residence_city || "";
+  if (city && !CITIES.includes(city)) return { error: "居住縣市不正確" };
+  const address = String(p.address || "").trim();
+  if (address.length > 200) return { error: "地址請在 200 字以內" };
+  return { value: { name, phone: p.phone, email: email || null, gender: p.gender, birth_date: birth || null, residence_city: city || null, address: address || null } };
+}
+
+// 學員活動紀錄的狀態：取消 → 已取消；報到過 → 已參加；活動已結束還沒報到 → 未出席；其他 → 已報名
+export function historyStatus(reg = {}, now = new Date()) {
+  if (reg.cancelled_at) return "cancelled";
+  if (reg.attendance_status === "attended") return "attended";
+  const end = reg.events?.ends_at || reg.events?.starts_at;
+  return end && new Date(end) < now ? "absent" : "registered";
+}
