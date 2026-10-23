@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution } from "./lib.js?v=20261023-3";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution } from "./lib.js?v=20261023-4";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -9,6 +9,17 @@ const $ = selector => document.querySelector(selector);
 // 雲端模式但 LIFF 尚未設定時，學員端的 LINE 功能先顯示說明，不要直接出錯。
 const LINE_NOT_READY = "LINE 登入尚未開放，請洽協會工作人員。";
 const lineReady = () => !live || Boolean(config.liffId);
+// LINE 登入會離開本站：沒指定回來的網址時，LINE 會把人送回首頁（工作人員登入頁）。
+// 報名表的資料先存在這個分頁，登入回來後回到同一個報名頁並自動送出。
+const REG_DRAFT_KEY = "chaoren-reg-draft";
+function lineLogin(draft){
+  if(draft) try{ sessionStorage.setItem(REG_DRAFT_KEY,JSON.stringify({...draft,hash:location.hash,at:Date.now()})); }catch{}
+  window.liff.login({redirectUri:location.href});
+}
+function readRegDraft(){
+  try{ const d=JSON.parse(sessionStorage.getItem(REG_DRAFT_KEY)||"null"); return d&&Date.now()-d.at<30*60e3?d:null; }catch{ return null; }
+}
+function clearRegDraft(){ try{ sessionStorage.removeItem(REG_DRAFT_KEY); }catch{} }
 
 const SEED_VERSION = 9;
 // 展示資料全部是假的；區域名稱等協會提供真實清單後再換。
@@ -108,6 +119,9 @@ function pageHead(title,subtitle,actions=""){ return `<section class="page-head"
 
 async function boot(){
   $("#modeBadge").textContent=live?"已連雲端":"展示模式";
+  // LINE 登入回來時網址的 # 可能被丟掉，用存下來的報名頁補回來
+  const draft=live&&readRegDraft();
+  if(draft&&route()==="dashboard") history.replaceState(null,"",location.pathname+location.search+draft.hash);
   // 從 liff.line.me/… 進來時，真正的頁面（例如 #me、#scan）放在 liff.state，要等 LIFF 初始化把網址還原後再判斷路由
   if(live && new URLSearchParams(location.search).has("liff.state")) { try { await liffReady; } catch {} }
   if(live && await handleAuthLink()) { /* 已切到設定密碼頁或顯示錯誤 */ }
@@ -412,6 +426,8 @@ async function checkRegisterMember(eventId){
   const data=await memberApi("me"); if(data.pending)return;
   const regIds=new Set((data.registrations||[]).filter(r=>!r.cancelled_at).map(r=>r.event_id));
   regMember=data.ok&&data.contact?{eventId,status:"member",name:data.contact.name,registered:regIds.has(eventId),regIds}:{eventId,status:"guest"};
+  const draft=live&&readRegDraft();
+  if(draft&&route()==="register"){ clearRegDraft(); $("#app").innerHTML="<div class='empty'>已用 LINE 登入，正在送出報名…</div>"; return submitRegistration(draft.data,draft.ids); }
   if(route()==="register") render();
 }
 // 報名或取消後重新抓名額，避免畫面上的人數停在舊的
@@ -460,7 +476,7 @@ async function memberApi(action,payload={}){
   if(live){
     if(!lineReady()) return {error:LINE_NOT_READY};
     await liffReady;
-    if(!window.liff.isLoggedIn()){ window.liff.login({redirectUri:location.href}); return {pending:true}; }
+    if(!window.liff.isLoggedIn()){ lineLogin(); return {pending:true}; }
     const res=await fetch(`${config.supabaseUrl}/functions/v1/member`,{method:"POST",headers:{"Content-Type":"application/json",apikey:config.supabasePublishableKey},body:JSON.stringify({...payload,action,idToken:window.liff.getIDToken()})});
     const body=await res.json().catch(()=>({error:"連線失敗，請稍後再試"}));
     return res.ok?body:{error:body.error||"暫時無法完成"};
@@ -961,7 +977,7 @@ async function onClick(event){
   if(action==="cancel-registration") return cancelRegistration(btn.dataset.event);
   if(action==="quick-register") return quickRegister(btn);
   if(action==="back-to-event"){ event.preventDefault(); if(location.hash===btn.getAttribute("href")) return render(); location.hash=btn.getAttribute("href"); return; }
-  if(action==="line-login-register"){ if(!lineReady()) return toast(LINE_NOT_READY); await liffReady; return window.liff.login({redirectUri:location.href}); }
+  if(action==="line-login-register"){ if(!lineReady()) return toast(LINE_NOT_READY); await liffReady; return lineLogin(); }
   if(action==="quick-join"){ btn.disabled=true; btn.textContent="報到中…"; return runScan({quickJoin:true}); }
 }
 
@@ -1025,13 +1041,14 @@ function sessionIds(form){
 async function submitRegistration(data,ids){
   if(!ids.length) return toast("請至少勾選一個場次");
   if(!GENDERS.includes(data.gender))return toast("請選擇性別");
+  if(live&&lineReady()){ try{ await liffReady; if(!window.liff.isLoggedIn()) return lineLogin({data:{...data},ids}); }catch(error){ return toast(error.message); } }
   const ph=readPhone(data); if(ph.error) return toast(ph.error); data.phone=ph.phone;
   delete data.session;
   if(ids.length>1) return submitSessions(data,ids);
   data.event_id=ids[0];
   if(live){
     if(!lineReady()) return toast(LINE_NOT_READY);
-    try{ await liffReady; if(!window.liff.isLoggedIn())return window.liff.login(); const idToken=window.liff.getIDToken(); const res=await fetch(`${config.supabaseUrl}/functions/v1/line-auth`,{method:"POST",headers:{"Content-Type":"application/json","apikey":config.supabasePublishableKey},body:JSON.stringify({...data,idToken,marketing:data.marketing==="on"})}); const body=await res.json(); if(!res.ok)throw new Error(body.error||"報名失敗"); }
+    try{ await liffReady; const idToken=window.liff.getIDToken(); const res=await fetch(`${config.supabaseUrl}/functions/v1/line-auth`,{method:"POST",headers:{"Content-Type":"application/json","apikey":config.supabasePublishableKey},body:JSON.stringify({...data,idToken,marketing:data.marketing==="on"})}); const body=await res.json(); if(!res.ok)throw new Error(body.error||"報名失敗"); }
     catch(error){return toast(error.message);}
     await refreshEventCounts(); regMember=null;
   } else { const error=demoRegister(data); if(error) return toast(error); }
@@ -1044,7 +1061,7 @@ async function submitSessions(data,ids){
   if(live){
     if(!lineReady()) return toast(LINE_NOT_READY);
     let idToken;
-    try{ await liffReady; if(!window.liff.isLoggedIn())return window.liff.login(); idToken=window.liff.getIDToken(); }catch(error){ return toast(error.message); }
+    try{ await liffReady; idToken=window.liff.getIDToken(); }catch(error){ return toast(error.message); }
     for(const id of ids){
       try{ const res=await fetch(`${config.supabaseUrl}/functions/v1/line-auth`,{method:"POST",headers:{"Content-Type":"application/json","apikey":config.supabasePublishableKey},body:JSON.stringify({...data,event_id:id,idToken,marketing:data.marketing==="on"})}); const body=await res.json().catch(()=>({})); results.push({id,error:res.ok?null:(body.error||"報名失敗")}); }
       catch(error){ results.push({id,error:error.message}); }
@@ -1080,7 +1097,7 @@ async function cancelRegistration(eventId){
   }
   try{
     if(!lineReady()) return toast(LINE_NOT_READY);
-    await liffReady;if(!window.liff.isLoggedIn())return window.liff.login();
+    await liffReady;if(!window.liff.isLoggedIn())return lineLogin();
     const res=await fetch(`${config.supabaseUrl}/functions/v1/line-auth`,{method:"POST",headers:{"Content-Type":"application/json",apikey:config.supabasePublishableKey},body:JSON.stringify({action:"cancel",event_id:eventId,idToken:window.liff.getIDToken()})});
     const body=await res.json();if(!res.ok)throw new Error(body.error||"取消失敗");toast("已取消報名");
     await refreshEventCounts(); forgetRegistration(eventId); render();
