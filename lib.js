@@ -165,6 +165,15 @@ export function eventState(event, now = new Date()) {
   return "報名中";
 }
 
+// 同名活動＝同一個體驗的不同場次：一張報名 QR，學員在報名頁勾選要參加的場次。
+// 只合併目前「報名中」的場次（連結本身那場不論狀態都保留），往年同名活動早已截止，不會被混進來。
+export function eventSessions(events, event, now = new Date()) {
+  const title = (event.title || "").trim();
+  return events
+    .filter(e => e.id === event.id || ((e.title || "").trim() === title && eventState(e, now) === "報名中"))
+    .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+}
+
 export function campaignEligible(contact) {
   return Boolean(contact.line_user_id && contact.marketing_consent && contact.line_status === "active" && !contact.anonymized_at);
 }
