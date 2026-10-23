@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261023-12";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261023-13";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -1438,7 +1438,7 @@ function campaignDraftForm(id){
   campaignPick=new Set(c?.audience==="selected"?c.contact_ids||[]:[]);
   const aud=c?.audience||"event";
   const tags=[...new Set(state.contacts.flatMap(c=>c.tags||[]))].sort((a,b)=>a.localeCompare(b,"zh-Hant"));
-  modal(`<h2>${c?"修改":"新增"} LINE 訊息草稿</h2><form id="campaignForm">${c?`<input type="hidden" name="campaign_id" value="${c.id}">`:""}<div class="field"><label>主旨</label><input name="name" required maxlength="80" value="${escapeHtml(c?.name||"")}"></div>
+  modal(`<h2>${c?"修改":"新增"} LINE 推播專案</h2><form id="campaignForm">${c?`<input type="hidden" name="campaign_id" value="${c.id}">`:""}<div class="field"><label>主旨</label><input name="name" required maxlength="80" autocomplete="off" value="${escapeHtml(c?.name||"")}"></div>
     <div class="field"><label>發送對象</label><div class="actions"><label><input type="radio" name="audience" value="event" ${aud==="event"?"checked":""}> 某場活動的報名者</label><label><input type="radio" name="audience" value="all" ${aud==="all"?"checked":""}> 全員</label><label><input type="radio" name="audience" value="selected" ${aud==="selected"?"checked":""}> 指定學員</label></div></div>
     <div class="field" data-audience="event" ${aud==="event"?"":"hidden"}><label>活動</label><select name="event_id">${state.events.map(e=>`<option value="${e.id}" ${c?.event_id===e.id?"selected":""}>${escapeHtml(eventLabel(e))}・${fmtDate(e.starts_at)}</option>`).join("")}</select></div>
     <div data-audience="selected" ${aud==="selected"?"":"hidden"}>
