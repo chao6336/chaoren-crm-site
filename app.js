@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution } from "./lib.js?v=20261023-7";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin } from "./lib.js?v=20261023-8";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -551,7 +551,7 @@ function demoMemberApi(action,payload){
     let reg=state.registrations.find(r=>r.event_id===event.id&&r.contact_id===me.id); let already=false;
     if(!reg){ reg={id:crypto.randomUUID(),event_id:event.id,contact_id:me.id,payment_status:"pending",source:"walk-in",registered_at:new Date().toISOString()}; state.registrations.push(reg); event.registration_count=(event.registration_count||0)+1; }
     else if(reg.attendance_status==="attended"&&!reg.cancelled_at) already=true;
-    if(!already){ Object.assign(reg,{attendance_status:"attended",cancelled_at:null,checked_in_at:new Date().toISOString()}); me.last_interaction_at=new Date().toISOString(); }
+    if(!already){ Object.assign(reg,{attendance_status:"attended",cancelled_at:null,checked_in_at:new Date().toISOString()}); me.last_interaction_at=new Date().toISOString(); me.tags=eventTagsAfterCheckin(me.tags||[],event.title,true); }
     persist(); return {ok:true,already,joined,checkedInAt:reg.checked_in_at,name:me.name,eventTitle:event.title,region:me.region_id?regionName(me.region_id):null};
   }
 }
@@ -1151,7 +1151,12 @@ async function toggleCheckin(id){
   const reg=roster().find(r=>r.id===id); if(!reg)return toast("你沒有權限處理這位會員的報到");
   const next=reg.attendance_status==="attended"?"registered":"attended";
   if(live){ const {error}=await supabase.rpc("set_attendance",{p_registration_id:id,p_attended:next==="attended"}); if(error)return toast(error.message.includes("FORBIDDEN")?"你沒有權限處理這位會員的報到":error.message); await loadLiveData(); }
-  else Object.assign(state.registrations.find(r=>r.id===id),{attendance_status:next,checked_in_at:next==="attended"?new Date().toISOString():null});
+  else {
+    const r=state.registrations.find(x=>x.id===id), c=state.contacts.find(x=>x.id===r.contact_id), e=state.events.find(x=>x.id===r.event_id);
+    Object.assign(r,{attendance_status:next,checked_in_at:next==="attended"?new Date().toISOString():null});
+    const others=state.registrations.filter(x=>x.contact_id===r.contact_id&&x.id!==r.id&&x.attendance_status==="attended"&&!x.cancelled_at).map(x=>state.events.find(ev=>ev.id===x.event_id)?.title||"");
+    if(c&&e) c.tags=eventTagsAfterCheckin(c.tags||[],e.title,next==="attended",others);
+  }
   audit(next==="attended"?"完成報到":"取消報到",reg.name);persist();render();toast(next==="attended"?"已完成報到":"已取消報到");
 }
 function eligibleForEvent(eventId){ const ids=new Set(state.registrations.filter(r=>r.event_id===eventId&&!r.cancelled_at).map(r=>r.contact_id)); return state.contacts.filter(c=>ids.has(c.id)&&campaignEligible(c)); }

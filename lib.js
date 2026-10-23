@@ -404,3 +404,12 @@ export function sponsorshipSummary(records) {
   }
   return [...byItem.values()].sort((a, b) => a.item.localeCompare(b.item, "zh-Hant"));
 }
+
+// 完成報到時把活動名稱寫進參加者標籤；取消報到且沒有其他同名活動的報到紀錄時拿掉。
+// 規則與資料庫 trigger（2026-10-23_attendee_event_tags.sql）相同，展示版用這支。
+export function eventTagsAfterCheckin(tags = [], title = "", attended, otherAttendedTitles = []) {
+  const name = String(title).trim().slice(0, 40);
+  if (!name) return tags;
+  if (attended) return tags.includes(name) ? tags : [...tags, name];
+  return otherAttendedTitles.some(t => String(t).trim().slice(0, 40) === name) ? tags : tags.filter(t => t !== name);
+}
