@@ -165,13 +165,23 @@ export function eventState(event, now = new Date()) {
   return "報名中";
 }
 
-// 同名活動＝同一個體驗的不同場次：一張報名 QR，學員在報名頁勾選要參加的場次。
+// 同一活動的不同場次：一張報名 QR，學員在報名頁勾選要參加的場次。
+// 在「編輯活動」加的場次用 series_id 綁在一起；沒有 series_id 的舊活動，同名的也算同一組。
 // 只合併目前「報名中」的場次（連結本身那場不論狀態都保留），往年同名活動早已截止，不會被混進來。
+const byStart = (a, b) => new Date(a.starts_at) - new Date(b.starts_at);
 export function eventSessions(events, event, now = new Date()) {
   const title = (event.title || "").trim();
-  return events
-    .filter(e => e.id === event.id || ((e.title || "").trim() === title && eventState(e, now) === "報名中"))
-    .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+  const same = event.series_id ? e => e.series_id === event.series_id : e => !e.series_id && (e.title || "").trim() === title;
+  return events.filter(e => e.id === event.id || (same(e) && eventState(e, now) === "報名中")).sort(byStart);
+}
+
+// 編輯活動時要一起編的場次：同一個 series_id 的全部場次，不論狀態
+export function seriesOf(events, event) {
+  return event.series_id ? events.filter(e => e.series_id === event.series_id).sort(byStart) : [event];
+}
+
+export function eventLabel(event) {
+  return event.session_name ? `${event.title}｜${event.session_name}` : event.title;
 }
 
 export function campaignEligible(contact) {

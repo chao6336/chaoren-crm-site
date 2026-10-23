@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution } from "./lib.js?v=20261023-2";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution } from "./lib.js?v=20261023-3";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -204,13 +204,13 @@ function dashboard(){
     <div class="stat"><span>活動數</span><strong>${s.events}</strong></div><div class="stat"><span>有效報名</span><strong>${s.registrations}</strong></div>
     <div class="stat"><span>出席率</span><strong>${s.attendanceRate}%</strong></div><div class="stat"><span>取消率</span><strong>${s.cancellationRate}%</strong></div>${canBrowseMembers(state.role)?`<div class="stat"><span>會員</span><strong>${s.contacts}</strong></div>`:""}
   </section>
-  <section class="grid"><article class="card"><h2>下一場活動</h2>${next?`<h3>${escapeHtml(next.title)}</h3><p>${fmtDate(next.starts_at)}・${escapeHtml(next.location)}</p><div class="kpi-line"><span>報名</span><strong>${next.registration_count}/${next.capacity}</strong></div><div class="actions"><a class="button" href="#checkin?event=${next.id}">開啟報到</a><a class="button secondary" href="#register?event=${next.id}">查看報名頁</a></div>`:"<p class='muted'>目前沒有未來活動。</p>"}</article>
+  <section class="grid"><article class="card"><h2>下一場活動</h2>${next?`<h3>${escapeHtml(eventLabel(next))}</h3><p>${fmtDate(next.starts_at)}・${escapeHtml(next.location)}</p><div class="kpi-line"><span>報名</span><strong>${next.registration_count}/${next.capacity}</strong></div><div class="actions"><a class="button" href="#checkin?event=${next.id}">開啟報到</a><a class="button secondary" href="#register?event=${next.id}">查看報名頁</a></div>`:"<p class='muted'>目前沒有未來活動。</p>"}</article>
   <article class="card"><h2>需要注意</h2><div class="kpi-line"><span>待繳費</span><strong>${regs.filter(r=>r.payment_status==="pending"&&!r.cancelled_at).length}</strong></div>${isAdmin()?`<div class="kpi-line"><span>待確認訊息</span><strong>${state.campaigns.filter(c=>c.status==="draft").length}</strong></div><div class="kpi-line"><span>尚未分區的會員</span><strong>${unassigned}</strong></div>`:""}${canBrowseMembers(state.role)?`<div class="kpi-line"><span>無法 LINE 聯絡</span><strong>${myContacts().filter(c=>!campaignEligible(c)).length}</strong></div>`:""}</article></section>`;
 }
 
 function events(){
   const create=canEvents()?`<button data-action="edit-event">＋ 建立活動</button>`:"";
-  return `${pageHead("活動管理","建立活動、查看報名進度並取得公開連結。",create)}<div class="table-wrap"><table><thead><tr><th>活動</th><th>日期</th><th>地點</th><th>報名</th><th>狀態</th><th>操作</th></tr></thead><tbody>${state.events.map(e=>`<tr><td><strong>${escapeHtml(e.title)}</strong><br><small>${escapeHtml(e.theme)}</small></td><td>${fmtDate(e.starts_at)}</td><td>${escapeHtml(e.location)}</td><td>${e.registration_count}/${e.capacity}</td><td><span class="pill">${eventState(e)}</span></td><td><a href="#events" data-action="event-roster" data-id="${e.id}">名單</a>　<a href="#register?event=${e.id}">報名頁</a>　<a href="#checkin?event=${e.id}">報到</a>${canEvents()?`　<a href="#events" data-action="edit-event" data-id="${e.id}">編輯</a>　<a href="#events" class="danger-link" data-action="delete-event" data-id="${e.id}">刪除</a>`:""}</td></tr>`).join("")}</tbody></table></div>`;
+  return `${pageHead("活動管理","建立活動、查看報名進度並取得公開連結。",create)}<div class="table-wrap"><table><thead><tr><th>活動</th><th>日期</th><th>地點</th><th>報名</th><th>狀態</th><th>操作</th></tr></thead><tbody>${state.events.map(e=>`<tr><td><strong>${escapeHtml(eventLabel(e))}</strong><br><small>${escapeHtml(e.theme)}</small></td><td>${fmtDate(e.starts_at)}</td><td>${escapeHtml(e.location)}</td><td>${e.registration_count}/${e.capacity}</td><td><span class="pill">${eventState(e)}</span></td><td><a href="#events" data-action="event-roster" data-id="${e.id}">名單</a>　<a href="#register?event=${e.id}">報名頁</a>　<a href="#checkin?event=${e.id}">報到</a>${canEvents()?`　<a href="#events" data-action="edit-event" data-id="${e.id}">編輯</a>　<a href="#events" class="danger-link" data-action="delete-event" data-id="${e.id}">刪除</a>`:""}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
 function regionOptions(selected,{withAll=false,withNone=false}={}){
@@ -238,7 +238,7 @@ function eventRoster(id){
   const item=(r,when)=>`<li class="student-item"><div><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span><small>${escapeHtml(r.region_name||"未分區")}・手機末三碼 ${escapeHtml(r.phone_last3||"---")}${r.source==="walk-in"?"・現場報名":""}${when?`・${when}`:""}</small></div></li>`;
   const list=(title,rows,when)=>`<h3>${title}（${rows.length}）</h3>${rows.length?`<ul class="student-list">${rows.map(r=>item(r,when(r))).join("")}</ul>`:`<p class="muted">沒有</p>`}`;
   const scope=canEvents()?"":`<p class="muted">只顯示${escapeHtml(regionName(state.region_id))}的會員</p>`;
-  modal(`<h2>${escapeHtml(e.title)}</h2><p class="muted">${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・報名 ${attended.length+waiting.length}／${e.capacity}</p>${scope}
+  modal(`<h2>${escapeHtml(eventLabel(e))}</h2><p class="muted">${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・報名 ${attended.length+waiting.length}／${e.capacity}</p>${scope}
     ${list("已報到",attended,r=>r.checked_in_at?`報到 ${fmtDate(r.checked_in_at)}`:"")}
     ${list("已報名、未報到",waiting,r=>r.registered_at?`報名 ${fmtDate(r.registered_at)}`:"")}
     ${cancelled.length?list("已取消",cancelled,r=>r.cancelled_at?`取消 ${fmtDate(r.cancelled_at)}`:""):""}
@@ -344,9 +344,9 @@ function checkin(){
   const scope=canEvents()?"全部區域":`只顯示${regionName(state.region_id)}`;
   const pay=r=>r.payment_status==="paid"?"已繳":r.payment_status==="free"?"免費":"待確認款項";
   const qrBtn=canEvents()&&event?`<button data-action="show-qr" data-event="${event.id}">報到 QR Code</button>`:"";
-  const picker=`<select id="eventSwitch">${state.events.map(e=>`<option value="${e.id}" ${e.id===eventId?"selected":""}>${escapeHtml(e.title)}</option>`).join("")}</select>`;
+  const picker=`<select id="eventSwitch">${state.events.map(e=>`<option value="${e.id}" ${e.id===eventId?"selected":""}>${escapeHtml(eventLabel(e))}</option>`).join("")}</select>`;
   const rows=regs.map(r=>`<div class="checkin-item" data-search="${escapeHtml(`${r.member_no||""} ${r.name} ${r.phone_last3}`.toLowerCase())}"><div><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span><small>${escapeHtml(r.region_name||"未分區")}・手機末三碼 ${escapeHtml(r.phone_last3||"---")}・${r.source==="walk-in"?"現場報名・":""}${pay(r)}</small></div><button data-action="toggle-checkin" data-id="${r.id}" class="${r.attendance_status==="attended"?"secondary":""}">${r.attendance_status==="attended"?"已報到 ✓":"確認報到"}</button></div>`).join("");
-  return `${pageHead("現場報到",event?`${event.title}・${fmtDate(event.starts_at)}`:"請先建立活動",qrBtn+picker)}<p class="muted">${scope}・已報到 ${done}／${regs.length}</p><input class="search" id="checkinSearch" placeholder="搜尋姓名或手機末三碼"><div class="checkin-list" style="margin-top:15px">${rows||"<div class='empty'>目前沒有報名者</div>"}</div>`;
+  return `${pageHead("現場報到",event?`${eventLabel(event)}・${fmtDate(event.starts_at)}`:"請先建立活動",qrBtn+picker)}<p class="muted">${scope}・已報到 ${done}／${regs.length}</p><input class="search" id="checkinSearch" placeholder="搜尋姓名或手機末三碼"><div class="checkin-list" style="margin-top:15px">${rows||"<div class='empty'>目前沒有報名者</div>"}</div>`;
 }
 
 function messages(){
@@ -370,16 +370,16 @@ function register(){
   const event=state.events.find(e=>e.id===(wanted||(live?"":state.events[0]?.id)));
   if(!event){
     // 同名活動只列一次（報名頁裡再選場次）
-    const open=state.events.filter(e=>eventState(e)==="報名中").filter((e,i,all)=>all.findIndex(x=>x.title.trim()===e.title.trim())===i);
+    const open=state.events.filter(e=>eventState(e)==="報名中").filter((e,i,all)=>all.findIndex(x=>(x.series_id||x.title.trim())===(e.series_id||e.title.trim()))===i);
     return `<article class="card student-card" style="max-width:640px;margin:20px auto"><h1>${wanted?"找不到這場活動":"選擇要報名的活動"}</h1>${wanted?`<p class="muted">連結可能已過期，或活動已下架。以下是目前開放報名的活動：</p>`:""}${open.length?`<ul class="student-list">${open.map(e=>{const n=eventSessions(state.events,e).length;return `<li class="student-item"><div><strong>${escapeHtml(e.title)}</strong><small>${n>1?`共 ${n} 場・從 ${fmtDate(e.starts_at)} 起`:`${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}`}・${escapeHtml(e.fee_note||"")}</small></div><a class="button" href="#register?event=${e.id}">報名</a></li>`}).join("")}</ul>`:`<p class="muted">目前沒有開放報名的活動。</p>`}</article>`;
   }
   const sessions=eventSessions(state.events,event), multi=sessions.length>1;
   const info=multi
-    ?`<h2>場次</h2>${sessions.map(s=>`<div class="kpi-line"><span>${fmtDate(s.starts_at)}<br><small class="muted">${escapeHtml(s.location||"")}</small></span><strong>${eventState(s)==="報名中"?`${s.registration_count}/${s.capacity}`:eventState(s)}</strong></div>`).join("")}<div class="kpi-line"><span>費用</span><strong>${escapeHtml(event.fee_note)}</strong></div>`
+    ?`<h2>場次</h2>${sessions.map(s=>`<div class="kpi-line"><span>${s.session_name?`<strong>${escapeHtml(s.session_name)}</strong><br>`:""}${fmtDate(s.starts_at)}<br><small class="muted">${escapeHtml(s.location||"")}</small></span><strong>${eventState(s)==="報名中"?`${s.registration_count}/${s.capacity}`:eventState(s)}</strong></div>`).join("")}<div class="kpi-line"><span>費用</span><strong>${escapeHtml(event.fee_note)}</strong></div>`
     :`<h2>活動資訊</h2><div class="kpi-line"><span>時間</span><strong>${fmtDate(event.starts_at)}</strong></div><div class="kpi-line"><span>地點</span><strong>${escapeHtml(event.location)}</strong></div><div class="kpi-line"><span>費用</span><strong>${escapeHtml(event.fee_note)}</strong></div><div class="kpi-line"><span>名額</span><strong>${event.registration_count}/${event.capacity}</strong></div>`;
   const tracking=["utm_source","utm_medium","utm_campaign","utm_content"].map(k=>`<input type="hidden" name="${k}" value="${escapeHtml(q.get(k)||"")}">`).join("");
   const outdoorFields=outdoor?`<input type="hidden" name="campaign_type" value="outdoor"><input type="hidden" name="lead_city" value="${escapeHtml(leadCity)}"><input type="hidden" name="source_theme" value="${escapeHtml(sourceTheme)}"><div class="field full"><label>你是從哪裡認識我們？</label><select name="contact_mode"><option ${contactMode==="正式參加者"?"selected":""}>正式參加者</option><option ${contactMode==="現場圍觀者"?"selected":""}>現場圍觀者</option><option ${contactMode==="親友介紹"?"selected":""}>親友介紹</option></select></div><div class="field full"><h3>30 秒自我狀態了解</h3><p class="muted">這不是醫療診斷，只協助你了解最近的狀態。</p></div><div class="field full"><label>最近是否難入睡、睡不飽或醒來仍疲累？</label><select name="sleep_issue" required><option value="">請選擇</option><option>經常</option><option>偶爾</option><option>很少</option></select></div><div class="field full"><label>最近是否容易緊繃、煩躁或腦袋停不下來？</label><select name="stress_issue" required><option value="">請選擇</option><option>經常</option><option>偶爾</option><option>很少</option></select></div><label class="field full"><span><input type="checkbox" name="weekly_practice_interest"> 我願意每週留一小段時間練習放鬆。</span></label><label class="field full"><span><input type="checkbox" name="online_trial_interest" checked> 我想預約免費、限額的新手線上體驗課。</span></label>`:"";
-  return `${demoLinePicker()}${pageHead(event.title,event.theme)}<section class="two-col"><article class="card">${info}<p class="muted">分享報名 QR Code${multi?"（所有場次共用這一張）":""}</p><div id="qr" aria-label="活動報名 QR Code"></div></article><article class="card" id="regAction">${registerAction(event,sessions,`<form id="registrationForm">${multi?"":`<input type="hidden" name="event_id" value="${event.id}">`}${tracking}<div class="form-grid">${multi?sessionPicker(sessions):""}<div class="field"><label>姓名 *</label><input name="name" required maxlength="40"></div>${phoneField("手機","",{required:true,autocomplete:"tel"})}${genderField()}${cityField()}<div class="field full"><label>Email</label><input name="email" type="email"></div><div class="field full"><label>有興趣的主題</label><select name="interest"><option>閱讀</option><option>冥想</option><option>身心放鬆</option><option>節氣生活</option></select></div>${outdoorFields}<label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="privacy.html" target="_blank">個資告知</a>，資料僅用於活動與會員服務。</span></label><label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收後續活動與課程訊息，可隨時撤回。</span></label><button class="field full" type="submit">使用 LINE 身分送出報名</button></div></form>`)}</article></section>`;
+  return `${demoLinePicker()}${pageHead(multi?event.title:eventLabel(event),event.theme)}<section class="two-col"><article class="card">${info}<p class="muted">分享報名 QR Code${multi?"（所有場次共用這一張）":""}</p><div id="qr" aria-label="活動報名 QR Code"></div></article><article class="card" id="regAction">${registerAction(event,sessions,`<form id="registrationForm">${multi?"":`<input type="hidden" name="event_id" value="${event.id}">`}${tracking}<div class="form-grid">${multi?sessionPicker(sessions):""}<div class="field"><label>姓名 *</label><input name="name" required maxlength="40"></div>${phoneField("手機","",{required:true,autocomplete:"tel"})}${genderField()}${cityField()}<div class="field full"><label>Email</label><input name="email" type="email"></div><div class="field full"><label>有興趣的主題</label><select name="interest"><option>閱讀</option><option>冥想</option><option>身心放鬆</option><option>節氣生活</option></select></div>${outdoorFields}<label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="privacy.html" target="_blank">個資告知</a>，資料僅用於活動與會員服務。</span></label><label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收後續活動與課程訊息，可隨時撤回。</span></label><button class="field full" type="submit">使用 LINE 身分送出報名</button></div></form>`)}</article></section>`;
 }
 
 // 報名頁右側：先用 LINE 確認身分。會員一鍵報名（不用再填資料）、已報名顯示狀態與取消；不是會員才顯示報名表。
@@ -387,14 +387,14 @@ let regMember=null; // {eventId, status:"checking"|"member"|"guest", name, regis
 const STAFF_ROLES=["admin","event_staff","region_lead"];
 // 同名多場次的勾選清單：已報名、截止或額滿的場次不能勾
 function sessionPicker(sessions,mine=new Set()){
-  return `<div class="field full"><label>選擇場次 *（可複選）</label>${sessions.map(s=>{const st=eventState(s),done=mine.has(s.id);return `<label class="session-option"><input type="checkbox" name="session" value="${s.id}" ${st!=="報名中"||done?"disabled":""}> ${fmtDate(s.starts_at)}・${escapeHtml(s.location||"")} <small class="muted">${done?"已報名":st==="報名中"?`名額 ${s.registration_count}/${s.capacity}`:st}</small></label>`}).join("")}</div>`;
+  return `<div class="field full"><label>選擇場次 *（可複選）</label>${sessions.map(s=>{const st=eventState(s),done=mine.has(s.id);return `<label class="session-option"><input type="checkbox" name="session" value="${s.id}" ${st!=="報名中"||done?"disabled":""}><span>${s.session_name?`<strong>${escapeHtml(s.session_name)}</strong><br>`:""}${fmtDate(s.starts_at)}・${escapeHtml(s.location||"")}</span><small class="muted">${done?"已報名":st==="報名中"?`名額 ${s.registration_count}/${s.capacity}`:st}</small></label>`}).join("")}</div>`;
 }
 function registerAction(event,sessions,formHtml){
   const m=regMember?.eventId===event.id?regMember:{status:"checking"};
   if(m.status==="checking") return `<h2>報名</h2><div class="empty">正在用 LINE 確認你的會員身分…</div>`;
   if(sessions.length>1&&m.status==="member"){
     const mine=m.regIds||new Set(), regd=sessions.filter(s=>mine.has(s.id)), canPick=sessions.some(s=>!mine.has(s.id)&&eventState(s)==="報名中");
-    return `<h2>會員報名</h2><p>${escapeHtml(m.name)}，你已經是會員，不用再填資料。</p>${regd.length?`<div class="notice">✓ 你已報名：<ul class="plain">${regd.map(s=>`<li>${fmtDate(s.starts_at)}・${escapeHtml(s.location||"")}　<button class="secondary small" data-action="cancel-registration" data-event="${s.id}">取消這場</button></li>`).join("")}</ul></div>`:""}${canPick?`<form id="quickRegisterForm" style="margin-top:14px"><div class="form-grid">${sessionPicker(sessions,mine)}<button class="big field full" type="submit">報名勾選的場次</button></div></form><p class="muted" style="margin-top:10px">報名後，活動前會透過 LINE 提醒你。</p>`:`<div class="actions" style="margin-top:14px"><a class="button" href="#me">看我的活動</a></div>`}`;
+    return `<h2>會員報名</h2><p>${escapeHtml(m.name)}，你已經是會員，不用再填資料。</p>${regd.length?`<div class="notice">✓ 你已報名：<ul class="plain">${regd.map(s=>`<li>${s.session_name?`${escapeHtml(s.session_name)}・`:""}${fmtDate(s.starts_at)}・${escapeHtml(s.location||"")}　<button class="secondary small" data-action="cancel-registration" data-event="${s.id}">取消這場</button></li>`).join("")}</ul></div>`:""}${canPick?`<form id="quickRegisterForm" style="margin-top:14px"><div class="form-grid">${sessionPicker(sessions,mine)}<button class="big field full" type="submit">報名勾選的場次</button></div></form><p class="muted" style="margin-top:10px">報名後，活動前會透過 LINE 提醒你。</p>`:`<div class="actions" style="margin-top:14px"><a class="button" href="#me">看我的活動</a></div>`}`;
   }
   if(sessions.length>1) return `<h2>LINE 登入＋簡短報名</h2>${live&&m.loggedOut?`<div class="notice">已經是會員？<button type="button" class="secondary small" data-action="line-login-register">用 LINE 登入一鍵報名</button></div>`:""}${formHtml}`;
   if(m.status==="member"&&m.registered) return `<h2>會員報名</h2><div class="notice">✓ ${escapeHtml(m.name)}，你已報名這場活動，活動前會透過 LINE 提醒你。</div><div class="actions" style="margin-top:14px"><a class="button" href="#me">看我的活動</a><button class="secondary" data-action="cancel-registration" data-event="${event.id}">取消報名</button></div>`;
@@ -443,7 +443,7 @@ async function quickRegisterMany(form,ids){
 }
 function sessionsDoneView(results,backId){
   const ok=results.filter(r=>!r.error), bad=results.filter(r=>r.error);
-  const line=r=>{const e=state.events.find(x=>x.id===r.id);return `<li>${e?`${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}`:"場次"}${r.error?`：${escapeHtml(r.error)}`:""}</li>`;};
+  const line=r=>{const e=state.events.find(x=>x.id===r.id);return `<li>${e?`${e.session_name?`${escapeHtml(e.session_name)}・`:""}${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}`:"場次"}${r.error?`：${escapeHtml(r.error)}`:""}</li>`;};
   $("#app").innerHTML=`<article class="card" style="max-width:560px;margin:40px auto;text-align:center"><h1>${ok.length?"報名完成":"報名沒有成功"}</h1>${ok.length?`<p>已報名以下場次，活動前會透過 LINE 提醒你：</p><ul class="plain">${ok.map(line).join("")}</ul>`:""}${bad.length?`<div class="notice">以下場次沒有報名成功：<ul class="plain">${bad.map(line).join("")}</ul></div>`:""}<div class="actions" style="justify-content:center"><a class="button" href="#me">看我的活動</a><a class="button secondary" href="#register?event=${backId}" data-action="back-to-event">回到活動頁</a></div></article>`;
 }
 function forgetRegistration(eventId){
@@ -537,7 +537,7 @@ async function loadMe(){
   area.innerHTML=`<section class="card profile-head student-card"><div class="avatar" aria-hidden="true">${escapeHtml((c.name||"?").slice(0,1))}</div><div><h1>${escapeHtml(c.name)}</h1><p class="muted">${escapeHtml(c.region_name||"尚未分區")}・LINE：${escapeHtml(c.display_name||"")}</p></div></section>
     <section class="card student-card"><h2>我報名的活動</h2>${upcoming.length?`<ul class="student-list">${upcoming.map(r=>item(r.events.title,`${fmtDate(r.events.starts_at)}・${escapeHtml(r.events.location||"")}`,`<span class="pill">已報名</span>`)).join("")}</ul>`:`<p class="muted">目前沒有報名中的活動。</p>`}</section>
     <section class="card student-card"><h2>參加紀錄</h2>${attended.length?`<ul class="student-list">${attended.map(r=>item(r.events.title,`${fmtDate(r.events.starts_at)}${r.checked_in_at?`・報到 ${fmtDate(r.checked_in_at)}`:""}`,`<span class="pill">${ATTENDANCE_LABELS.attended}</span>`)).join("")}</ul>`:`<p class="muted">還沒有參加紀錄，期待在活動見到你。</p>`}</section>
-    <section class="card student-card"><h2>近期活動</h2>${(data.events||[]).length?`<ul class="student-list">${data.events.map(e=>item(e.title,`${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・${escapeHtml(e.fee_note||"")}`,mine.has(e.id)?`<span class="pill">已報名</span>`:eventState(e)==="報名中"?`<a class="button" href="#register?event=${e.id}">報名</a>`:`<span class="pill off">${eventState(e)}</span>`)).join("")}</ul>`:`<p class="muted">近期沒有公開活動。</p>`}</section>`;
+    <section class="card student-card"><h2>近期活動</h2>${(data.events||[]).length?`<ul class="student-list">${data.events.map(e=>item(eventLabel(e),`${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・${escapeHtml(e.fee_note||"")}`,mine.has(e.id)?`<span class="pill">已報名</span>`:eventState(e)==="報名中"?`<a class="button" href="#register?event=${e.id}">報名</a>`:`<span class="pill off">${eventState(e)}</span>`)).join("")}</ul>`:`<p class="muted">近期沒有公開活動。</p>`}</section>`;
 }
 
 async function runScan({quickJoin=false}={}){
@@ -599,7 +599,7 @@ async function showCheckinQr(eventId,{renew=false}={}){
   if(renew)audit("重新產生報到 QR Code",event.title); else audit("開啟報到 QR Code",event.title); persist();
   const url=checkinUrl(eventId,token); const {opensAt,closesAt}=checkinWindow(event);
   const code=window.qrcode(0,"M"); code.addData(url); code.make();
-  modal(`<h2>報到 QR Code</h2><p><strong>${escapeHtml(event.title)}</strong><br><span class="muted">${fmtDate(event.starts_at)}・${escapeHtml(event.location)}</span></p>
+  modal(`<h2>報到 QR Code</h2><p><strong>${escapeHtml(eventLabel(event))}</strong><br><span class="muted">${fmtDate(event.starts_at)}・${escapeHtml(event.location)}</span></p>
     <div class="qr-big">${code.createSvgTag(6,0)}</div>
     <div class="notice">可報到時間：${fmtDate(opensAt.toISOString())} ～ ${fmtDate(closesAt.toISOString())}。請把這張 QR Code 傳給各區負責人，或印出來貼在報到桌；學員掃碼後會自動歸到自己的區域。</div>
     <div class="actions"><button class="secondary" data-action="download-qr" data-event="${eventId}">下載圖檔</button><button class="danger" data-action="renew-qr" data-event="${eventId}">重新產生（舊的立即失效）</button></div>
@@ -686,18 +686,35 @@ function toLocalInput(value){ if(!value)return ""; const d=new Date(value); retu
 function eventForm(id){
   if(!canEvents())return toast("只有總管理與活動幹部可以編輯活動");
   const e=id?state.events.find(x=>x.id===id):{capacity:24,fee_note:"免費",status:"published"}; if(!e)return;
-  const v=key=>escapeHtml(e[key]??"");
-  modal(`<h2>${id?"編輯活動":"建立活動"}</h2><form id="eventForm"><input type="hidden" name="event_id" value="${id||""}"><div class="form-grid">
+  const v=key=>escapeHtml(e[key]??""), rows=id?seriesOf(state.events,e):[e];
+  modal(`<h2>${id?"編輯活動":"建立活動"}</h2><form id="eventForm"><input type="hidden" name="event_id" value="${id||""}"><input type="hidden" name="removed_sessions" value=""><div class="form-grid">
     <div class="field full"><label>活動名稱 *</label><input name="title" required maxlength="120" value="${v("title")}"></div>
     <div class="field full"><label>活動說明</label><textarea name="theme" maxlength="1000">${v("theme")}</textarea></div>
-    <div class="field"><label>開始時間 *</label><input name="starts_at" type="datetime-local" required value="${toLocalInput(e.starts_at)}"></div>
-    <div class="field"><label>結束時間</label><input name="ends_at" type="datetime-local" value="${toLocalInput(e.ends_at)}"></div>
+    <div class="field full"><label>場次</label><div id="sessionRows">${rows.map(sessionRow).join("")}</div><div class="actions"><button type="button" class="secondary" data-action="add-session">＋ 新增場次</button></div><small class="muted">只有一場就不用填場次名稱。兩場以上會共用一張報名 QR，學員報名時勾選要參加哪幾場；每場各自計算名額、各自報到。</small></div>
     <div class="field"><label>報名截止 *</label><input name="registration_deadline" type="datetime-local" required value="${toLocalInput(e.registration_deadline)}"></div>
-    <div class="field"><label>名額 *</label><input name="capacity" type="number" min="1" max="500" required value="${v("capacity")}"></div>
     <div class="field"><label>地點 *</label><input name="location" required value="${v("location")}"></div>
     <div class="field"><label>費用說明</label><input name="fee_note" value="${v("fee_note")}"></div>
-    <div class="field full"><label>狀態</label><select name="status">${Object.entries(EVENT_STATUS_LABELS).map(([k,label])=>`<option value="${k}" ${e.status===k?"selected":""}>${label}</option>`).join("")}</select></div>
-    <button class="field full">儲存活動</button>${id?`<button type="button" class="field full danger" data-action="delete-event" data-id="${id}">刪除活動</button>`:""}</div></form>`);
+    <div class="field"><label>狀態</label><select name="status">${Object.entries(EVENT_STATUS_LABELS).map(([k,label])=>`<option value="${k}" ${e.status===k?"selected":""}>${label}</option>`).join("")}</select></div>
+    <button class="field full">儲存活動</button>${id&&rows.length===1?`<button type="button" class="field full danger" data-action="delete-event" data-id="${id}">刪除活動</button>`:""}</div></form>`);
+}
+// 編輯活動裡的一個場次：已存在的場次帶 data-id，新增的沒有
+function sessionRow(s={}){
+  return `<div class="session-row" data-id="${s.id||""}" data-regs="${s.registration_count||0}"><div class="field"><label>場次名稱</label><input name="s_name" maxlength="60" placeholder="例如：放鬆實驗室" value="${escapeHtml(s.session_name||"")}"></div><div class="field"><label>開始時間 *</label><input name="s_start" type="datetime-local" required value="${toLocalInput(s.starts_at)}"></div><div class="field"><label>結束時間</label><input name="s_end" type="datetime-local" value="${toLocalInput(s.ends_at)}"></div><div class="field"><label>名額 *</label><input name="s_capacity" type="number" min="1" max="500" required value="${s.capacity??24}"></div><button type="button" class="secondary small" data-action="remove-session">移除</button></div>`;
+}
+function addSessionRow(){
+  const box=$("#sessionRows"), last=[...box.children].at(-1), get=n=>last?.querySelector(`[name=${n}]`).value||"";
+  box.insertAdjacentHTML("beforeend",sessionRow({capacity:get("s_capacity")||24}));
+  // 新場次預設接在上一場之後：開始＝上一場結束（沒填結束就同一時間），方便只改時間
+  const row=box.lastElementChild; row.querySelector("[name=s_start]").value=get("s_end")||get("s_start");
+  row.querySelector("[name=s_name]").focus();
+}
+function removeSessionRow(btn){
+  const row=btn.closest(".session-row"), box=$("#sessionRows");
+  if(box.children.length===1) return toast("至少要有一個場次");
+  const regs=Number(row.dataset.regs||0);
+  if(regs) return toast(`這個場次已有 ${regs} 人報名，不能在這裡移除。可以改時間，或從活動列表刪除這個場次`);
+  if(row.dataset.id){ const f=$("#eventForm").elements.removed_sessions; f.value=[f.value,row.dataset.id].filter(Boolean).join(","); }
+  row.remove();
 }
 // 刪除活動：沒有報名紀錄的，總管理與活動幹部都可刪；有報名／報到紀錄的只限總管理，且要輸入活動名稱確認（資料庫也會再檢查一次）
 function deleteEventForm(id){
@@ -705,7 +722,7 @@ function deleteEventForm(id){
   const e=state.events.find(x=>x.id===id); if(!e)return;
   const regs=Math.max(state.registrations.filter(r=>r.event_id===id).length,e.registration_count||0);
   if(regs&&!isAdmin()) return modal(`<h2>無法刪除</h2><p><strong>${escapeHtml(e.title)}</strong> 已有 ${regs} 筆報名／報到紀錄，只有總管理可以刪除。<br>如果只是活動不辦了，可以在「編輯」把狀態改成「已取消」，紀錄會保留。</p><button value="cancel" data-action="close-modal">知道了</button>`);
-  modal(`<h2>刪除活動</h2><p><strong>${escapeHtml(e.title)}</strong><br><span class="muted">${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}</span></p>
+  modal(`<h2>刪除活動</h2><p><strong>${escapeHtml(eventLabel(e))}</strong><br><span class="muted">${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}</span></p>
     <div class="notice">刪除後<strong>無法復原</strong>${regs?`：這場活動的 ${regs} 筆報名／報到紀錄會一起移除。如果只是活動不辦了，建議改用「編輯」把狀態改成「已取消」，紀錄會保留`:"。這場活動還沒有人報名"}。</div>
     <form id="deleteEventForm"><input type="hidden" name="event_id" value="${id}">${regs?`<div class="field"><label>請輸入活動名稱「${escapeHtml(e.title)}」確認</label><input name="confirm_title" required autocomplete="off"></div>`:""}
     <div class="actions" style="margin-top:14px"><button class="danger">確認刪除</button><button type="button" class="secondary" data-action="close-modal">取消</button></div></form>`);
@@ -727,15 +744,33 @@ async function deleteEvent(data){
 async function saveEvent(data){
   if(!canEvents())return toast("沒有權限");
   const iso=value=>value?new Date(value).toISOString():null;
-  const fields={title:data.title.trim(),theme:data.theme||"",starts_at:iso(data.starts_at),ends_at:iso(data.ends_at),registration_deadline:iso(data.registration_deadline),location:data.location,capacity:Number(data.capacity),fee_note:data.fee_note||"免費",status:data.status};
-  if(new Date(fields.registration_deadline)>new Date(fields.starts_at))return toast("報名截止不能晚於開始時間");
-  if(fields.ends_at&&new Date(fields.ends_at)<=new Date(fields.starts_at))return toast("結束時間要晚於開始時間");
+  const shared={title:data.title.trim(),theme:data.theme||"",registration_deadline:iso(data.registration_deadline),location:data.location,fee_note:data.fee_note||"免費",status:data.status};
+  const rows=[...document.querySelectorAll("#sessionRows .session-row")].map(r=>{const val=n=>r.querySelector(`[name=${n}]`).value;return {id:r.dataset.id||null,session_name:val("s_name").trim(),starts_at:iso(val("s_start")),ends_at:iso(val("s_end")),capacity:Number(val("s_capacity"))};});
+  for(const [i,r] of rows.entries()){
+    const which=rows.length>1?`第 ${i+1} 場（${r.session_name||fmtDate(r.starts_at)}）`:"";
+    if(new Date(shared.registration_deadline)>new Date(r.starts_at))return toast(`報名截止不能晚於${which||""}開始時間`);
+    if(r.ends_at&&new Date(r.ends_at)<=new Date(r.starts_at))return toast(`${which}結束時間要晚於開始時間`);
+  }
+  // 兩場以上用同一個 series_id 綁成一個活動；剩一場就解除綁定，和一般活動一樣
+  const current=state.events.find(e=>e.id===data.event_id);
+  const series_id=rows.length>1?(seriesOf(state.events,current||{}).find(e=>e.series_id)?.series_id||crypto.randomUUID()):null;
+  const removed=(data.removed_sessions||"").split(",").filter(Boolean);
   if(live){
-    const {error}=data.event_id?await supabase.from("events").update(fields).eq("id",data.event_id):await supabase.from("events").insert(fields);
-    if(error)return toast("儲存失敗："+error.message); await loadLiveData();
-  } else if(data.event_id) Object.assign(state.events.find(e=>e.id===data.event_id),fields);
-  else state.events.push({id:crypto.randomUUID(),...fields,registration_count:0});
-  audit(data.event_id?"編輯活動":"建立活動",fields.title); persist(); closeModal(); render(); toast(data.event_id?"活動已更新":"活動已建立");
+    for(const id of removed){ const {error}=await supabase.rpc("admin_delete_event",{p_event_id:id,p_confirm_title:null}); if(error)return toast("移除場次失敗："+error.message); }
+    for(const r of rows){
+      const fields={...shared,session_name:r.session_name,starts_at:r.starts_at,ends_at:r.ends_at,capacity:r.capacity,series_id};
+      const {error}=r.id?await supabase.from("events").update(fields).eq("id",r.id):await supabase.from("events").insert(fields);
+      if(error){ await loadLiveData(); return toast("儲存失敗："+error.message); }
+    }
+    await loadLiveData();
+  } else {
+    state.events=state.events.filter(e=>!removed.includes(e.id));
+    for(const r of rows){
+      const fields={...shared,session_name:r.session_name,starts_at:r.starts_at,ends_at:r.ends_at,capacity:r.capacity,series_id};
+      if(r.id) Object.assign(state.events.find(e=>e.id===r.id),fields); else state.events.push({id:crypto.randomUUID(),...fields,registration_count:0});
+    }
+  }
+  audit(data.event_id?"編輯活動":"建立活動",shared.title+(rows.length>1?`（${rows.length} 場）`:"")); persist(); closeModal(); render(); toast(data.event_id?"活動已更新":"活動已建立");
 }
 
 // ───── Excel／CSV 匯入（總管理）─────
@@ -888,6 +923,8 @@ async function onClick(event){
   if(action==="close-modal") return closeModal();
   if(action==="logout"){ await supabase?.auth.signOut(); location.hash="login"; return location.reload(); }
   if(action==="edit-event"){ event.preventDefault(); return eventForm(btn.dataset.id); }
+  if(action==="add-session") return addSessionRow();
+  if(action==="remove-session") return removeSessionRow(btn);
   if(action==="forgot-password") return forgotPassword();
   if(action==="redeem-link") return redeemLink(btn);
   if(action==="copy-link"){ const el=$("#linkText"); el.select(); try{ await navigator.clipboard.writeText(el.value); toast("已複製"); }catch{ document.execCommand("copy"); toast("已複製"); } return; }

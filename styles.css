@@ -33,4 +33,5 @@ dialog #modalBody{max-height:calc(100vh - 32px);overflow:auto}
 .phone-input{display:flex;gap:6px}.phone-input select{flex:0 0 auto;max-width:46%;border:1px solid var(--line);border-radius:8px;padding:10px 6px;background:#fff;font:inherit}.phone-input input{flex:1;min-width:0}
 .member-no{font-family:ui-monospace,Consolas,monospace;color:var(--muted);white-space:nowrap}
 .danger-link{color:var(--red)}
-.session-option{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-weight:400;cursor:pointer}.session-option input{width:auto!important;margin:0;flex:0 0 auto}.session-option small{margin-left:auto}
+.session-option{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-weight:400;cursor:pointer}.session-option input{width:auto!important;margin:0;flex:0 0 auto}.session-option small{margin-left:auto;white-space:nowrap}
+.session-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:end;padding:12px;border:1px solid var(--line);border-radius:10px;background:#f8faf7;margin-bottom:10px}.session-row .field{min-width:0}.session-row .field:first-child{grid-column:1/-1}.session-row button{justify-self:start}
