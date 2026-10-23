@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution } from "./lib.js?v=20261023-5";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution } from "./lib.js?v=20261023-6";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -18,7 +18,16 @@ const lineReady = () => !live || Boolean(config.liffId);
 const REG_DRAFT_KEY = "chaoren-reg-draft";
 function lineLogin(draft){
   try{ sessionStorage.setItem(REG_DRAFT_KEY,JSON.stringify({...draft,hash:location.hash,at:Date.now()})); }catch{}
+  if(window.liff.isInClient()) return location.reload(); // LINE App 內重新開啟就會拿到新的 ID Token
+  if(window.liff.isLoggedIn()) window.liff.logout(); // ID Token 過期時要先登出，login 才會真的重新登入
   window.liff.login({redirectUri:location.href});
+}
+// 一般瀏覽器會記住 LINE 登入，但 ID Token 約一小時過期且不會自動換新，後端會回「LINE 身分驗證失敗」。
+// 過期（或一分鐘內要過期）就當作沒登入，重新登入拿新的。
+function lineSignedIn(){
+  if(!window.liff.isLoggedIn()) return false;
+  const token=window.liff.getDecodedIDToken();
+  return Boolean(token&&token.exp*1000>Date.now()+60e3);
 }
 function readRegDraft(){
   try{ const d=JSON.parse(sessionStorage.getItem(REG_DRAFT_KEY)||"null"); return d&&Date.now()-d.at<30*60e3?d:null; }catch{ return null; }
@@ -212,6 +221,8 @@ function render(){
   // 學員從個人頁點「報名」進來時，報名頁還沒載入過活動資料：先去雲端抓再畫
   // 左上角：學員前台回活動清單，後台回總覽
   $(".brand").setAttribute("href",IS_ADMIN?"#dashboard":"#register");
+  // 學員前台右上角的「回首頁」：已經在活動清單就不顯示
+  if($("#homeBtn")) $("#homeBtn").hidden=name==="register"&&!query().get("event");
   // 工作人員已有完整活動資料，不能被公開活動資料蓋掉
   if(live&&name==="register"&&!state.eventsLoaded&&!STAFF_ROLES.includes(state.role)){ $("#app").innerHTML="<div class='empty'>載入活動中…</div>"; loadPublicEvent().then(render); return; }
   const views={dashboard,events,contacts,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors,"set-password":setPassword};
@@ -437,7 +448,7 @@ async function checkRegisterMember(eventId){
   regMember={eventId,status:"checking"};
   if(live){
     let loggedIn=false;
-    if(lineReady()){ try{ await liffReady; loggedIn=window.liff.isLoggedIn(); }catch{} }
+    if(lineReady()){ try{ await liffReady; loggedIn=lineSignedIn(); }catch{} }
     if(!loggedIn){ regMember={eventId,status:"guest",loggedOut:true}; return route()==="register"&&render(); }
   }
   const data=await memberApi("me"); if(data.pending)return;
@@ -477,13 +488,13 @@ async function quickRegisterMany(form,ids){
 function sessionsDoneView(results,backId){
   const ok=results.filter(r=>!r.error), bad=results.filter(r=>r.error);
   const line=r=>{const e=state.events.find(x=>x.id===r.id);return `<li>${e?`${e.session_name?`${escapeHtml(e.session_name)}・`:""}${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}`:"場次"}${r.error?`：${escapeHtml(r.error)}`:""}</li>`;};
-  $("#app").innerHTML=`<article class="card" style="max-width:560px;margin:40px auto;text-align:center"><h1>${ok.length?"報名完成":"報名沒有成功"}</h1>${ok.length?`<p>已報名以下場次，活動前會透過 LINE 提醒你：</p><ul class="plain">${ok.map(line).join("")}</ul>`:""}${bad.length?`<div class="notice">以下場次沒有報名成功：<ul class="plain">${bad.map(line).join("")}</ul></div>`:""}<div class="actions" style="justify-content:center"><a class="button" href="#me">看我的活動</a><a class="button secondary" href="#register?event=${backId}" data-action="back-to-event">回到活動頁</a></div></article>`;
+  $("#app").innerHTML=`<article class="card" style="max-width:560px;margin:40px auto;text-align:center"><h1>${ok.length?"報名完成":"報名沒有成功"}</h1>${ok.length?`<p>已報名以下場次，活動前會透過 LINE 提醒你：</p><ul class="plain">${ok.map(line).join("")}</ul>`:""}${bad.length?`<div class="notice">以下場次沒有報名成功：<ul class="plain">${bad.map(line).join("")}</ul></div>`:""}<div class="actions" style="justify-content:center"><a class="button" href="#me">看我的活動</a><a class="button secondary" href="#register?event=${backId}" data-action="back-to-event">回到活動頁</a><a class="button secondary" href="#register">回首頁</a></div></article>`;
 }
 function forgetRegistration(eventId){
   if(!regMember) return; regMember.regIds?.delete(eventId); if(regMember.eventId===eventId) regMember.registered=false;
 }
 function registeredView(eventId,title){
-  $("#app").innerHTML=`<article class="card" style="max-width:560px;margin:40px auto;text-align:center"><h1>${title}</h1><p>活動前會透過 LINE 提醒你。</p><div class="actions" style="justify-content:center"><a class="button" href="#me">看我的活動</a><a class="button secondary" href="#register?event=${eventId}" data-action="back-to-event">回到活動頁</a></div></article>`;
+  $("#app").innerHTML=`<article class="card" style="max-width:560px;margin:40px auto;text-align:center"><h1>${title}</h1><p>活動前會透過 LINE 提醒你。</p><div class="actions" style="justify-content:center"><a class="button" href="#me">看我的活動</a><a class="button secondary" href="#register?event=${eventId}" data-action="back-to-event">回到活動頁</a><a class="button secondary" href="#register">回首頁</a></div></article>`;
 }
 
 // ───── 學員頁面 ─────
@@ -493,7 +504,7 @@ async function memberApi(action,payload={}){
   if(live){
     if(!lineReady()) return {error:LINE_NOT_READY};
     await liffReady;
-    if(!window.liff.isLoggedIn()){ lineLogin(); return {pending:true}; }
+    if(!lineSignedIn()){ lineLogin(); return {pending:true}; }
     const res=await fetch(`${config.supabaseUrl}/functions/v1/member`,{method:"POST",headers:{"Content-Type":"application/json",apikey:config.supabasePublishableKey},body:JSON.stringify({...payload,action,idToken:window.liff.getIDToken()})});
     const body=await res.json().catch(()=>({error:"連線失敗，請稍後再試"}));
     return res.ok?body:{error:body.error||"暫時無法完成"};
@@ -1058,7 +1069,7 @@ function sessionIds(form){
 async function submitRegistration(data,ids){
   if(!ids.length) return toast("請至少勾選一個場次");
   if(!GENDERS.includes(data.gender))return toast("請選擇性別");
-  if(live&&lineReady()){ try{ await liffReady; if(!window.liff.isLoggedIn()) return lineLogin({data:{...data},ids}); }catch(error){ return toast(error.message); } }
+  if(live&&lineReady()){ try{ await liffReady; if(!lineSignedIn()) return lineLogin({data:{...data},ids}); }catch(error){ return toast(error.message); } }
   const ph=readPhone(data); if(ph.error) return toast(ph.error); data.phone=ph.phone;
   delete data.session;
   if(ids.length>1) return submitSessions(data,ids);
@@ -1069,7 +1080,7 @@ async function submitRegistration(data,ids){
     catch(error){return toast(error.message);}
     await refreshEventCounts(); regMember=null;
   } else { const error=demoRegister(data); if(error) return toast(error); }
-  regMember=null; persist(); $("#app").innerHTML=`<article class="card" style="max-width:560px;margin:40px auto;text-align:center"><h1>報名完成</h1><p>我們已收到你的資料，活動前會透過 LINE 提醒你。</p><div class="actions" style="justify-content:center"><a class="button" href="#me">看我的活動</a><a class="button secondary" href="#register?event=${data.event_id}" data-action="back-to-event">回到活動頁</a></div></article>`;
+  regMember=null; persist(); $("#app").innerHTML=`<article class="card" style="max-width:560px;margin:40px auto;text-align:center"><h1>報名完成</h1><p>我們已收到你的資料，活動前會透過 LINE 提醒你。</p><div class="actions" style="justify-content:center"><a class="button" href="#me">看我的活動</a><a class="button secondary" href="#register?event=${data.event_id}" data-action="back-to-event">回到活動頁</a><a class="button secondary" href="#register">回首頁</a></div></article>`;
 }
 
 // 新朋友一次報名多個場次：同一份資料逐場送出（後端只補空白欄位，重複送不會覆蓋），每場各自記錄來源
@@ -1114,7 +1125,7 @@ async function cancelRegistration(eventId){
   }
   try{
     if(!lineReady()) return toast(LINE_NOT_READY);
-    await liffReady;if(!window.liff.isLoggedIn())return lineLogin();
+    await liffReady;if(!lineSignedIn())return lineLogin();
     const res=await fetch(`${config.supabaseUrl}/functions/v1/line-auth`,{method:"POST",headers:{"Content-Type":"application/json",apikey:config.supabasePublishableKey},body:JSON.stringify({action:"cancel",event_id:eventId,idToken:window.liff.getIDToken()})});
     const body=await res.json();if(!res.ok)throw new Error(body.error||"取消失敗");toast("已取消報名");
     await refreshEventCounts(); forgetRegistration(eventId); render();
