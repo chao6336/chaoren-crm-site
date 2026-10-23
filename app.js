@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261023-10";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261023-11";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -91,9 +91,9 @@ function myRegistrations(){ return scopeRegistrations(state.registrations,state.
 function canEvents(){ return canManageEvents(state.role); }
 // 報名名單：雲端由 event_roster view 決定範圍；展示版用同一規則（lib.rosterFor）。
 function roster(){ return live ? (state.roster||[]).map(r=>({...r,id:r.registration_id})) : rosterFor(state.registrations,state.contacts,viewer(),regionName); }
-const ADMIN_ONLY_ROUTES=["messages","governance","users","import","sponsors"];
+const ADMIN_ONLY_ROUTES=["messages","governance","users","import","sponsors","applications"];
 // 學員看的頁面：不顯示後台選單，資料只走 LINE 身分。
-const STUDENT_ROUTES=["me","scan","signin","activate"];
+const STUDENT_ROUTES=["me","scan","signin","activate","apply"];
 // 學員前台只開放這些頁面，其他頁面一律轉到 /admin/
 const PUBLIC_ROUTES=["register",...STUDENT_ROUTES];
 // 對外分享的報名網址一律指向學員前台，工作人員在後台打開報名頁也一樣
@@ -201,7 +201,8 @@ async function loadLiveData(){
   ]);
   const staff = profile.data?.role === "admin" ? await supabase.from("staff_profiles").select("user_id,display_name,role,region_id,active") : {data:[]};
   const sponsorships = profile.data?.role === "admin" ? await supabase.from("sponsorships").select("*").order("created_at",{ascending:false}) : {data:[]};
-  state={role:profile.data?.role||"none",eventsLoaded:true,region_id:profile.data?.region_id||null,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:"工作人員",action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
+  const applications = profile.data?.role === "admin" ? await supabase.from("student_applications").select("*").eq("status","pending").order("created_at") : {data:[]};
+  state={role:profile.data?.role||"none",eventsLoaded:true,region_id:profile.data?.region_id||null,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],applications:applications.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:"工作人員",action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
   showUser(profile.data?.display_name||session.user.email);
   $("#logoutBtn").hidden=state.role==="none";
 }
@@ -217,6 +218,7 @@ function render(){
   if(signedOut&&!["login","register","set-password",...STUDENT_ROUTES].includes(name)){ location.hash="login"; return; }
   document.body.classList.toggle("signed-out",signedOut);
   document.body.classList.toggle("student-view",STUDENT_ROUTES.includes(name));
+  const appLink=document.querySelector('.sidebar a[data-route="applications"]'); if(appLink) appLink.textContent=`待開通${(state.applications||[]).length?`（${state.applications.length}）`:""}`;
   document.querySelectorAll(".sidebar a").forEach(a=>{ a.classList.toggle("active",a.dataset.route===name); if(!a.hasAttribute("data-demo-only"))a.hidden=(ADMIN_ONLY_ROUTES.includes(a.dataset.route)&&!isAdmin())||(a.dataset.route==="contacts"&&!canBrowseMembers(state.role)); });
   // 學員從個人頁點「報名」進來時，報名頁還沒載入過活動資料：先去雲端抓再畫
   // 左上角：學員前台回活動清單，後台回總覽
@@ -225,7 +227,7 @@ function render(){
   if($("#homeBtn")) $("#homeBtn").hidden=name==="register"&&!query().get("event");
   // 工作人員已有完整活動資料，不能被公開活動資料蓋掉
   if(live&&name==="register"&&!state.eventsLoaded&&!STAFF_ROLES.includes(state.role)){ $("#app").innerHTML="<div class='empty'>載入活動中…</div>"; loadPublicEvent().then(render); return; }
-  const views={dashboard,events,contacts,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors,"set-password":setPassword,signin,activate};
+  const views={dashboard,events,contacts,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors,"set-password":setPassword,signin,activate,apply,applications};
   $("#app").innerHTML=(views[name]||dashboard)();
   if(name==="me")loadMe();
   if(name==="users")loadStaffList();
@@ -248,7 +250,7 @@ function dashboard(){
     <div class="stat"><span>出席率</span><strong>${s.attendanceRate}%</strong></div><div class="stat"><span>取消率</span><strong>${s.cancellationRate}%</strong></div>${canBrowseMembers(state.role)?`<div class="stat"><span>會員</span><strong>${s.contacts}</strong></div>`:""}
   </section>
   <section class="grid"><article class="card"><h2>下一場活動</h2>${next?`<h3>${escapeHtml(eventLabel(next))}</h3><p>${fmtDate(next.starts_at)}・${escapeHtml(next.location)}</p><div class="kpi-line"><span>報名</span><strong>${next.registration_count}/${next.capacity}</strong></div><div class="actions"><a class="button" href="#checkin?event=${next.id}">開啟報到</a><a class="button secondary" href="#register?event=${next.id}">查看報名頁</a></div>`:"<p class='muted'>目前沒有未來活動。</p>"}</article>
-  <article class="card"><h2>需要注意</h2><div class="kpi-line"><span>待繳費</span><strong>${regs.filter(r=>r.payment_status==="pending"&&!r.cancelled_at).length}</strong></div>${isAdmin()?`<div class="kpi-line"><span>待確認訊息</span><strong>${state.campaigns.filter(c=>c.status==="draft").length}</strong></div><div class="kpi-line"><span>尚未分區的會員</span><strong>${unassigned}</strong></div>`:""}${canBrowseMembers(state.role)?`<div class="kpi-line"><span>無法 LINE 聯絡</span><strong>${myContacts().filter(c=>!campaignEligible(c)).length}</strong></div>`:""}</article></section>`;
+  <article class="card"><h2>需要注意</h2><div class="kpi-line"><span>待繳費</span><strong>${regs.filter(r=>r.payment_status==="pending"&&!r.cancelled_at).length}</strong></div>${isAdmin()?`<div class="kpi-line"><span><a href="#applications">待開通學員</a></span><strong>${(state.applications||[]).length}</strong></div><div class="kpi-line"><span>待確認訊息</span><strong>${state.campaigns.filter(c=>c.status==="draft").length}</strong></div><div class="kpi-line"><span>尚未分區的會員</span><strong>${unassigned}</strong></div>`:""}${canBrowseMembers(state.role)?`<div class="kpi-line"><span>無法 LINE 聯絡</span><strong>${myContacts().filter(c=>!campaignEligible(c)).length}</strong></div>`:""}</article></section>`;
 }
 
 function events(){
@@ -434,6 +436,7 @@ function sessionPicker(sessions,mine=new Set()){
 }
 function registerAction(event,sessions,formHtml){
   const m=regMember?.eventId===event.id?regMember:{status:"checking"};
+  if(m.status==="pending") return `<h2>報名</h2><div class="notice">你的帳號還在等待工作人員開通，開通後就能報名。</div>`;
   if(m.status==="checking") return `<h2>報名</h2><div class="empty">正在用 LINE 確認你的會員身分…</div>`;
   if(sessions.length>1&&m.status==="member"){
     const mine=m.regIds||new Set(), regd=sessions.filter(s=>mine.has(s.id)), canPick=sessions.some(s=>!mine.has(s.id)&&eventState(s)==="報名中");
@@ -454,6 +457,7 @@ async function checkRegisterMember(eventId){
   }
   const data=await memberApi("me"); if(data.pending)return;
   const regIds=new Set((data.registrations||[]).filter(r=>!r.cancelled_at).map(r=>r.event_id));
+  if(data.code==="PENDING"){ regMember={eventId,status:"pending"}; return route()==="register"&&render(); }
   regMember=data.ok&&data.contact?{eventId,status:"member",name:data.contact.name,registered:regIds.has(eventId),regIds}:{eventId,status:"guest"};
   const draft=live&&readRegDraft();
   if(draft?.data&&route()==="register"){ clearRegDraft(); $("#app").innerHTML="<div class='empty'>已用 LINE 登入，正在送出報名…</div>"; return submitRegistration(draft.data,draft.ids); }
@@ -528,10 +532,10 @@ async function memberCall(payload){
 const STUDENT_FLAG="chaoren-student-login";
 // 帳密學員沒有綁 LINE，收不到 LINE 提醒
 const remindText=()=>studentMode()?"活動前請留意工作人員的通知":"活動前會透過 LINE 提醒你";
-function studentMode(){ if(!live) return Boolean(state.demoStudent); try{ return localStorage.getItem(STUDENT_FLAG)==="1"; }catch{ return false; } }
+function studentMode(){ if(!live) return Boolean(state.demoStudent||state.demoApplicant); try{ return localStorage.getItem(STUDENT_FLAG)==="1"; }catch{ return false; } }
 function setStudentMode(on){ try{ on?localStorage.setItem(STUDENT_FLAG,"1"):localStorage.removeItem(STUDENT_FLAG); }catch{} }
 async function studentSignOut(){
-  if(live){ setStudentMode(false); await supabase.auth.signOut(); } else { state.demoStudent=null; persist(); }
+  if(live){ setStudentMode(false); await supabase.auth.signOut(); } else { state.demoStudent=null; state.demoApplicant=null; persist(); }
 }
 function signin(){
   return `<article class="card student-card" style="max-width:480px;margin:20px auto"><h1>帳號密碼登入</h1><p class="muted">給沒有 LINE 的學員。帳號是工作人員幫你開通時用的 Email 或手機。</p>
@@ -541,7 +545,7 @@ function signin(){
       <div class="full" data-login="phone" hidden>${phoneField("手機")}</div>
       <div class="field full"><label>密碼</label><input name="password" type="password" required autocomplete="current-password"></div>
       <button class="field full" type="submit">登入</button></div></form>
-    <p class="muted" style="margin-top:12px">還沒有帳號或忘記密碼？請洽工作人員重新產生開通連結。</p><p><a href="#me">改用 LINE 登入</a></p></article>`;
+    <p style="margin-top:12px">第一次使用？<a href="#apply">申請帳號</a></p><p class="muted">忘記密碼？請洽工作人員重新產生連結。</p><p><a href="#me">改用 LINE 登入</a></p></article>`;
 }
 async function submitSignin(data){
   const type=data.login_type==="phone"?"phone":"email";
@@ -554,11 +558,83 @@ async function submitSignin(data){
     setStudentMode(true);
   } else {
     const a=Object.entries(state.student_accounts||{}).find(([,x])=>studentAuthEmail(x.login_type,x.login)===email&&x.password&&x.password===data.password);
-    if(!a) return toast("帳號或密碼不正確");
-    state.demoStudent=a[0]; persist();
+    if(!a){ const p=(state.student_applications||[]).find(x=>x.status==="pending"&&studentAuthEmail(x.login_type,x.login)===email&&x.password===data.password); if(!p) return toast("帳號或密碼不正確"); state.demoApplicant=p.id; state.demoStudent=null; persist(); location.hash="#me"; return toast("登入成功"); }
+    state.demoStudent=a[0]; state.demoApplicant=null; persist();
   }
   location.hash="#me"; toast("登入成功");
 }
+// 沒有 LINE 的學員自己申請帳號密碼；總管理在後台「待開通」開通後才能看資料、報名
+function apply(){
+  return `<article class="card student-card" style="max-width:560px;margin:20px auto"><h1>申請帳號</h1><p class="muted">給沒有 LINE 的學員（例如海外）。送出後請等工作人員開通，開通後就能用帳號密碼登入、報名活動。有 LINE 的朋友請直接用 LINE 登入。</p>
+    <form id="applyForm"><div class="form-grid">
+      <div class="field full"><label>登入帳號用</label><div class="actions"><label><input type="radio" name="login_type" value="phone" checked> 手機</label><label><input type="radio" name="login_type" value="email"> Email</label></div></div>
+      <div class="field"><label>姓名 *</label><input name="name" required maxlength="40" autocomplete="name"></div>
+      ${phoneField("手機",'',{required:true,autocomplete:"tel"})}
+      <div class="field"><label id="applyEmailLabel">Email</label><input name="email" type="email" maxlength="120" autocomplete="email"></div>
+      ${genderField()}
+      <div class="field"><label>生日</label><input name="birth_date" type="date" min="1900-01-01"></div>
+      ${cityField()}
+      <div class="field"><label>密碼 *（至少 8 個字）</label><input name="password" type="password" required minlength="8" maxlength="72" autocomplete="new-password"></div>
+      <div class="field"><label>再輸入一次密碼 *</label><input name="again" type="password" required minlength="8" maxlength="72" autocomplete="new-password"></div>
+      <label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="${STUDENT_HOME}privacy.html" target="_blank">個資告知</a>，資料僅用於活動與會員服務。</span></label>
+      <label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收後續活動與課程訊息，可隨時撤回。</span></label>
+      <button class="field full" type="submit">送出申請</button></div></form>
+    <p style="margin-top:12px">已經申請過？<a href="#signin">帳號密碼登入</a></p></article>`;
+}
+async function submitApply(form,data){
+  const ph=readPhone(data); if(ph.error||!ph.phone) return toast(ph.error||"請填寫手機");
+  const checked=checkProfile({...data,phone:ph.phone}); if(checked.error) return toast(checked.error);
+  const type=data.login_type==="email"?"email":"phone";
+  if(type==="email"&&!checked.value.email) return toast("用 Email 當帳號時，請填寫 Email");
+  const problem=checkNewPassword(data.password,data.again); if(problem) return toast(problem);
+  if(!data.privacy) return toast("請先同意個資告知");
+  const btn=form.querySelector("button[type=submit]"); btn.disabled=true; btn.textContent="送出中…";
+  const payload={...checked.value,login_type:type,password:data.password,privacy:true,marketing:data.marketing==="on"};
+  const res=live?(await memberCall({action:"apply",...payload})).body:demoApply(payload);
+  if(!res.ok){ btn.disabled=false; btn.textContent="送出申請"; return toast(res.error||"暫時無法完成"); }
+  if(live){ const {error}=await supabase.auth.signInWithPassword({email:res.email,password:data.password}); if(!error) setStudentMode(true); }
+  location.hash="#me"; toast("申請已送出");
+}
+const pendingCard=name=>`<article class="card result-card"><div class="result-icon" aria-hidden="true">…</div><h1>申請已送出</h1><p>${escapeHtml(name||"")}，謝謝你！工作人員開通後，你就能在這裡看到自己的資料並報名活動。</p><p class="muted">開通後不會另外通知，請過一段時間再回來看看；急的話可以洽工作人員。</p><button class="secondary" data-action="student-logout">登出</button></article>`;
+// 展示版：申請存在 state.student_applications；用申請的帳號密碼登入時，先記成「申請中」
+function demoApply(p){
+  const email=studentAuthEmail(p.login_type,p.login_type==="email"?p.email:p.phone);
+  const taken=Object.values(state.student_accounts||{}).some(a=>studentAuthEmail(a.login_type,a.login)===email)||(state.student_applications||[]).some(a=>a.status==="pending"&&studentAuthEmail(a.login_type,a.login)===email);
+  if(taken) return {error:"這個帳號已經申請過或已有人使用；忘記密碼請洽工作人員"};
+  const app={id:crypto.randomUUID(),...p,login:p.login_type==="email"?p.email:p.phone,status:"pending",created_at:new Date().toISOString()};
+  state.student_applications=[...(state.student_applications||[]),app]; state.applications=state.student_applications.filter(a=>a.status==="pending");
+  state.demoApplicant=app.id; state.demoStudent=null; persist(); return {ok:true};
+}
+
+// ───── 總管理：待開通的學員申請 ─────
+function applications(){
+  const list=state.applications||[];
+  const row=a=>`<article class="card" style="margin-bottom:12px"><div class="card-title"><h2>${escapeHtml(a.name)}</h2><span class="muted">${fmtDate(a.created_at)} 申請</span></div>
+    <div class="kpi-line"><span>登入帳號</span><strong>${a.login_type==="phone"?"手機":"Email"} ${escapeHtml(a.login_type==="phone"?displayPhone(a.login):a.login)}</strong></div>
+    <div class="kpi-line"><span>手機</span><strong>${escapeHtml(displayPhone(a.phone))}</strong></div><div class="kpi-line"><span>Email</span><strong>${escapeHtml(a.email||"—")}</strong></div>
+    <div class="kpi-line"><span>性別／生日</span><strong>${escapeHtml(a.gender)}・${escapeHtml(a.birth_date||"—")}</strong></div><div class="kpi-line"><span>居住縣市</span><strong>${escapeHtml(a.residence_city||"—")}</strong></div>
+    <div class="actions" style="margin-top:12px"><button data-action="approve-application" data-id="${a.id}">開通（建立新會員）</button><button class="danger" data-action="reject-application" data-id="${a.id}">拒絕</button></div></article>`;
+  return `${pageHead("待開通的學員","沒有 LINE 的學員自己申請帳號密碼。確認是本人後按開通，系統會建立一位新會員；拒絕會刪掉他的登入帳號，對方可以重新申請。")}${list.length?list.map(row).join(""):`<div class="empty">目前沒有待開通的申請。</div>`}`;
+}
+async function reviewApplication(id,approve){
+  const a=(state.applications||[]).find(x=>x.id===id); if(!a||!isAdmin()) return;
+  if(!confirm(approve?`開通「${a.name}」並建立新會員？`:`拒絕「${a.name}」的申請？他的登入帳號會被刪除。`)) return;
+  if(live){
+    if(approve){ const {error}=await supabase.rpc("admin_approve_student_application",{p_id:id}); if(error) return toast(error.message.includes("NOT_PENDING")?"這筆申請已經處理過了":"開通失敗："+error.message); }
+    else { const res=await callStaff("reject_application",{id}); if(res.error) return toast(res.error); }
+    await loadLiveData();
+  } else {
+    const app=state.student_applications.find(x=>x.id===id); app.status=approve?"approved":"rejected";
+    if(approve){
+      const c={id:crypto.randomUUID(),member_no:nextMemberNo(),name:app.name,display_name:"",phone:app.phone,email:app.email||"",gender:app.gender,birth_date:app.birth_date,region_id:null,residence_city:app.residence_city,address:"",national_id:"",notes:"自行申請帳號密碼登入（沒有 LINE）",line_user_id:null,line_status:"unknown",marketing_consent:app.marketing,tags:[],last_interaction_at:new Date().toISOString(),created_at:new Date().toISOString()};
+      state.contacts.push(c); state.student_accounts={...(state.student_accounts||{}),[c.id]:{login_type:app.login_type,login:app.login,password:app.password,used:true}};
+      if(state.demoApplicant===id){ state.demoApplicant=null; state.demoStudent=c.id; }
+    }
+    state.applications=state.student_applications.filter(x=>x.status==="pending");
+  }
+  audit(approve?"開通學員申請":"拒絕學員申請",a.name); persist(); render(); toast(approve?`已開通，已建立會員「${a.name}」`:"已拒絕");
+}
+
 // 一次性連結：打開頁面只查詢不兌換（聊天軟體的預覽機器人不會用掉連結），按下「設定密碼」才兌換
 function activate(){ return `<div id="studentArea"><div class="empty">正在確認連結…</div></div>`; }
 async function loadActivate(){
@@ -587,6 +663,7 @@ async function submitActivate(form,data){
 }
 
 function demoMemberApi(action,payload){
+  if(state.demoApplicant){ const app=(state.student_applications||[]).find(x=>x.id===state.demoApplicant); if(app?.status==="pending") return {code:"PENDING",name:app.name}; state.demoApplicant=null; persist(); return {error:"登入已過期，請重新登入"}; }
   const line=state.demoLine; let me=state.demoStudent?state.contacts.find(c=>c.id===state.demoStudent&&!c.anonymized_at):state.contacts.find(c=>c.line_user_id===line&&!c.anonymized_at);
   const notMember={code:"NOT_MEMBER",displayName:"LINE 新朋友",regions:state.regions};
   if(action==="me"){
@@ -675,11 +752,12 @@ async function loadMe(){
   // 一般瀏覽器、還沒登入 LINE：先讓學員選登入方式（沒有 LINE 的海外學員用帳號密碼），不要直接跳去 LINE
   if(live&&!studentMode()&&lineReady()){
     let ready=false; try{ await liffReady; ready=window.liff.isInClient()||lineSignedIn(); }catch{}
-    if(!ready){ const area=$("#studentArea"); if(area) area.innerHTML=`<article class="card student-card" style="max-width:480px;margin:20px auto;text-align:center"><h1>我的活動</h1><p>請選擇登入方式</p><div class="actions" style="justify-content:center"><button data-action="line-login-me">用 LINE 登入</button><a class="button secondary" href="#signin">用帳號密碼登入</a></div><p class="muted" style="margin-top:12px">沒有 LINE 的學員（例如海外），請先向工作人員索取開通連結。</p></article>`; return; }
+    if(!ready){ const area=$("#studentArea"); if(area) area.innerHTML=`<article class="card student-card" style="max-width:480px;margin:20px auto;text-align:center"><h1>我的活動</h1><p>請選擇登入方式</p><div class="actions" style="justify-content:center"><button data-action="line-login-me">用 LINE 登入</button><a class="button secondary" href="#signin">用帳號密碼登入</a></div><p class="muted" style="margin-top:12px">沒有 LINE 的學員（例如海外）第一次使用，請先<a href="#apply">申請帳號</a>。</p></article>`; return; }
   }
   const data=await memberApi("me"); if(data.pending)return;
   const area=$("#studentArea"); if(!area)return;
   if(data.error){ area.innerHTML=`<div class="notice">${escapeHtml(data.error)}</div>`; return; }
+  if(data.code==="PENDING"){ area.innerHTML=pendingCard(data.name); return; }
   if(data.code==="NOT_MEMBER"){ area.innerHTML=signupForm(data,"me"); return; }
   const c=data.contact; const now=new Date(); myProfile=c;
   const regs=(data.registrations||[]).filter(r=>r.events);
@@ -1122,6 +1200,8 @@ async function onClick(event){
   if(action==="student-logout"){ await studentSignOut(); location.hash="#register"; return toast("已登出"); }
   if(action==="line-login-me"){ if(!lineReady()) return toast(LINE_NOT_READY); await liffReady; return lineLogin(); }
   if(action==="student-link") return studentLinkModal(btn.dataset.id);
+  if(action==="approve-application") return reviewApplication(btn.dataset.id,true);
+  if(action==="reject-application") return reviewApplication(btn.dataset.id,false);
   if(action==="logout"){ await supabase?.auth.signOut(); location.hash="login"; return location.reload(); }
   if(action==="edit-event"){ event.preventDefault(); return eventForm(btn.dataset.id); }
   if(action==="add-session") return addSessionRow();
@@ -1174,6 +1254,7 @@ document.addEventListener("input",event=>{
 });
 document.addEventListener("change",event=>{
   if(event.target.name==="login_type"&&event.target.closest("#signinForm")) document.querySelectorAll("#signinForm [data-login]").forEach(el=>el.hidden=el.dataset.login!==event.target.value);
+  if(event.target.name==="login_type"&&event.target.closest("#applyForm")) $("#applyEmailLabel").textContent=event.target.value==="email"?"Email *（登入帳號）":"Email";
   if(event.target.id==="eventSwitch")location.hash=`checkin?event=${event.target.value}`;
   if(event.target.id==="regionFilter")location.hash=event.target.value?`contacts?region=${event.target.value}`:"contacts";
   if(event.target.id==="demoUser")switchDemoUser(event.target.value);
@@ -1184,13 +1265,14 @@ document.addEventListener("change",event=>{
 });
 
 async function onSubmit(event){
-  if(!["eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","deleteContactForm","deleteEventForm","profileForm","signinForm","activateForm","studentLinkForm"].includes(event.target.id))return;
+  if(!["eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","deleteContactForm","deleteEventForm","profileForm","signinForm","activateForm","studentLinkForm","applyForm"].includes(event.target.id))return;
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target));
   if(event.target.id==="contactForm") return saveContact(data);
   if(event.target.id==="profileForm") return saveProfile(event.target,data);
   if(event.target.id==="signinForm") return submitSignin(data);
   if(event.target.id==="activateForm") return submitActivate(event.target,data);
   if(event.target.id==="studentLinkForm") return createStudentLink(data);
+  if(event.target.id==="applyForm") return submitApply(event.target,data);
   if(event.target.id==="signupForm") return submitSignup(data);
   if(event.target.id==="sponsorForm") return saveSponsor(data);
   if(event.target.id==="batchSponsorForm") return saveBatchSponsor(data);
