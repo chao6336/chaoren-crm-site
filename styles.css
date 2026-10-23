@@ -38,3 +38,4 @@ dialog #modalBody{max-height:calc(100vh - 32px);overflow:auto}
 .student-item .button{white-space:nowrap;flex:none}
 .card-title{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px}.card-title h2{margin:0}
 .brand strong,#homeBtn{white-space:nowrap}@media(max-width:360px){.brand strong{display:none}}
+.field input[type=radio]{width:auto;margin:0;padding:0}.field label:has(> input[type=radio]){display:inline-flex;align-items:center;gap:6px;margin:4px 16px 4px 0;font-weight:400}

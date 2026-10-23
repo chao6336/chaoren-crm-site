@@ -439,3 +439,16 @@ export function historyStatus(reg = {}, now = new Date()) {
   const end = reg.events?.ends_at || reg.events?.starts_at;
   return end && new Date(end) < now ? "absent" : "registered";
 }
+
+// 沒有 LINE 的學員用帳號密碼登入：Email 帳號直接用；手機帳號（+886912345678）轉成不會收信的登入 Email。
+// 規則與後端 manage-staff 的 student_link 相同。
+export function studentAuthEmail(type, value = "") {
+  if (type === "phone") return /^\+[1-9]\d{7,14}$/.test(value) ? `p${value.slice(1)}@phone.crm.sw-ii.com` : "";
+  const email = String(value).trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "";
+}
+export function checkNewPassword(password = "", again = "") {
+  if (password.length < 8 || password.length > 72) return "密碼請設定 8 到 72 個字";
+  if (password !== again) return "兩次輸入的密碼不一樣";
+  return null;
+}
