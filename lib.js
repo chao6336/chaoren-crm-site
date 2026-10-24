@@ -17,6 +17,9 @@ export const CITIES = ["臺北市", "新北市", "基隆市", "桃園市", "新�
 
 // 改制前的舊縣名（舊名冊地址常見）
 const OLD_COUNTIES = { "臺北縣": "新北市", "桃園縣": "桃園市", "臺中縣": "臺中市", "臺南縣": "臺南市", "高雄縣": "高雄市" };
+// 縣轄市與常見大鎮：寫「彰化市」「竹北市」「員林市」時對到所屬縣
+const COUNTY_TOWNS = { "彰化市": "彰化縣", "員林市": "彰化縣", "竹北市": "新竹縣", "頭份市": "苗栗縣", "苗栗市": "苗栗縣", "南投市": "南投縣", "斗六市": "雲林縣",
+  "太保市": "嘉義縣", "朴子市": "嘉義縣", "宜蘭市": "宜蘭縣", "屏東市": "屏東縣", "花蓮市": "花蓮縣", "臺東市": "臺東縣", "馬公市": "澎湖縣", "金城鎮": "金門縣" };
 
 // 「台北」「台北市大安區…」「100 臺北市…」「臺北縣板橋市…」都對到正式名稱；對不上或分不出（「新竹」「嘉義」）回傳 ""。
 export function normalizeCity(value) {
@@ -25,6 +28,8 @@ export function normalizeCity(value) {
   if (["國外", "海外", "外國"].includes(text)) return "海外";
   const old = Object.keys(OLD_COUNTIES).find(k => text.startsWith(k));
   if (old) return OLD_COUNTIES[old];
+  const town = Object.keys(COUNTY_TOWNS).find(k => text.startsWith(k));
+  if (town) return COUNTY_TOWNS[town];
   const hit = CITIES.find(c => text.startsWith(c));
   if (hit) return hit;
   const short = CITIES.filter(c => c !== "海外" && c.slice(0, 2) === text);
@@ -358,7 +363,8 @@ export function prepareImportRow(raw, map, { regions = [], existing = [], seen =
   const name = cell("name").replace(/\s+/g, "");
   if (!name) errors.push("缺姓名");
   const rawPhone = cell("phone"); const phone = rawPhone ? normalizePhone(rawPhone) : null;
-  if (rawPhone && !phone) errors.push(`手機格式無法辨識（${rawPhone}）`);
+  // 手機看不懂時不擋整筆（姓名、LINE UID、標籤照樣匯入），手機先留空；Excel 科學記號（8.86912E+11）的號碼已經遺失，要從原始檔重新匯出
+  if (rawPhone && !phone) warnings.push(/^\d+(\.\d+)?E\+\d+$/i.test(rawPhone) ? `手機被 Excel 改成科學記號（${rawPhone}），號碼已遺失，先留空` : `手機格式無法辨識（${rawPhone}），先留空`);
   const rawBirth = map.birth_date === undefined ? "" : raw[map.birth_date];
   const birth_date = parseBirthDate(rawBirth);
   if (rawBirth !== "" && rawBirth !== undefined && rawBirth !== null && !birth_date) warnings.push(`生日看不懂（${rawBirth}），先留空`);
