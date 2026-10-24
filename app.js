@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261024-5";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261024-6";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -395,7 +395,7 @@ function checkin(){
 }
 
 function messages(){
-  return `${pageHead("LINE 訊息","訊息必須由幹部檢查對象與內容後，才能送出。",!isAdmin()?"":`<button data-action="new-campaign">＋ 新增專案</button>`)}<div class="notice">系統不會自動發送。按下「檢查並送出」後，還會再次顯示實際對象與訊息全文。</div><div class="grid">${state.campaigns.map(c=>`<article class="card"><span class="pill ${c.status!=="draft"?"off":""}">${({draft:"草稿",partial:"部分失敗",failed:"失敗",sent:"已送出",sending:"發送中"})[c.status]||c.status}</span><h3>${escapeHtml(c.name)}</h3><p class="muted">發送對象：${escapeHtml(audienceLabel(c))}</p><p>${escapeHtml(c.body)}</p><div class="kpi-line"><span>符合條件</span><strong>${c.audience==="broadcast"?"全部好友":c.eligible_count}</strong></div><div class="kpi-line"><span>成功／失敗</span><strong>${c.success_count}/${c.failed_count}</strong></div><div class="actions" style="margin-top:10px">${["draft","partial","failed"].includes(c.status)&&isAdmin()?`<button data-action="review-campaign" data-id="${c.id}">${c.status==="draft"?"檢查並送出":"重送失敗對象"}</button>`:""}${c.status==="draft"&&isAdmin()?`<button class="secondary" data-action="edit-campaign" data-id="${c.id}">修改</button><button class="danger" data-action="delete-campaign" data-id="${c.id}">刪除</button>`:""}</div></article>`).join("")}</div>`;
+  return `${pageHead("LINE 訊息","訊息必須由幹部檢查對象與內容後，才能送出。",!isAdmin()?"":`<button data-action="new-campaign">＋ 新增專案</button>`)}<div class="notice">系統不會自動發送。按下「檢查並送出」後，還會再次顯示實際對象與訊息全文。</div><div class="grid">${state.campaigns.map(c=>`<article class="card"><span class="pill ${c.status!=="draft"?"off":""}">${({draft:"草稿",partial:"部分失敗",failed:"失敗",sent:"已送出",sending:"發送中"})[c.status]||c.status}</span><h3>${escapeHtml(c.name)}</h3><p class="muted">發送對象：${escapeHtml(audienceLabel(c))}</p><p>${escapeHtml(c.body)}</p><div class="kpi-line"><span>符合條件</span><strong>${c.audience==="broadcast"?"全部好友":c.eligible_count}</strong></div><div class="kpi-line"><span>成功／失敗</span><strong>${c.success_count}/${c.failed_count}</strong></div><div class="actions" style="margin-top:10px">${c.status!=="draft"?`<button class="secondary" data-action="campaign-deliveries" data-id="${c.id}">發送明細</button>`:""}${["draft","partial","failed"].includes(c.status)&&isAdmin()?`<button data-action="review-campaign" data-id="${c.id}">${c.status==="draft"?"檢查並送出":"重送失敗對象"}</button>`:""}${c.status==="draft"&&isAdmin()?`<button class="secondary" data-action="edit-campaign" data-id="${c.id}">修改</button><button class="danger" data-action="delete-campaign" data-id="${c.id}">刪除</button>`:""}</div></article>`).join("")}</div>`;
 }
 
 function governance(){
@@ -1254,6 +1254,7 @@ async function onClick(event){
   if(action==="new-campaign") return campaignDraftForm();
   if(action==="edit-campaign") return campaignDraftForm(btn.dataset.id);
   if(action==="delete-campaign") return deleteCampaign(btn.dataset.id);
+  if(action==="campaign-deliveries") return campaignDeliveries(btn.dataset.id);
   if(action==="pick-all"){ pickCandidates().forEach(c=>campaignPick.add(c.id)); return renderPickList(); }
   if(action==="pick-none"){ pickCandidates().forEach(c=>campaignPick.delete(c.id)); return renderPickList(); }
   if(action==="review-campaign") return reviewCampaign(btn.dataset.id);
@@ -1467,6 +1468,18 @@ function campaignDraftForm(id){
     <div class="field"><label>訊息內容（500 字以內）</label><textarea name="body" required maxlength="500">${escapeHtml(c?.body||"")}</textarea></div><button>儲存檔案</button></form>`);
   renderPickList();
 }
+// 已送出的訊息：列出實際送給誰、成功或失敗（群發沒有個別名單）
+async function campaignDeliveries(id){
+  const c=state.campaigns.find(x=>x.id===id); if(!c) return;
+  const head=`<h2>發送明細</h2><p><strong>${escapeHtml(c.name)}</strong>・${escapeHtml(audienceLabel(c))}${c.sent_at?`・${fmtDate(c.sent_at)} 送出`:""}</p>`;
+  if(c.audience==="broadcast") return modal(`${head}<div class="notice">這則是群發給官方帳號的全部好友，LINE 不提供個別收件人名單；送達人數可到官方帳號後台的「分析」查看。</div>`);
+  modal(`${head}<div class="empty">讀取中…</div>`);
+  let rows=c.deliveries||[];
+  if(live){ const {data,error}=await supabase.from("message_deliveries").select("contact_id,status,error_code,attempted_at").eq("campaign_id",id).order("attempted_at"); if(error) return modal(`${head}<div class="notice">讀取失敗：${escapeHtml(error.message)}</div>`); rows=data||[]; }
+  const label={sent:"成功",failed:"失敗",pending:"等待中",skipped:"略過"};
+  const ok=rows.filter(r=>r.status==="sent").length;
+  modal(`${head}<p>共 ${rows.length} 位：成功 ${ok}、失敗 ${rows.length-ok}</p>${rows.length?`<div class="table-wrap"><table><thead><tr><th>收件人</th><th>結果</th><th>時間</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHtml(r.contact_id?contactLabel(r.contact_id):"已移除的會員")}</td><td><span class="pill${r.status==="sent"?"":" warn"}">${label[r.status]||r.status}</span>${r.error_code?` <small class="muted">（LINE 回應 ${escapeHtml(r.error_code)}）</small>`:""}</td><td>${r.attempted_at?fmtDate(r.attempted_at):""}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">沒有收件紀錄。</div>`}`);
+}
 async function deleteCampaign(id){
   const c=state.campaigns.find(x=>x.id===id); if(!c||c.status!=="draft"||!isAdmin()) return toast("只有還沒送出的草稿可以刪除");
   if(!confirm(`刪除草稿「${c.name}」？刪除後無法復原。`)) return;
@@ -1495,8 +1508,8 @@ function eligibleForEvent(eventId){ const ids=new Set(state.registrations.filter
 function reviewCampaign(id){ const c=state.campaigns.find(x=>x.id===id); const people=campaignRecipients(c); modal(`<h2>最後確認</h2>${c.audience==="broadcast"?`<div class="notice">即將<strong>群發給官方帳號的全部好友</strong>（包含還沒加入 CRM 的好友），會用掉官方帳號每月的訊息額度；送出後無法收回。</div>`:`<div class="notice">即將發送給 <strong>${people.length}</strong> 位已同意且可聯絡的 LINE 好友（${escapeHtml(audienceLabel(c))}）。</div><details class="tag-box"><summary>收件人名單（${people.length}）</summary><p>${people.map(x=>escapeHtml(x.name)).join("、")||"（沒有人）"}</p></details>`}<p><strong>${escapeHtml(c.name)}</strong></p><p>${escapeHtml(c.body)}</p><form id="sendCampaignForm"><button type="button" data-send-id="${c.id}" id="confirmSend">確認送出</button> <button class="secondary" value="cancel">返回修改</button></form>`); $("#confirmSend").onclick=()=>sendCampaign(c,people); }
 async function sendCampaign(c,people){
   $("#confirmSend").disabled=true;
-  if(live){ const {data,error}=await supabase.functions.invoke("send-campaign",{body:{campaignId:c.id}}); if(error){$("#confirmSend").disabled=false;return toast(error.message);} c.success_count=data.success;c.failed_count=data.failed; }
-  else { c.success_count=c.audience==="broadcast"?1:people.length;c.failed_count=0;c.status="sent"; }
+  if(live){ const {data,error}=await supabase.functions.invoke("send-campaign",{body:{campaignId:c.id}}); if(error){$("#confirmSend").disabled=false;return toast(error.message);} c.success_count=data.success;c.failed_count=data.failed; await loadLiveData(); }
+  else { c.success_count=c.audience==="broadcast"?1:people.length;c.failed_count=0;c.status="sent";c.sent_at=new Date().toISOString();c.deliveries=c.audience==="broadcast"?[]:people.map(x=>({contact_id:x.id,status:"sent",error_code:null,attempted_at:c.sent_at})); }
   audit("確認並發送 LINE 訊息",c.name);persist();closeModal();render();toast(`已完成：成功 ${c.success_count}、失敗 ${c.failed_count}`);
 }
 function audit(action,target){ state.audit.unshift({at:new Date().toLocaleString("zh-TW"),actor:state.staff?.find(s=>s.id===state.as)?.display_name||"工作人員",action,target}); }
