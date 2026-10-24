@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261024-8";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261024-9";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -395,7 +395,7 @@ function checkin(){
 }
 
 function messages(){
-  return `${pageHead("LINE 訊息","訊息必須由幹部檢查對象與內容後，才能送出。",!isAdmin()?"":`<button data-action="new-campaign">＋ 新增專案</button>`)}<div class="notice">系統不會自動發送。按下「檢查並送出」後，還會再次顯示實際對象與訊息全文。</div><div class="grid">${state.campaigns.map(c=>`<article class="card"><span class="pill ${c.status!=="draft"?"off":""}">${({draft:"草稿",partial:"部分失敗",failed:"失敗",sent:"已送出",sending:"發送中"})[c.status]||c.status}</span><h3>${escapeHtml(c.name)}</h3><p class="muted">發送對象：${escapeHtml(audienceLabel(c))}</p><p>${escapeHtml(c.body)}</p><div class="kpi-line"><span>符合條件</span><strong>${c.audience==="broadcast"?"全部好友":c.eligible_count}</strong></div><div class="kpi-line"><span>成功／失敗</span><strong>${c.success_count}/${c.failed_count}</strong></div><div class="actions" style="margin-top:10px">${c.status!=="draft"?`<button class="secondary" data-action="campaign-deliveries" data-id="${c.id}">發送明細</button>`:""}${["draft","partial","failed"].includes(c.status)&&isAdmin()?`<button data-action="review-campaign" data-id="${c.id}">${c.status==="draft"?"檢查並送出":"重送失敗對象"}</button>`:""}${c.status==="draft"&&isAdmin()?`<button class="secondary" data-action="edit-campaign" data-id="${c.id}">修改</button><button class="danger" data-action="delete-campaign" data-id="${c.id}">刪除</button>`:""}</div></article>`).join("")}</div>`;
+  return `${pageHead("LINE 訊息","訊息必須由幹部檢查對象與內容後，才能送出。",!isAdmin()?"":`<button data-action="new-campaign">＋ 新增專案</button>`)}<div class="notice">系統不會自動發送。按下「檢查並送出」後，還會再次顯示實際對象與訊息全文。</div><div class="grid">${state.campaigns.map(c=>`<article class="card"><span class="pill ${c.status!=="draft"?"off":""}">${({draft:"草稿",partial:"部分失敗",failed:"失敗",sent:"已送出",sending:"發送中"})[c.status]||c.status}</span><h3>${escapeHtml(c.name)}</h3><p class="muted">發送對象：${escapeHtml(audienceLabel(c))}</p><p>${escapeHtml(c.body)}</p><div class="kpi-line"><span>符合條件</span><strong>${c.audience==="broadcast"?"全部好友":c.eligible_count}</strong></div><div class="kpi-line"><span>成功／失敗</span><strong>${c.success_count}/${c.failed_count}</strong></div><div class="actions" style="margin-top:10px">${c.status!=="draft"?`<button class="secondary" data-action="campaign-deliveries" data-id="${c.id}">發送明細</button>`:""}${["draft","partial","failed"].includes(c.status)&&isAdmin()?`<button data-action="review-campaign" data-id="${c.id}">${c.status==="draft"?"檢查並送出":"重送失敗對象"}</button>`:""}${c.status==="draft"&&isAdmin()?`<button class="secondary" data-action="edit-campaign" data-id="${c.id}">修改</button>`:""}${c.status!=="sending"&&isAdmin()?`<button class="danger" data-action="delete-campaign" data-id="${c.id}">刪除</button>`:""}</div></article>`).join("")}</div>`;
 }
 
 function governance(){
@@ -1481,12 +1481,15 @@ async function campaignDeliveries(id){
   const ok=rows.filter(r=>r.status==="sent").length;
   modal(`${head}<p>共 ${rows.length} 位：成功 ${ok}、失敗 ${rows.length-ok}</p>${rows.length?`<div class="table-wrap"><table><thead><tr><th>收件人</th><th>結果</th><th>時間</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHtml(r.contact_id?contactLabel(r.contact_id):"已移除的會員")}</td><td><span class="pill${r.status==="sent"?"":" warn"}">${label[r.status]||r.status}</span>${r.error_code?` <small class="muted">（LINE 回應 ${escapeHtml(r.error_code)}）</small>`:""}</td><td>${r.attempted_at?fmtDate(r.attempted_at):""}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">沒有收件紀錄。</div>`}`);
 }
+// 刪除草稿或已送出的訊息；已送出的只是刪掉 CRM 裡的紀錄（含發送明細），學員手機上的訊息不會收回。發送中的不能刪。
 async function deleteCampaign(id){
-  const c=state.campaigns.find(x=>x.id===id); if(!c||c.status!=="draft"||!isAdmin()) return toast("只有還沒送出的草稿可以刪除");
-  if(!confirm(`刪除草稿「${c.name}」？刪除後無法復原。`)) return;
-  if(live){ const {data,error}=await supabase.from("message_campaigns").delete().eq("id",id).eq("status","draft").select("id"); if(error) return toast(error.message); if(!data?.length) return toast("這份草稿已經送出，不能刪除"); await loadLiveData(); }
+  const c=state.campaigns.find(x=>x.id===id); if(!c||c.status==="sending"||!isAdmin()) return toast("發送中的訊息不能刪除");
+  const sent=c.status!=="draft";
+  if(!confirm(sent?`刪除已送出的訊息「${c.name}」？
+只會刪掉 CRM 裡的紀錄和發送明細，學員已經收到的 LINE 訊息不會收回。刪除後無法復原。`:`刪除草稿「${c.name}」？刪除後無法復原。`)) return;
+  if(live){ const {data,error}=await supabase.from("message_campaigns").delete().eq("id",id).neq("status","sending").select("id"); if(error) return toast(error.message); if(!data?.length) return toast("這則訊息正在發送，不能刪除"); await loadLiveData(); }
   else state.campaigns=state.campaigns.filter(x=>x.id!==id);
-  audit("刪除訊息草稿",c.name); persist(); render(); toast("已刪除草稿");
+  audit(sent?"刪除已送出的訊息紀錄":"刪除訊息草稿",c.name); persist(); render(); toast(sent?"已刪除訊息紀錄":"已刪除草稿");
 }
 function pickCandidates(){
   const tag=$("#pickTag")?.value||"", region=$("#pickRegion")?.value||"", q=($("#pickSearch")?.value||"").trim().toLowerCase();
