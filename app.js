@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261024-3";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261024-5";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -352,9 +352,8 @@ function deleteContactForm(id){
   if(!isAdmin()) return toast("只有總管理可以刪除會員");
   const c=state.contacts.find(x=>x.id===id); if(!c) return;
   const regs=state.registrations.filter(r=>r.contact_id===id).length;
-  const sps=(state.sponsorships||[]).filter(s=>s.contact_id===id).length;
-  if(sps) return modal(`<h2>無法刪除</h2><p><strong>${escapeHtml(c.name)}</strong> 有 ${sps} 筆贊助紀錄。為了保留金錢帳目，請先到「贊助紀錄」確認是否要處理，再刪除會員。</p><button value="cancel" data-action="close-modal">知道了</button>`);
-  modal(`<h2>刪除會員</h2><div class="notice">刪除後<strong>無法復原</strong>：會員資料、${regs} 筆報名／出席紀錄、標籤都會一起移除。</div>
+  const sps=(state.sponsorships||[]).filter(s=>s.contact_id===id);
+  modal(`<h2>刪除會員</h2><div class="notice">刪除後<strong>無法復原</strong>：會員資料、${regs} 筆報名／出席紀錄、標籤都會一起移除。${sps.length?`<br>這位會員的 ${sps.length} 筆贊助紀錄會<strong>保留</strong>，在贊助紀錄顯示為「已刪除會員」。`:""}</div>
     <form id="deleteContactForm"><input type="hidden" name="contact_id" value="${id}"><div class="field"><label>請輸入會員姓名「${escapeHtml(c.name)}」確認</label><input name="confirm_name" required autocomplete="off"></div>
     <div class="actions" style="margin-top:14px"><button class="danger">確認刪除</button><button type="button" class="secondary" data-action="close-modal">取消</button></div></form>`);
 }
@@ -363,11 +362,12 @@ async function deleteContact(data){
   if(data.confirm_name.trim()!==c.name) return toast("姓名不符，未刪除");
   if(live){
     const {error}=await supabase.rpc("admin_delete_contact",{p_contact_id:c.id,p_confirm_name:data.confirm_name.trim()});
-    if(error) return toast(error.message.includes("HAS_SPONSORSHIPS")?"有贊助紀錄，不能刪除":error.message.includes("FORBIDDEN")?"沒有權限":"刪除失敗："+error.message);
+    if(error) return toast(error.message.includes("NAME_MISMATCH")?"姓名不符，未刪除":error.message.includes("FORBIDDEN")?"沒有權限":"刪除失敗："+error.message);
     await loadLiveData();
   } else {
     state.registrations.filter(r=>r.contact_id===c.id).forEach(r=>{ const e=state.events.find(x=>x.id===r.event_id); if(e&&!r.cancelled_at&&e.registration_count>0) e.registration_count--; });
     state.registrations=state.registrations.filter(r=>r.contact_id!==c.id);
+    (state.sponsorships||[]).filter(s=>s.contact_id===c.id).forEach(s=>Object.assign(s,{contact_id:null,contact_name:c.name,member_no:c.member_no}));
     state.contacts=state.contacts.filter(x=>x.id!==c.id);
   }
   audit("刪除會員","（已刪除）"); persist(); closeModal(); render(); toast("已刪除會員");
@@ -1121,6 +1121,8 @@ function downloadImportErrors(){
 }
 
 // ───── 贊助紀錄（只有總管理）─────
+// 贊助紀錄的會員：會員刪除後紀錄保留，改用當時記下的姓名與會員編號
+function sponsorLabel(s){ return s.contact_id&&state.contacts.some(c=>c.id===s.contact_id)?contactLabel(s.contact_id):s.contact_name?`${s.contact_name}（${s.member_no||"—"}・已刪除會員）`:"已移除的會員"; }
 function contactLabel(id){ const c=state.contacts.find(x=>x.id===id); return c?`${c.name}（${regionName(c.region_id)}）`:"已移除的會員"; }
 function sponsorBlock(contactId){
   const list=(state.sponsorships||[]).filter(s=>s.contact_id===contactId);
@@ -1140,7 +1142,7 @@ function sponsors(){
     <h2>各項目統計</h2><div class="table-wrap"><table><thead><tr><th>項目</th><th>筆數</th><th>應收</th><th>已收</th><th>未收</th></tr></thead><tbody>${summary||`<tr><td colspan="5" class="empty">尚無資料</td></tr>`}</tbody>${all.length?`<tfoot><tr class="total-row"><td>合計</td><td>${totals.count}</td><td>${money(totals.total)}</td><td>${money(totals.paid)}（${totals.paidCount} 筆）</td><td>${money(totals.total-totals.paid)}</td></tr></tfoot>`:""}</table></div>
     <h2 style="margin-top:22px">明細</h2><div class="toolbar"><select id="sponsorItemFilter"><option value="">全部項目</option>${items.map(i=>`<option ${i===item?"selected":""}>${escapeHtml(i)}</option>`).join("")}</select><select id="sponsorPaidFilter"><option value="">已收＋未收</option><option value="true" ${paid==="true"?"selected":""}>已收</option><option value="false" ${paid==="false"?"selected":""}>未收</option></select></div>
     <div class="sum-bar"><span>${item?escapeHtml(item):"全部項目"}${paid==="true"?"・只看已收":paid==="false"?"・只看未收":""}</span><span>${sum.count} 筆</span><span>應收 <strong>${money(sum.total)}</strong></span><span>已收 <strong>${money(sum.paid)}</strong></span><span>未收 <strong>${money(sum.total-sum.paid)}</strong></span></div>
-    <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>會員</th><th>項目</th><th>金額</th><th>狀態</th><th>備註</th><th></th></tr></thead><tbody>${list.map(s=>`<tr><td>${escapeHtml(contactLabel(s.contact_id))}</td><td>${escapeHtml(s.item)}</td><td>NT$${Number(s.amount).toLocaleString()}</td><td>${s.paid?`<span class="pill">已收</span> <small>${escapeHtml(s.paid_at||"")}</small>`:`<span class="pill warn">未收</span>`}</td><td>${escapeHtml(s.note||"")}</td><td><div class="row-actions"><button class="secondary" data-action="toggle-paid" data-id="${s.id}">${s.paid?"改為未收":"標記已收"}</button><button class="danger" data-action="delete-sponsor" data-id="${s.id}">刪除</button></div></td></tr>`).join("")||`<tr><td colspan="6" class="empty">沒有符合的紀錄</td></tr>`}</tbody>${list.length?`<tfoot><tr class="total-row"><td>合計（${sum.count} 筆）</td><td>${item?escapeHtml(item):"全部項目"}</td><td>應收 ${money(sum.total)}</td><td colspan="3">已收 ${money(sum.paid)}（${sum.paidCount} 筆）・未收 ${money(sum.total-sum.paid)}（${sum.count-sum.paidCount} 筆）</td></tr></tfoot>`:""}</table></div>`;
+    <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>會員</th><th>項目</th><th>金額</th><th>狀態</th><th>備註</th><th></th></tr></thead><tbody>${list.map(s=>`<tr><td>${escapeHtml(sponsorLabel(s))}</td><td>${escapeHtml(s.item)}</td><td>NT$${Number(s.amount).toLocaleString()}</td><td>${s.paid?`<span class="pill">已收</span> <small>${escapeHtml(s.paid_at||"")}</small>`:`<span class="pill warn">未收</span>`}</td><td>${escapeHtml(s.note||"")}</td><td><div class="row-actions"><button class="secondary" data-action="toggle-paid" data-id="${s.id}">${s.paid?"改為未收":"標記已收"}</button><button class="danger" data-action="delete-sponsor" data-id="${s.id}">刪除</button></div></td></tr>`).join("")||`<tr><td colspan="6" class="empty">沒有符合的紀錄</td></tr>`}</tbody>${list.length?`<tfoot><tr class="total-row"><td>合計（${sum.count} 筆）</td><td>${item?escapeHtml(item):"全部項目"}</td><td>應收 ${money(sum.total)}</td><td colspan="3">已收 ${money(sum.paid)}（${sum.paidCount} 筆）・未收 ${money(sum.total-sum.paid)}（${sum.count-sum.paidCount} 筆）</td></tr></tfoot>`:""}</table></div>`;
 }
 function memberOptions(selected){ return state.contacts.filter(c=>!c.anonymized_at).sort((a,b)=>a.name.localeCompare(b.name,"zh-Hant")).map(c=>`<option value="${c.id}" ${c.id===selected?"selected":""}>${escapeHtml(c.member_no||"")} ${escapeHtml(c.name)}・${escapeHtml(regionName(c.region_id))}・${escapeHtml(String(c.phone||"").slice(-3))}</option>`).join(""); }
 function itemDatalist(){ return `<datalist id="sponsorItems">${[...new Set((state.sponsorships||[]).map(s=>s.item))].map(i=>`<option value="${escapeHtml(i)}">`).join("")}</datalist>`; }
@@ -1185,16 +1187,16 @@ async function togglePaid(id){
   const s=(state.sponsorships||[]).find(x=>x.id===id); if(!s||!isAdmin())return;
   const next={paid:!s.paid,paid_at:!s.paid?new Date().toISOString().slice(0,10):null};
   if(live){ const {error}=await supabase.from("sponsorships").update(next).eq("id",id); if(error)return toast("更新失敗："+error.message); }
-  Object.assign(s,next); audit(next.paid?"贊助標記已收":"贊助改為未收",`${contactLabel(s.contact_id)} ${s.item}`); persist(); render();
+  Object.assign(s,next); audit(next.paid?"贊助標記已收":"贊助改為未收",`${sponsorLabel(s)} ${s.item}`); persist(); render();
 }
 async function deleteSponsor(id){
   const s=(state.sponsorships||[]).find(x=>x.id===id); if(!s||!isAdmin())return;
-  if(!confirm(`刪除「${contactLabel(s.contact_id)}」的「${s.item}」NT$${Number(s.amount||0).toLocaleString()}（${s.paid?"已收":"未收"}）？刪除後無法復原。`)) return;
+  if(!confirm(`刪除「${sponsorLabel(s)}」的「${s.item}」NT$${Number(s.amount||0).toLocaleString()}（${s.paid?"已收":"未收"}）？刪除後無法復原。`)) return;
   if(live){ const {error}=await supabase.from("sponsorships").delete().eq("id",id); if(error)return toast("刪除失敗："+error.message); }
-  state.sponsorships=state.sponsorships.filter(x=>x.id!==id); audit("刪除贊助紀錄",`${contactLabel(s.contact_id)} ${s.item}`); persist(); render(); toast("已刪除");
+  state.sponsorships=state.sponsorships.filter(x=>x.id!==id); audit("刪除贊助紀錄",`${sponsorLabel(s)} ${s.item}`); persist(); render(); toast("已刪除");
 }
 function exportSponsors(){
-  const rows=(state.sponsorships||[]).map(s=>({...s,member:contactLabel(s.contact_id),status:s.paid?"已收":"未收"}));
+  const rows=(state.sponsorships||[]).map(s=>({...s,member:sponsorLabel(s),status:s.paid?"已收":"未收"}));
   download("贊助紀錄.csv",rowsToCsv(rows,[["會員","member"],["項目","item"],["金額","amount"],["狀態","status"],["收款日期","paid_at"],["備註","note"]]),"text/csv;charset=utf-8");
 }
 
