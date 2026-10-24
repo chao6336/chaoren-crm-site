@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261024-1";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261024-2";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -1131,11 +1131,16 @@ function sponsors(){
   const q=query(); const item=q.get("item")||""; const paid=q.get("paid")||"";
   const all=state.sponsorships||[]; const items=[...new Set(all.map(s=>s.item))].sort((a,b)=>b.localeCompare(a,"zh-Hant"));
   const list=all.filter(s=>(!item||s.item===item)&&(!paid||String(s.paid)===paid));
+  // 目前明細（依篩選）的合計：應收、已收、未收
+  const sum=sponsorshipSummary(list.map(s=>({...s,item:"_"})))[0]||{count:0,total:0,paid:0,paidCount:0};
+  const money=n=>`NT$${n.toLocaleString()}`;
+  const totals=sponsorshipSummary(all).reduce((t,x)=>({count:t.count+x.count,total:t.total+x.total,paid:t.paid+x.paid,paidCount:t.paidCount+x.paidCount}),{count:0,total:0,paid:0,paidCount:0});
   const summary=sponsorshipSummary(all).map(s=>`<tr><td>${escapeHtml(s.item)}</td><td>${s.count}</td><td>NT$${s.total.toLocaleString()}</td><td>NT$${s.paid.toLocaleString()}（${s.paidCount} 筆）</td><td>NT$${(s.total-s.paid).toLocaleString()}</td></tr>`).join("");
   return `${pageHead("贊助紀錄","與金錢有關的資料只有總管理看得到；活動幹部、區負責人與學員都看不到。",`<button data-action="new-sponsor">＋ 新增一筆</button><button class="secondary" data-action="batch-sponsor">批次建立</button><button class="secondary" data-action="export-sponsors">匯出 CSV</button>`)}
-    <h2>各項目統計</h2><div class="table-wrap"><table><thead><tr><th>項目</th><th>筆數</th><th>應收</th><th>已收</th><th>未收</th></tr></thead><tbody>${summary||`<tr><td colspan="5" class="empty">尚無資料</td></tr>`}</tbody></table></div>
+    <h2>各項目統計</h2><div class="table-wrap"><table><thead><tr><th>項目</th><th>筆數</th><th>應收</th><th>已收</th><th>未收</th></tr></thead><tbody>${summary||`<tr><td colspan="5" class="empty">尚無資料</td></tr>`}</tbody>${all.length?`<tfoot><tr class="total-row"><td>合計</td><td>${totals.count}</td><td>${money(totals.total)}</td><td>${money(totals.paid)}（${totals.paidCount} 筆）</td><td>${money(totals.total-totals.paid)}</td></tr></tfoot>`:""}</table></div>
     <h2 style="margin-top:22px">明細</h2><div class="toolbar"><select id="sponsorItemFilter"><option value="">全部項目</option>${items.map(i=>`<option ${i===item?"selected":""}>${escapeHtml(i)}</option>`).join("")}</select><select id="sponsorPaidFilter"><option value="">已收＋未收</option><option value="true" ${paid==="true"?"selected":""}>已收</option><option value="false" ${paid==="false"?"selected":""}>未收</option></select></div>
-    <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>會員</th><th>項目</th><th>金額</th><th>狀態</th><th>備註</th><th></th></tr></thead><tbody>${list.map(s=>`<tr><td>${escapeHtml(contactLabel(s.contact_id))}</td><td>${escapeHtml(s.item)}</td><td>NT$${Number(s.amount).toLocaleString()}</td><td>${s.paid?`<span class="pill">已收</span> <small>${escapeHtml(s.paid_at||"")}</small>`:`<span class="pill warn">未收</span>`}</td><td>${escapeHtml(s.note||"")}</td><td><button class="secondary" data-action="toggle-paid" data-id="${s.id}">${s.paid?"改為未收":"標記已收"}</button></td></tr>`).join("")||`<tr><td colspan="6" class="empty">沒有符合的紀錄</td></tr>`}</tbody></table></div>`;
+    <div class="sum-bar"><span>${item?escapeHtml(item):"全部項目"}${paid==="true"?"・只看已收":paid==="false"?"・只看未收":""}</span><span>${sum.count} 筆</span><span>應收 <strong>${money(sum.total)}</strong></span><span>已收 <strong>${money(sum.paid)}</strong></span><span>未收 <strong>${money(sum.total-sum.paid)}</strong></span></div>
+    <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>會員</th><th>項目</th><th>金額</th><th>狀態</th><th>備註</th><th></th></tr></thead><tbody>${list.map(s=>`<tr><td>${escapeHtml(contactLabel(s.contact_id))}</td><td>${escapeHtml(s.item)}</td><td>NT$${Number(s.amount).toLocaleString()}</td><td>${s.paid?`<span class="pill">已收</span> <small>${escapeHtml(s.paid_at||"")}</small>`:`<span class="pill warn">未收</span>`}</td><td>${escapeHtml(s.note||"")}</td><td><div class="row-actions"><button class="secondary" data-action="toggle-paid" data-id="${s.id}">${s.paid?"改為未收":"標記已收"}</button><button class="danger" data-action="delete-sponsor" data-id="${s.id}">刪除</button></div></td></tr>`).join("")||`<tr><td colspan="6" class="empty">沒有符合的紀錄</td></tr>`}</tbody></table></div>`;
 }
 function memberOptions(selected){ return state.contacts.filter(c=>!c.anonymized_at).sort((a,b)=>a.name.localeCompare(b.name,"zh-Hant")).map(c=>`<option value="${c.id}" ${c.id===selected?"selected":""}>${escapeHtml(c.member_no||"")} ${escapeHtml(c.name)}・${escapeHtml(regionName(c.region_id))}・${escapeHtml(String(c.phone||"").slice(-3))}</option>`).join(""); }
 function itemDatalist(){ return `<datalist id="sponsorItems">${[...new Set((state.sponsorships||[]).map(s=>s.item))].map(i=>`<option value="${escapeHtml(i)}">`).join("")}</datalist>`; }
@@ -1182,6 +1187,12 @@ async function togglePaid(id){
   if(live){ const {error}=await supabase.from("sponsorships").update(next).eq("id",id); if(error)return toast("更新失敗："+error.message); }
   Object.assign(s,next); audit(next.paid?"贊助標記已收":"贊助改為未收",`${contactLabel(s.contact_id)} ${s.item}`); persist(); render();
 }
+async function deleteSponsor(id){
+  const s=(state.sponsorships||[]).find(x=>x.id===id); if(!s||!isAdmin())return;
+  if(!confirm(`刪除「${contactLabel(s.contact_id)}」的「${s.item}」NT$${Number(s.amount||0).toLocaleString()}（${s.paid?"已收":"未收"}）？刪除後無法復原。`)) return;
+  if(live){ const {error}=await supabase.from("sponsorships").delete().eq("id",id); if(error)return toast("刪除失敗："+error.message); }
+  state.sponsorships=state.sponsorships.filter(x=>x.id!==id); audit("刪除贊助紀錄",`${contactLabel(s.contact_id)} ${s.item}`); persist(); render(); toast("已刪除");
+}
 function exportSponsors(){
   const rows=(state.sponsorships||[]).map(s=>({...s,member:contactLabel(s.contact_id),status:s.paid?"已收":"未收"}));
   download("贊助紀錄.csv",rowsToCsv(rows,[["會員","member"],["項目","item"],["金額","amount"],["狀態","status"],["收款日期","paid_at"],["備註","note"]]),"text/csv;charset=utf-8");
@@ -1223,6 +1234,7 @@ async function onClick(event){
   if(action==="new-sponsor") return sponsorForm(btn.dataset.contact);
   if(action==="batch-sponsor") return batchSponsorForm();
   if(action==="toggle-paid") return togglePaid(btn.dataset.id);
+  if(action==="delete-sponsor") return deleteSponsor(btn.dataset.id);
   if(action==="export-sponsors") return exportSponsors();
   if(action==="show-qr") return showCheckinQr(btn.dataset.event);
   if(action==="renew-qr"){ if(!confirm("重新產生後，已經發出去的舊 QR Code 會立刻不能用。確定嗎？"))return; return showCheckinQr(btn.dataset.event,{renew:true}); }
