@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261026-2";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261026-3";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -130,6 +130,8 @@ function readPhone(data){
   const phone=normalizePhone(raw,code||"886");
   return phone?{phone}:{error:code==="886"?"台灣手機請輸入 09 開頭的 10 碼":"手機號碼格式不正確，請確認國碼與號碼"};
 }
+// 今天的日期（本地時間 YYYY-MM-DD）；toISOString 是 UTC，台灣早上 8 點前會變成前一天
+const localToday=()=>new Date().toLocaleDateString("sv-SE");
 const showPhone=v=>!v?"":String(v).includes("*")?v:displayPhone(v);
 
 function pageHead(title,subtitle,actions=""){ return `<section class="page-head"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="actions">${actions}</div></section>`; }
@@ -1157,7 +1159,7 @@ function sponsors(){
     <h2>各項目統計</h2><div class="table-wrap"><table><thead><tr><th>項目</th><th>筆數</th><th>應收</th><th>已收</th><th>未收</th></tr></thead><tbody>${summary||`<tr><td colspan="5" class="empty">尚無資料</td></tr>`}</tbody>${all.length?`<tfoot><tr class="total-row"><td>合計</td><td>${totals.count}</td><td>${money(totals.total)}</td><td>${money(totals.paid)}（${totals.paidCount} 筆）</td><td>${money(totals.total-totals.paid)}</td></tr></tfoot>`:""}</table></div>
     <h2 style="margin-top:22px">明細</h2><div class="toolbar"><select id="sponsorItemFilter"><option value="">全部項目</option>${items.map(i=>`<option ${i===item?"selected":""}>${escapeHtml(i)}</option>`).join("")}</select><select id="sponsorPaidFilter"><option value="">已收＋未收</option><option value="true" ${paid==="true"?"selected":""}>已收</option><option value="false" ${paid==="false"?"selected":""}>未收</option></select></div>
     <div class="sum-bar"><span>${item?escapeHtml(item):"全部項目"}${paid==="true"?"・只看已收":paid==="false"?"・只看未收":""}</span><span>${sum.count} 筆</span><span>應收 <strong>${money(sum.total)}</strong></span><span>已收 <strong>${money(sum.paid)}</strong></span><span>未收 <strong>${money(sum.total-sum.paid)}</strong></span></div>
-    <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>會員</th><th>項目</th><th>金額</th><th>狀態</th><th>備註</th><th></th></tr></thead><tbody>${list.map(s=>`<tr><td>${escapeHtml(sponsorLabel(s))}</td><td>${escapeHtml(s.item)}</td><td>NT$${Number(s.amount).toLocaleString()}</td><td>${s.paid?`<span class="pill">已收</span> <small>${escapeHtml(s.paid_at||"")}</small>`:`<span class="pill warn">未收</span>`}</td><td>${escapeHtml(s.note||"")}</td><td><div class="row-actions"><button class="secondary" data-action="toggle-paid" data-id="${s.id}">${s.paid?"改為未收":"標記已收"}</button><button class="danger" data-action="delete-sponsor" data-id="${s.id}">刪除</button></div></td></tr>`).join("")||`<tr><td colspan="6" class="empty">沒有符合的紀錄</td></tr>`}</tbody>${list.length?`<tfoot><tr class="total-row"><td>合計（${sum.count} 筆）</td><td>${item?escapeHtml(item):"全部項目"}</td><td>應收 ${money(sum.total)}</td><td colspan="3">已收 ${money(sum.paid)}（${sum.paidCount} 筆）・未收 ${money(sum.total-sum.paid)}（${sum.count-sum.paidCount} 筆）</td></tr></tfoot>`:""}</table></div>`;
+    <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>會員</th><th>項目</th><th>金額</th><th>狀態</th><th>感謝狀／收據編號</th><th>備註</th><th></th></tr></thead><tbody>${list.map(s=>`<tr><td>${escapeHtml(sponsorLabel(s))}</td><td>${escapeHtml(s.item)}</td><td>NT$${Number(s.amount).toLocaleString()}</td><td>${s.paid?`<span class="pill">已收</span> <small>${escapeHtml(s.paid_at||"")}</small>`:`<span class="pill warn">未收</span>`}</td><td>${escapeHtml(s.receipt_no||"")}</td><td>${escapeHtml(s.note||"")}</td><td><div class="row-actions">${s.paid?"":`<button data-action="mark-paid" data-id="${s.id}">標記已收</button>`}<button class="secondary" data-action="edit-sponsor" data-id="${s.id}">修改</button><button class="danger" data-action="delete-sponsor" data-id="${s.id}">刪除</button></div></td></tr>`).join("")||`<tr><td colspan="7" class="empty">沒有符合的紀錄</td></tr>`}</tbody>${list.length?`<tfoot><tr class="total-row"><td>合計（${sum.count} 筆）</td><td>${item?escapeHtml(item):"全部項目"}</td><td>應收 ${money(sum.total)}</td><td colspan="4">已收 ${money(sum.paid)}（${sum.paidCount} 筆）・未收 ${money(sum.total-sum.paid)}（${sum.count-sum.paidCount} 筆）</td></tr></tfoot>`:""}</table></div>`;
 }
 // 會員欄位：直接打姓名、會員編號或手機末三碼，下拉清單會篩出符合的人（志工不用在長清單裡找）
 const memberLabel=c=>`${c.member_no||""} ${c.name}・${regionName(c.region_id)}・${String(c.phone||"").slice(-3)}`.trim();
@@ -1175,15 +1177,17 @@ function pickMember(q){
   return hits.length===1?hits[0]:null;
 }
 function itemDatalist(){ return `<datalist id="sponsorItems">${[...new Set((state.sponsorships||[]).map(s=>s.item))].map(i=>`<option value="${escapeHtml(i)}">`).join("")}</datalist>`; }
-function sponsorForm(contactId){
+function sponsorForm(contactId,editId){
   if(!isAdmin())return;
-  modal(`<h2>新增贊助紀錄</h2><form id="sponsorForm"><div class="form-grid">
-    ${memberPicker(contactId)}
-    <div class="field"><label>項目 *</label><input name="item" required maxlength="60" list="sponsorItems" placeholder="例如：2026 清明">${itemDatalist()}</div>
-    <div class="field"><label>金額（元）*</label><input name="amount" type="number" min="0" max="10000000" required value="200"></div>
-    <div class="field"><label>收款狀態</label><label class="check-line"><input type="checkbox" name="paid"> 已收款</label></div>
-    <div class="field"><label>收款日期</label><input name="paid_at" type="date"></div>
-    <div class="field full"><label>備註</label><input name="note" maxlength="500"></div>
+  const e=editId?(state.sponsorships||[]).find(x=>x.id===editId):null;
+  modal(`<h2>${e?"修改":"新增"}贊助紀錄</h2><form id="sponsorForm">${e?`<input type="hidden" name="sponsor_id" value="${e.id}">`:""}<div class="form-grid">
+    ${e&&!e.contact_id?`<div class="field full"><label>會員</label><p>${escapeHtml(sponsorLabel(e))}</p></div>`:memberPicker(e?e.contact_id:contactId)}
+    <div class="field"><label>項目 *</label><input name="item" required maxlength="60" list="sponsorItems" placeholder="例如：2026 清明" value="${escapeHtml(e?.item||"")}">${itemDatalist()}</div>
+    <div class="field"><label>金額（元）*</label><input name="amount" type="number" min="0" max="10000000" required value="${e?e.amount:200}"></div>
+    <div class="field"><label>收款狀態</label><label class="check-line"><input type="checkbox" name="paid" ${e?.paid?"checked":""}> 已收款</label></div>
+    <div class="field"><label>收款日期</label><input name="paid_at" type="date" value="${escapeHtml(e?.paid_at||"")}"></div>
+    <div class="field full"><label>感謝狀／收據編號</label><input name="receipt_no" maxlength="40" autocomplete="off" value="${escapeHtml(e?.receipt_no||"")}"></div>
+    <div class="field full"><label>備註</label><input name="note" maxlength="500" value="${escapeHtml(e?.note||"")}"></div>
     <button class="field full">儲存</button></div></form>`);
 }
 function batchSponsorForm(){
@@ -1200,9 +1204,15 @@ async function insertSponsorships(rows){
   return true;
 }
 async function saveSponsor(data){
-  const contactId=data.contact_id||pickMember(data.member_query)?.id;
-  if(!contactId) return toast("找不到這位會員，請從下拉清單選一位");
-  const row={contact_id:contactId,item:data.item.trim(),amount:Number(data.amount),paid:data.paid==="on",paid_at:data.paid==="on"?(data.paid_at||new Date().toISOString().slice(0,10)):null,note:data.note||""};
+  const editing=data.sponsor_id?(state.sponsorships||[]).find(x=>x.id===data.sponsor_id):null;
+  const contactId=editing&&!editing.contact_id?null:(data.contact_id||pickMember(data.member_query)?.id);
+  if(!contactId&&!(editing&&!editing.contact_id)) return toast("找不到這位會員，請從下拉清單選一位");
+  if(editing){
+    const patch={...(contactId?{contact_id:contactId}:{}),item:data.item.trim(),amount:Number(data.amount),paid:data.paid==="on",paid_at:data.paid==="on"?(data.paid_at||editing.paid_at||localToday()):null,receipt_no:(data.receipt_no||"").trim()||null,note:data.note||""};
+    if(live){ const {error}=await supabase.from("sponsorships").update(patch).eq("id",editing.id); if(error) return toast("儲存失敗："+error.message); }
+    Object.assign(editing,patch); audit("修改贊助紀錄",`${sponsorLabel(editing)} ${editing.item}`); persist(); closeModal(); render(); return toast("已儲存");
+  }
+  const row={receipt_no:(data.receipt_no||"").trim()||null,contact_id:contactId,item:data.item.trim(),amount:Number(data.amount),paid:data.paid==="on",paid_at:data.paid==="on"?(data.paid_at||localToday()):null,note:data.note||""};
   if(!(await insertSponsorships([row])))return;
   audit("新增贊助紀錄",`${contactLabel(row.contact_id)} ${row.item}`); persist(); closeModal(); render(); toast("已新增贊助紀錄");
 }
@@ -1214,11 +1224,19 @@ async function saveBatchSponsor(data){
   if(!(await insertSponsorships(targets.map(c=>({contact_id:c.id,item,amount:Number(data.amount),paid:false,paid_at:null,note:""})))))return;
   audit("批次建立贊助紀錄",`${item} × ${targets.length}`); persist(); closeModal(); location.hash=`sponsors?item=${encodeURIComponent(item)}`; render(); toast(`已建立 ${targets.length} 筆`);
 }
-async function togglePaid(id){
+// 標記已收：先開小視窗填收款日期與感謝狀／收據編號，按確認才改。改回未收只能從「修改」刻意取消勾選，避免誤按。
+function markPaidForm(id){
   const s=(state.sponsorships||[]).find(x=>x.id===id); if(!s||!isAdmin())return;
-  const next={paid:!s.paid,paid_at:!s.paid?new Date().toISOString().slice(0,10):null};
+  modal(`<h2>標記已收</h2><p>${escapeHtml(sponsorLabel(s))}・${escapeHtml(s.item)}・NT$${Number(s.amount||0).toLocaleString()}</p><form id="markPaidForm"><input type="hidden" name="sponsor_id" value="${s.id}"><div class="form-grid">
+    <div class="field"><label>收款日期 *</label><input name="paid_at" type="date" required value="${localToday()}"></div>
+    <div class="field"><label>感謝狀／收據編號</label><input name="receipt_no" maxlength="40" autocomplete="off" value="${escapeHtml(s.receipt_no||"")}"></div>
+    <button class="field full">確認已收款</button></div></form>`);
+}
+async function togglePaid(id,{paid_at,receipt_no}={}){
+  const s=(state.sponsorships||[]).find(x=>x.id===id); if(!s||!isAdmin()||s.paid)return;
+  const next={paid:true,paid_at:paid_at||localToday(),receipt_no:(receipt_no||"").trim()||s.receipt_no||null};
   if(live){ const {error}=await supabase.from("sponsorships").update(next).eq("id",id); if(error)return toast("更新失敗："+error.message); }
-  Object.assign(s,next); audit(next.paid?"贊助標記已收":"贊助改為未收",`${sponsorLabel(s)} ${s.item}`); persist(); render();
+  Object.assign(s,next); audit("贊助標記已收",`${sponsorLabel(s)} ${s.item}`); persist(); closeModal(); render(); toast("已標記已收");
 }
 async function deleteSponsor(id){
   const s=(state.sponsorships||[]).find(x=>x.id===id); if(!s||!isAdmin())return;
@@ -1228,7 +1246,7 @@ async function deleteSponsor(id){
 }
 function exportSponsors(){
   const rows=(state.sponsorships||[]).map(s=>({...s,member:sponsorLabel(s),status:s.paid?"已收":"未收"}));
-  download("贊助紀錄.csv",rowsToCsv(rows,[["會員","member"],["項目","item"],["金額","amount"],["狀態","status"],["收款日期","paid_at"],["備註","note"]]),"text/csv;charset=utf-8");
+  download("贊助紀錄.csv",rowsToCsv(rows,[["會員","member"],["項目","item"],["金額","amount"],["狀態","status"],["收款日期","paid_at"],["感謝狀／收據編號","receipt_no"],["備註","note"]]),"text/csv;charset=utf-8");
 }
 
 function login(){ return `${pageHead("工作人員登入","只有經總管理開通的帳號能查看 CRM。")}
@@ -1267,7 +1285,8 @@ async function onClick(event){
   if(action==="import-errors") return downloadImportErrors();
   if(action==="new-sponsor") return sponsorForm(btn.dataset.contact);
   if(action==="batch-sponsor") return batchSponsorForm();
-  if(action==="toggle-paid") return togglePaid(btn.dataset.id);
+  if(action==="mark-paid") return markPaidForm(btn.dataset.id);
+  if(action==="edit-sponsor") return sponsorForm(null,btn.dataset.id);
   if(action==="delete-sponsor") return deleteSponsor(btn.dataset.id);
   if(action==="export-sponsors") return exportSponsors();
   if(action==="show-qr") return showCheckinQr(btn.dataset.event);
@@ -1279,8 +1298,8 @@ async function onClick(event){
   // 匯出檔不含身分證：檔案一旦被轉寄就無法收回。
   if(action==="export-contacts") return download("會員資料.csv",toCsv(myContacts().map(c=>({...c,region_name:c.region_name||regionName(c.region_id),age:c.age??ageFrom(c.birth_date),line_bound:c.line_status==="active"||c.line_user_id?"是":"否",tag_list:(c.tags||[]).join("、"),created_date:String(c.created_at||"").slice(0,10)})),[["會員編號","member_no"],["姓名","name"],["LINE 名稱","display_name"],["性別","gender"],["出生年月日","birth_date"],["年齡","age"],["區域","region_name"],["手機","phone"],["Email","email"],["地址","address"],["LINE 綁定","line_bound"],["LINE UID","line_user_id"],["標籤","tag_list"],["備註","notes"],["建立日期","created_date"],["最後互動","last_interaction_at"]]),"text/csv;charset=utf-8");
   if(action==="backup"){
-    if(live){const {data,error}=await supabase.functions.invoke("export-backup",{body:{}});if(error)return toast(error.message);return download(`crm-backup-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(data,null,2),"application/json");}
-    return download(`crm-backup-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(state,null,2),"application/json");
+    if(live){const {data,error}=await supabase.functions.invoke("export-backup",{body:{}});if(error)return toast(error.message);return download(`crm-backup-${localToday()}.json`,JSON.stringify(data,null,2),"application/json");}
+    return download(`crm-backup-${localToday()}.json`,JSON.stringify(state,null,2),"application/json");
   }
   if(action==="preview-anonymize") return previewAnonymize();
   if(action==="new-campaign") return campaignDraftForm();
@@ -1323,7 +1342,7 @@ document.addEventListener("change",event=>{
 });
 
 async function onSubmit(event){
-  if(!["eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","deleteContactForm","deleteEventForm","profileForm","signinForm","activateForm","studentLinkForm","applyForm"].includes(event.target.id))return;
+  if(!["eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","deleteContactForm","deleteEventForm","profileForm","signinForm","activateForm","studentLinkForm","applyForm"].includes(event.target.id))return;
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target));
   if(event.target.id==="contactForm") return saveContact(data);
   if(event.target.id==="profileForm") return saveProfile(event.target,data);
@@ -1333,6 +1352,7 @@ async function onSubmit(event){
   if(event.target.id==="applyForm") return submitApply(event.target,data);
   if(event.target.id==="signupForm") return submitSignup(data);
   if(event.target.id==="sponsorForm") return saveSponsor(data);
+  if(event.target.id==="markPaidForm") return togglePaid(data.sponsor_id,data);
   if(event.target.id==="batchSponsorForm") return saveBatchSponsor(data);
   if(event.target.id==="eventForm") return saveEvent(data);
   if(event.target.id==="campaignForm"){
@@ -1541,7 +1561,7 @@ async function uploadCampaignImage(file){
     blob=await new Promise(r=>cv.toBlob(r,"image/jpeg",0.85));
   }catch{ return {error:"讀不到這張圖片，請換一張"}; }
   if(!live) return {url:await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(blob); })};
-  const path=`${new Date().toISOString().slice(0,10)}/${crypto.randomUUID()}.jpg`;
+  const path=`${localToday()}/${crypto.randomUUID()}.jpg`;
   const {error}=await supabase.storage.from("campaign-images").upload(path,blob,{contentType:"image/jpeg",upsert:false});
   if(error) return {error:"圖片上傳失敗："+error.message};
   return {url:supabase.storage.from("campaign-images").getPublicUrl(path).data.publicUrl};
