@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261026-3";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261026-4";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -277,6 +277,26 @@ function contacts(){
 function tagPills(tags=[],limit=3){ const shown=tags.slice(0,limit).map(t=>`<span class="pill">${escapeHtml(t)}</span>`).join(" "); return tags.length>limit?`${shown} <span class="pill off">＋${tags.length-limit}</span>`:shown; }
 // 活動名單：分「已報到」「已報名、未報到」「已取消」三區；範圍和報到頁一樣（區負責人只看自己區域）
 // 匯出某場活動的報名名單（CSV，Excel 可直接開）：總管理看得到完整手機與 Email，其他人照權限只有末三碼
+// 報名的繳費狀態（payment_status：pending 未繳、paid 已繳、free 免費、refunded 已退款）
+const PAY_LABELS={pending:"未繳費",paid:"已繳費",free:"免費",refunded:"已退款"};
+const payLabel=r=>`<span class="pill${r.payment_status==="paid"||r.payment_status==="free"?"":" warn"}">${PAY_LABELS[r.payment_status]||"未繳費"}</span>`;
+// 名單裡按「繳費」：選已繳／未繳／免費，填繳費日期與收據／發票編號，儲存後回到名單（不提供一鍵切換，避免誤按）
+function regPayForm(regId,eventId){
+  const r=roster().find(x=>(x.registration_id||x.id)===regId); if(!r||!canEvents()) return;
+  const opt=(v,t)=>`<label><input type="radio" name="payment_status" value="${v}" ${(r.payment_status||"pending")===v?"checked":""}> ${t}</label>`;
+  modal(`<h2>繳費紀錄</h2><p>${escapeHtml(r.name)} ${escapeHtml(r.member_no||"")}</p><form id="regPayForm"><input type="hidden" name="reg_id" value="${regId}"><input type="hidden" name="event_id" value="${eventId}"><div class="form-grid">
+    <div class="field full"><label>繳費狀態</label><div class="actions">${opt("pending","未繳費")}${opt("paid","已繳費")}${opt("free","免費")}${opt("refunded","已退款")}</div></div>
+    <div class="field"><label>繳費日期</label><input name="paid_at" type="date" value="${escapeHtml(r.paid_at||"")}"></div>
+    <div class="field"><label>收據／發票編號</label><input name="receipt_no" maxlength="40" autocomplete="off" value="${escapeHtml(r.receipt_no||"")}"></div>
+    <button class="field full">儲存</button></div></form>`);
+}
+async function saveRegPay(data){
+  const status=PAY_LABELS[data.payment_status]?data.payment_status:"pending";
+  const patch={payment_status:status,paid_at:status==="paid"?(data.paid_at||localToday()):(data.paid_at||null),receipt_no:(data.receipt_no||"").trim()||null};
+  if(live){ const {error}=await supabase.from("registrations").update(patch).eq("id",data.reg_id); if(error) return toast("儲存失敗："+error.message); await loadLiveData(); }
+  else Object.assign(state.registrations.find(x=>x.id===data.reg_id)||{},patch);
+  audit("更新報名繳費",PAY_LABELS[status]); persist(); eventRoster(data.event_id); toast("已儲存繳費紀錄");
+}
 function exportRoster(id){
   const e=state.events.find(x=>x.id===id); if(!e) return;
   const status={attended:"已報到",registered:"已報名",cancelled:"已取消",absent:"未出席"};
@@ -285,8 +305,8 @@ function exportRoster(id){
   const rows=regs.map(r=>{ const c=state.contacts.find(x=>x.id===r.contact_id)||{};
     return {member_no:r.member_no||c.member_no||"",name:r.name||c.name||"",gender:c.gender||"",region:r.region_name||regionName(c.region_id),city:c.residence_city||"",
       phone:isAdmin()&&c.phone?displayPhone(c.phone):(r.phone_last3?`***${r.phone_last3}`:""),email:isAdmin()?(c.email||""):"",
-      status:r.cancelled_at?"已取消":status[r.attendance_status]||r.attendance_status||"",registered_at:r.registered_at?fmtDate(r.registered_at):"",checked_in_at:r.checked_in_at?fmtDate(r.checked_in_at):""}; });
-  const cols=[["會員編號","member_no"],["姓名","name"],["性別","gender"],["區域","region"],["居住縣市","city"],["手機","phone"],...(isAdmin()?[["Email","email"]]:[]),["狀態","status"],["報名時間","registered_at"],["報到時間","checked_in_at"]];
+      status:r.cancelled_at?"已取消":status[r.attendance_status]||r.attendance_status||"",pay:PAY_LABELS[r.payment_status]||"未繳費",paid_at:r.paid_at||"",receipt_no:r.receipt_no||"",registered_at:r.registered_at?fmtDate(r.registered_at):"",checked_in_at:r.checked_in_at?fmtDate(r.checked_in_at):""}; });
+  const cols=[["會員編號","member_no"],["姓名","name"],["性別","gender"],["區域","region"],["居住縣市","city"],["手機","phone"],...(isAdmin()?[["Email","email"]]:[]),["狀態","status"],["繳費","pay"],["繳費日期","paid_at"],["收據／發票編號","receipt_no"],["報名時間","registered_at"],["報到時間","checked_in_at"]];
   const day=String(e.starts_at||"").slice(0,10);
   download(`報名名單_${eventLabel(e).replace(/[\/:*?"<>|]/g,"_")}_${day}.csv`,rowsToCsv(rows,cols),"text/csv;charset=utf-8");
 }
@@ -296,7 +316,7 @@ function eventRoster(id){
   const attended=regs.filter(r=>!r.cancelled_at&&r.attendance_status==="attended");
   const waiting=regs.filter(r=>!r.cancelled_at&&r.attendance_status!=="attended");
   const cancelled=regs.filter(r=>r.cancelled_at);
-  const item=(r,when)=>`<li class="student-item"><div><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span><small>${escapeHtml(r.region_name||"未分區")}・手機末三碼 ${escapeHtml(r.phone_last3||"---")}${r.source==="walk-in"?"・現場報名":""}${when?`・${when}`:""}</small></div></li>`;
+  const item=(r,when)=>`<li class="student-item"><div><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span><small>${escapeHtml(r.region_name||"未分區")}・手機末三碼 ${escapeHtml(r.phone_last3||"---")}${r.source==="walk-in"?"・現場報名":""}${when?`・${when}`:""}</small><small>${payLabel(r)}${r.receipt_no?`・收據／發票 ${escapeHtml(r.receipt_no)}`:""}${r.paid_at?`・${escapeHtml(r.paid_at)} 繳費`:""}</small></div>${canEvents()&&!r.cancelled_at?`<button class="secondary small" data-action="reg-pay" data-id="${r.registration_id||r.id}" data-event="${id}">繳費</button>`:""}</li>`;
   const list=(title,rows,when)=>`<h3>${title}（${rows.length}）</h3>${rows.length?`<ul class="student-list">${rows.map(r=>item(r,when(r))).join("")}</ul>`:`<p class="muted">沒有</p>`}`;
   const scope=canEvents()?"":`<p class="muted">只顯示${escapeHtml(regionName(state.region_id))}的會員</p>`;
   modal(`<h2>${escapeHtml(eventLabel(e))}</h2><p class="muted">${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・報名 ${attended.length+waiting.length}／${e.capacity}</p>${scope}
@@ -1278,6 +1298,7 @@ async function onClick(event){
   if(action==="delete-contact") return deleteContactForm(btn.dataset.id);
   if(action==="delete-event"){ event.preventDefault(); return deleteEventForm(btn.dataset.id); }
   if(action==="event-roster"){ event.preventDefault(); return eventRoster(btn.dataset.id); }
+  if(action==="reg-pay") return regPayForm(btn.dataset.id,btn.dataset.event);
   if(action==="export-roster"){ event.preventDefault(); return exportRoster(btn.dataset.id); }
   if(action==="import-template") return download("會員名冊範本.csv",IMPORT_FIELDS.map(([,label])=>label).join(",")+"\r\n王小美,0912345678,女,51/03/18,北區,台北市大安區和平東路一段 1 號,may@example.com,,清明法會志工","text/csv;charset=utf-8");
   if(action==="import-run") return runImport();
@@ -1342,7 +1363,7 @@ document.addEventListener("change",event=>{
 });
 
 async function onSubmit(event){
-  if(!["eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","deleteContactForm","deleteEventForm","profileForm","signinForm","activateForm","studentLinkForm","applyForm"].includes(event.target.id))return;
+  if(!["eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","regPayForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","deleteContactForm","deleteEventForm","profileForm","signinForm","activateForm","studentLinkForm","applyForm"].includes(event.target.id))return;
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target));
   if(event.target.id==="contactForm") return saveContact(data);
   if(event.target.id==="profileForm") return saveProfile(event.target,data);
@@ -1353,6 +1374,7 @@ async function onSubmit(event){
   if(event.target.id==="signupForm") return submitSignup(data);
   if(event.target.id==="sponsorForm") return saveSponsor(data);
   if(event.target.id==="markPaidForm") return togglePaid(data.sponsor_id,data);
+  if(event.target.id==="regPayForm") return saveRegPay(data);
   if(event.target.id==="batchSponsorForm") return saveBatchSponsor(data);
   if(event.target.id==="eventForm") return saveEvent(data);
   if(event.target.id==="campaignForm"){
