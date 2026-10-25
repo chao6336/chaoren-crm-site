@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261026-5";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261026-6";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -255,9 +255,14 @@ function dashboard(){
   <article class="card"><h2>需要注意</h2><div class="kpi-line"><span>待繳費</span><strong>${regs.filter(r=>r.payment_status==="pending"&&!r.cancelled_at).length}</strong></div>${isAdmin()?`<div class="kpi-line"><span><a href="#applications">待開通學員</a></span><strong>${(state.applications||[]).length}</strong></div><div class="kpi-line"><span>待確認訊息</span><strong>${state.campaigns.filter(c=>c.status==="draft").length}</strong></div><div class="kpi-line"><span>尚未分區的會員</span><strong>${unassigned}</strong></div>`:""}${canBrowseMembers(state.role)?`<div class="kpi-line"><span>無法 LINE 聯絡</span><strong>${myContacts().filter(c=>!campaignEligible(c)).length}</strong></div>`:""}</article></section>`;
 }
 
+// 活動與課程共用同一套（場次、報名、名單、報到、繳費都一樣），只差 kind 與顯示的字
+const KIND_LABELS={event:"活動",course:"課程"};
+const kindOf=e=>e?.kind==="course"?"course":"event";
 function events(){
-  const create=canEvents()?`<button data-action="edit-event">＋ 建立活動</button>`:"";
-  return `${pageHead("活動管理","建立活動、查看報名進度並取得公開連結。",create)}<div class="table-wrap"><table><thead><tr><th>活動</th><th>日期</th><th>地點</th><th>報名</th><th>狀態</th><th>操作</th></tr></thead><tbody>${state.events.map(e=>`<tr><td><strong>${escapeHtml(eventLabel(e))}</strong><br><small>${escapeHtml(e.theme)}</small></td><td>${fmtDate(e.starts_at)}</td><td>${escapeHtml(e.location)}</td><td>${e.registration_count}/${e.capacity}</td><td><span class="pill">${eventState(e)}</span></td><td><a href="#events" data-action="event-roster" data-id="${e.id}">名單</a>　<a href="#events" data-action="export-roster" data-id="${e.id}">匯出</a>　<a href="#register?event=${e.id}">報名頁</a>　<a href="#checkin?event=${e.id}">報到</a>${canEvents()?`　<a href="#events" data-action="edit-event" data-id="${e.id}">編輯</a>　<a href="#events" class="danger-link" data-action="delete-event" data-id="${e.id}">刪除</a>`:""}</td></tr>`).join("")}</tbody></table></div>`;
+  const create=canEvents()?`<button data-action="edit-event">＋ 建立活動</button><button data-action="edit-event" data-kind="course">＋ 建立課程</button>`:"";
+  const kind=query().get("kind")||""; const list=state.events.filter(e=>!kind||kindOf(e)===kind);
+  const tab=(k,t)=>`<a class="button ${kind===k?"":"secondary"} small" href="#events${k?`?kind=${k}`:""}">${t}（${k?state.events.filter(e=>kindOf(e)===k).length:state.events.length}）</a>`;
+  return `${pageHead("活動管理","建立活動或課程、查看報名進度並取得公開連結。",create)}<div class="toolbar">${tab("","全部")}${tab("event","活動")}${tab("course","課程")}</div><div class="table-wrap"><table><thead><tr><th>活動／課程</th><th>日期</th><th>地點</th><th>報名</th><th>狀態</th><th>操作</th></tr></thead><tbody>${list.map(e=>`<tr><td>${kindOf(e)==="course"?`<span class="pill">課程</span> `:""}<strong>${escapeHtml(eventLabel(e))}</strong><br><small>${escapeHtml(e.theme)}</small></td><td>${fmtDate(e.starts_at)}</td><td>${escapeHtml(e.location)}</td><td>${e.registration_count}/${e.capacity}</td><td><span class="pill">${eventState(e)}</span></td><td><a href="#events" data-action="event-roster" data-id="${e.id}">名單</a>　<a href="#events" data-action="export-roster" data-id="${e.id}">匯出</a>　<a href="#register?event=${e.id}">報名頁</a>　<a href="#checkin?event=${e.id}">報到</a>${canEvents()?`　<a href="#events" data-action="edit-event" data-id="${e.id}">編輯</a>　<a href="#events" class="danger-link" data-action="delete-event" data-id="${e.id}">刪除</a>`:""}</td></tr>`).join("")||`<tr><td colspan="6" class="empty">還沒有${kind?KIND_LABELS[kind]:"活動或課程"}</td></tr>`}</tbody></table></div>`;
 }
 
 function regionOptions(selected,{withAll=false,withNone=false}={}){
@@ -1008,19 +1013,20 @@ async function staffEditForm(userId){
 // ───── 活動建立與編輯（總管理、活動幹部）─────
 const EVENT_STATUS_LABELS={draft:"草稿（不公開）",published:"公開報名",completed:"已結束",cancelled:"已取消"};
 function toLocalInput(value){ if(!value)return ""; const d=new Date(value); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16); }
-function eventForm(id){
+function eventForm(id,newKind){
   if(!canEvents())return toast("只有總管理與活動幹部可以編輯活動");
-  const e=id?state.events.find(x=>x.id===id):{capacity:24,fee_note:"免費",status:"published"}; if(!e)return;
-  const v=key=>escapeHtml(e[key]??""), rows=id?seriesOf(state.events,e):[e];
-  modal(`<h2>${id?"編輯活動":"建立活動"}</h2><form id="eventForm"><input type="hidden" name="event_id" value="${id||""}"><input type="hidden" name="removed_sessions" value=""><div class="form-grid">
-    <div class="field full"><label>活動名稱 *</label><input name="title" required maxlength="120" value="${v("title")}"></div>
-    <div class="field full"><label>活動說明</label><textarea name="theme" maxlength="1000">${v("theme")}</textarea></div>
+  const e=id?state.events.find(x=>x.id===id):{capacity:24,fee_note:"免費",status:"published",kind:newKind==="course"?"course":"event"}; if(!e)return;
+  const v=key=>escapeHtml(e[key]??""), rows=id?seriesOf(state.events,e):[e], K=KIND_LABELS[kindOf(e)];
+  modal(`<h2>${id?"編輯":"建立"}${K}</h2><form id="eventForm"><input type="hidden" name="event_id" value="${id||""}"><input type="hidden" name="removed_sessions" value=""><div class="form-grid">
+    <div class="field full"><label>類型</label><div class="actions">${Object.entries(KIND_LABELS).map(([k,t])=>`<label><input type="radio" name="kind" value="${k}" ${kindOf(e)===k?"checked":""}> ${t}</label>`).join("")}</div></div>
+    <div class="field full"><label>名稱 *</label><input name="title" required maxlength="120" value="${v("title")}"></div>
+    <div class="field full"><label>說明</label><textarea name="theme" maxlength="1000">${v("theme")}</textarea></div>
     <div class="field full"><label>場次</label><div id="sessionRows">${rows.map(sessionRow).join("")}</div><div class="actions"><button type="button" class="secondary" data-action="add-session">＋ 新增場次</button></div><small class="muted">只有一場就不用填場次名稱。兩場以上會共用一張報名 QR，學員報名時勾選要參加哪幾場；每場各自計算名額、各自報到。</small></div>
     <div class="field"><label>報名截止 *</label><input name="registration_deadline" type="datetime-local" required value="${toLocalInput(e.registration_deadline)}"></div>
     <div class="field"><label>地點 *</label><input name="location" required value="${v("location")}"></div>
     <div class="field"><label>費用說明</label><input name="fee_note" value="${v("fee_note")}"></div>
     <div class="field"><label>狀態</label><select name="status">${Object.entries(EVENT_STATUS_LABELS).map(([k,label])=>`<option value="${k}" ${e.status===k?"selected":""}>${label}</option>`).join("")}</select></div>
-    <button class="field full">儲存活動</button>${id&&rows.length===1?`<button type="button" class="field full danger" data-action="delete-event" data-id="${id}">刪除活動</button>`:""}</div></form>`);
+    <button class="field full">儲存${K}</button>${id&&rows.length===1?`<button type="button" class="field full danger" data-action="delete-event" data-id="${id}">刪除${K}</button>`:""}</div></form>`);
 }
 // 編輯活動裡的一個場次：已存在的場次帶 data-id，新增的沒有
 function sessionRow(s={}){
@@ -1069,7 +1075,8 @@ async function deleteEvent(data){
 async function saveEvent(data){
   if(!canEvents())return toast("沒有權限");
   const iso=value=>value?new Date(value).toISOString():null;
-  const shared={title:data.title.trim(),theme:data.theme||"",registration_deadline:iso(data.registration_deadline),location:data.location,fee_note:data.fee_note||"免費",status:data.status};
+  const shared={title:data.title.trim(),theme:data.theme||"",registration_deadline:iso(data.registration_deadline),location:data.location,fee_note:data.fee_note||"免費",status:data.status,kind:data.kind==="course"?"course":"event"};
+  const K=KIND_LABELS[shared.kind];
   const rows=[...document.querySelectorAll("#sessionRows .session-row")].map(r=>{const val=n=>r.querySelector(`[name=${n}]`).value;return {id:r.dataset.id||null,session_name:val("s_name").trim(),starts_at:iso(val("s_start")),ends_at:iso(val("s_end")),capacity:Number(val("s_capacity"))};});
   for(const [i,r] of rows.entries()){
     const which=rows.length>1?`第 ${i+1} 場（${r.session_name||fmtDate(r.starts_at)}）`:"";
@@ -1095,7 +1102,7 @@ async function saveEvent(data){
       if(r.id) Object.assign(state.events.find(e=>e.id===r.id),fields); else state.events.push({id:crypto.randomUUID(),...fields,registration_count:0});
     }
   }
-  audit(data.event_id?"編輯活動":"建立活動",shared.title+(rows.length>1?`（${rows.length} 場）`:"")); persist(); closeModal(); render(); toast(data.event_id?"活動已更新":"活動已建立");
+  audit(`${data.event_id?"編輯":"建立"}${K}`,shared.title+(rows.length>1?`（${rows.length} 場）`:"")); persist(); closeModal(); render(); toast(`${K}已${data.event_id?"更新":"建立"}`);
 }
 
 // ───── Excel／CSV 匯入（總管理）─────
@@ -1298,7 +1305,7 @@ async function onClick(event){
   if(action==="approve-application") return reviewApplication(btn.dataset.id,true);
   if(action==="reject-application") return reviewApplication(btn.dataset.id,false);
   if(action==="logout"){ await supabase?.auth.signOut(); location.hash="login"; return location.reload(); }
-  if(action==="edit-event"){ event.preventDefault(); return eventForm(btn.dataset.id); }
+  if(action==="edit-event"){ event.preventDefault(); return eventForm(btn.dataset.id,btn.dataset.kind); }
   if(action==="add-session") return addSessionRow();
   if(action==="remove-session") return removeSessionRow(btn);
   if(action==="forgot-password") return forgotPassword();
