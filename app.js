@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261026-1";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261026-2";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -1159,15 +1159,29 @@ function sponsors(){
     <div class="sum-bar"><span>${item?escapeHtml(item):"全部項目"}${paid==="true"?"・只看已收":paid==="false"?"・只看未收":""}</span><span>${sum.count} 筆</span><span>應收 <strong>${money(sum.total)}</strong></span><span>已收 <strong>${money(sum.paid)}</strong></span><span>未收 <strong>${money(sum.total-sum.paid)}</strong></span></div>
     <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>會員</th><th>項目</th><th>金額</th><th>狀態</th><th>備註</th><th></th></tr></thead><tbody>${list.map(s=>`<tr><td>${escapeHtml(sponsorLabel(s))}</td><td>${escapeHtml(s.item)}</td><td>NT$${Number(s.amount).toLocaleString()}</td><td>${s.paid?`<span class="pill">已收</span> <small>${escapeHtml(s.paid_at||"")}</small>`:`<span class="pill warn">未收</span>`}</td><td>${escapeHtml(s.note||"")}</td><td><div class="row-actions"><button class="secondary" data-action="toggle-paid" data-id="${s.id}">${s.paid?"改為未收":"標記已收"}</button><button class="danger" data-action="delete-sponsor" data-id="${s.id}">刪除</button></div></td></tr>`).join("")||`<tr><td colspan="6" class="empty">沒有符合的紀錄</td></tr>`}</tbody>${list.length?`<tfoot><tr class="total-row"><td>合計（${sum.count} 筆）</td><td>${item?escapeHtml(item):"全部項目"}</td><td>應收 ${money(sum.total)}</td><td colspan="3">已收 ${money(sum.paid)}（${sum.paidCount} 筆）・未收 ${money(sum.total-sum.paid)}（${sum.count-sum.paidCount} 筆）</td></tr></tfoot>`:""}</table></div>`;
 }
-function memberOptions(selected){ return state.contacts.filter(c=>!c.anonymized_at).sort((a,b)=>a.name.localeCompare(b.name,"zh-Hant")).map(c=>`<option value="${c.id}" ${c.id===selected?"selected":""}>${escapeHtml(c.member_no||"")} ${escapeHtml(c.name)}・${escapeHtml(regionName(c.region_id))}・${escapeHtml(String(c.phone||"").slice(-3))}</option>`).join(""); }
+// 會員欄位：直接打姓名、會員編號或手機末三碼，下拉清單會篩出符合的人（志工不用在長清單裡找）
+const memberLabel=c=>`${c.member_no||""} ${c.name}・${regionName(c.region_id)}・${String(c.phone||"").slice(-3)}`.trim();
+function memberPicker(selected){
+  const list=state.contacts.filter(c=>!c.anonymized_at).sort((a,b)=>a.name.localeCompare(b.name,"zh-Hant"));
+  const cur=list.find(c=>c.id===selected);
+  return `<div class="field full"><label>會員 *（輸入姓名、會員編號或手機末三碼）</label><input name="member_query" list="memberList" autocomplete="off" required placeholder="例如：王小美、T0001、678" value="${cur?escapeHtml(memberLabel(cur)):""}"><datalist id="memberList">${list.map(c=>`<option value="${escapeHtml(memberLabel(c))}">`).join("")}</datalist><small class="muted" id="memberPicked">${cur?`已選：${escapeHtml(contactLabel(cur.id))}`:"從下拉清單點選一位"}</small></div>`;
+}
+// 打的字對到哪一位：完整選項文字優先，其次是唯一符合的姓名、會員編號或手機末三碼
+function pickMember(q){
+  const text=String(q||"").trim(); if(!text) return null;
+  const list=state.contacts.filter(c=>!c.anonymized_at);
+  const exact=list.find(c=>memberLabel(c)===text); if(exact) return exact;
+  const hits=list.filter(c=>c.name===text||(c.member_no||"").toUpperCase()===text.toUpperCase()||(text.length>=3&&String(c.phone||"").endsWith(text)));
+  return hits.length===1?hits[0]:null;
+}
 function itemDatalist(){ return `<datalist id="sponsorItems">${[...new Set((state.sponsorships||[]).map(s=>s.item))].map(i=>`<option value="${escapeHtml(i)}">`).join("")}</datalist>`; }
 function sponsorForm(contactId){
   if(!isAdmin())return;
   modal(`<h2>新增贊助紀錄</h2><form id="sponsorForm"><div class="form-grid">
-    <div class="field full"><label>會員 *</label><select name="contact_id" required>${memberOptions(contactId)}</select></div>
+    ${memberPicker(contactId)}
     <div class="field"><label>項目 *</label><input name="item" required maxlength="60" list="sponsorItems" placeholder="例如：2026 清明">${itemDatalist()}</div>
     <div class="field"><label>金額（元）*</label><input name="amount" type="number" min="0" max="10000000" required value="200"></div>
-    <label class="field"><span><input type="checkbox" name="paid"> 已收款</span></label>
+    <div class="field"><label>收款狀態</label><label class="check-line"><input type="checkbox" name="paid"> 已收款</label></div>
     <div class="field"><label>收款日期</label><input name="paid_at" type="date"></div>
     <div class="field full"><label>備註</label><input name="note" maxlength="500"></div>
     <button class="field full">儲存</button></div></form>`);
@@ -1186,7 +1200,9 @@ async function insertSponsorships(rows){
   return true;
 }
 async function saveSponsor(data){
-  const row={contact_id:data.contact_id,item:data.item.trim(),amount:Number(data.amount),paid:data.paid==="on",paid_at:data.paid==="on"?(data.paid_at||new Date().toISOString().slice(0,10)):null,note:data.note||""};
+  const contactId=data.contact_id||pickMember(data.member_query)?.id;
+  if(!contactId) return toast("找不到這位會員，請從下拉清單選一位");
+  const row={contact_id:contactId,item:data.item.trim(),amount:Number(data.amount),paid:data.paid==="on",paid_at:data.paid==="on"?(data.paid_at||new Date().toISOString().slice(0,10)):null,note:data.note||""};
   if(!(await insertSponsorships([row])))return;
   audit("新增贊助紀錄",`${contactLabel(row.contact_id)} ${row.item}`); persist(); closeModal(); render(); toast("已新增贊助紀錄");
 }
@@ -1283,6 +1299,7 @@ async function onClick(event){
 
 document.addEventListener("input",event=>{
   if(event.target.id==="pickSearch") return renderPickList();
+  if(event.target.name==="member_query"){ const c=pickMember(event.target.value), el=$("#memberPicked"); if(el) el.textContent=c?`已選：${contactLabel(c.id)}`:"從下拉清單點選一位"; return; }
   if(event.target.id==="contactSearch"||event.target.id==="checkinSearch"){
     const value=event.target.value.toLowerCase().trim();
     document.querySelectorAll("[data-search]").forEach(row=>row.hidden=!row.dataset.search.includes(value));
