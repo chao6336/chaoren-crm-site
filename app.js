@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261026-4";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261026-5";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -286,16 +286,29 @@ function regPayForm(regId,eventId){
   const opt=(v,t)=>`<label><input type="radio" name="payment_status" value="${v}" ${(r.payment_status||"pending")===v?"checked":""}> ${t}</label>`;
   modal(`<h2>繳費紀錄</h2><p>${escapeHtml(r.name)} ${escapeHtml(r.member_no||"")}</p><form id="regPayForm"><input type="hidden" name="reg_id" value="${regId}"><input type="hidden" name="event_id" value="${eventId}"><div class="form-grid">
     <div class="field full"><label>繳費狀態</label><div class="actions">${opt("pending","未繳費")}${opt("paid","已繳費")}${opt("free","免費")}${opt("refunded","已退款")}</div></div>
+    <div class="field"><label>金額（元）</label><input name="amount" type="number" min="0" max="10000000" value="${r.amount??feeAmount(state.events.find(e=>e.id===eventId))??""}"></div>
     <div class="field"><label>繳費日期</label><input name="paid_at" type="date" value="${escapeHtml(r.paid_at||"")}"></div>
     <div class="field"><label>收據／發票編號</label><input name="receipt_no" maxlength="40" autocomplete="off" value="${escapeHtml(r.receipt_no||"")}"></div>
+    <p class="field full muted">有填金額時，未繳費／已繳費會同步到「贊助紀錄」（項目＝活動名稱），一起算進應收、已收、未收；免費、已退款或金額空白則不列入。</p>
     <button class="field full">儲存</button></div></form>`);
 }
+// 從費用說明抓金額當預設值（例如「體驗活動 NT$300」→ 300；「免費」→ 空白）
+const feeAmount=e=>{ const m=String(e?.fee_note||"").replace(/,/g,"").match(/\d+/); return m?Number(m[0]):null; };
 async function saveRegPay(data){
   const status=PAY_LABELS[data.payment_status]?data.payment_status:"pending";
-  const patch={payment_status:status,paid_at:status==="paid"?(data.paid_at||localToday()):(data.paid_at||null),receipt_no:(data.receipt_no||"").trim()||null};
+  const patch={payment_status:status,paid_at:status==="paid"?(data.paid_at||localToday()):(data.paid_at||null),receipt_no:(data.receipt_no||"").trim()||null,amount:data.amount===""||data.amount==null?null:Number(data.amount)};
   if(live){ const {error}=await supabase.from("registrations").update(patch).eq("id",data.reg_id); if(error) return toast("儲存失敗："+error.message); await loadLiveData(); }
-  else Object.assign(state.registrations.find(x=>x.id===data.reg_id)||{},patch);
+  else { const r=state.registrations.find(x=>x.id===data.reg_id); if(r){ Object.assign(r,patch); syncFeeDemo(r); } }
   audit("更新報名繳費",PAY_LABELS[status]); persist(); eventRoster(data.event_id); toast("已儲存繳費紀錄");
+}
+// 展示版模擬資料庫觸發器：報名費同步到贊助紀錄（正式站由 sync_registration_fee 處理）
+function syncFeeDemo(r){
+  const list=state.sponsorships||(state.sponsorships=[]); const i=list.findIndex(s=>s.registration_id===r.id);
+  if(["pending","paid"].includes(r.payment_status)&&r.amount>0){
+    const e=state.events.find(x=>x.id===r.event_id)||{};
+    const row={contact_id:r.contact_id,item:eventLabel(e).slice(0,60),amount:r.amount,paid:r.payment_status==="paid",paid_at:r.payment_status==="paid"?r.paid_at:null,receipt_no:r.receipt_no,registration_id:r.id};
+    if(i>=0) Object.assign(list[i],row); else list.unshift({id:crypto.randomUUID(),note:"活動報名費",...row});
+  } else if(i>=0) list.splice(i,1);
 }
 function exportRoster(id){
   const e=state.events.find(x=>x.id===id); if(!e) return;
@@ -305,8 +318,8 @@ function exportRoster(id){
   const rows=regs.map(r=>{ const c=state.contacts.find(x=>x.id===r.contact_id)||{};
     return {member_no:r.member_no||c.member_no||"",name:r.name||c.name||"",gender:c.gender||"",region:r.region_name||regionName(c.region_id),city:c.residence_city||"",
       phone:isAdmin()&&c.phone?displayPhone(c.phone):(r.phone_last3?`***${r.phone_last3}`:""),email:isAdmin()?(c.email||""):"",
-      status:r.cancelled_at?"已取消":status[r.attendance_status]||r.attendance_status||"",pay:PAY_LABELS[r.payment_status]||"未繳費",paid_at:r.paid_at||"",receipt_no:r.receipt_no||"",registered_at:r.registered_at?fmtDate(r.registered_at):"",checked_in_at:r.checked_in_at?fmtDate(r.checked_in_at):""}; });
-  const cols=[["會員編號","member_no"],["姓名","name"],["性別","gender"],["區域","region"],["居住縣市","city"],["手機","phone"],...(isAdmin()?[["Email","email"]]:[]),["狀態","status"],["繳費","pay"],["繳費日期","paid_at"],["收據／發票編號","receipt_no"],["報名時間","registered_at"],["報到時間","checked_in_at"]];
+      status:r.cancelled_at?"已取消":status[r.attendance_status]||r.attendance_status||"",pay:PAY_LABELS[r.payment_status]||"未繳費",amount:r.amount??"",paid_at:r.paid_at||"",receipt_no:r.receipt_no||"",registered_at:r.registered_at?fmtDate(r.registered_at):"",checked_in_at:r.checked_in_at?fmtDate(r.checked_in_at):""}; });
+  const cols=[["會員編號","member_no"],["姓名","name"],["性別","gender"],["區域","region"],["居住縣市","city"],["手機","phone"],...(isAdmin()?[["Email","email"]]:[]),["狀態","status"],["繳費","pay"],["金額","amount"],["繳費日期","paid_at"],["收據／發票編號","receipt_no"],["報名時間","registered_at"],["報到時間","checked_in_at"]];
   const day=String(e.starts_at||"").slice(0,10);
   download(`報名名單_${eventLabel(e).replace(/[\/:*?"<>|]/g,"_")}_${day}.csv`,rowsToCsv(rows,cols),"text/csv;charset=utf-8");
 }
@@ -316,7 +329,7 @@ function eventRoster(id){
   const attended=regs.filter(r=>!r.cancelled_at&&r.attendance_status==="attended");
   const waiting=regs.filter(r=>!r.cancelled_at&&r.attendance_status!=="attended");
   const cancelled=regs.filter(r=>r.cancelled_at);
-  const item=(r,when)=>`<li class="student-item"><div><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span><small>${escapeHtml(r.region_name||"未分區")}・手機末三碼 ${escapeHtml(r.phone_last3||"---")}${r.source==="walk-in"?"・現場報名":""}${when?`・${when}`:""}</small><small>${payLabel(r)}${r.receipt_no?`・收據／發票 ${escapeHtml(r.receipt_no)}`:""}${r.paid_at?`・${escapeHtml(r.paid_at)} 繳費`:""}</small></div>${canEvents()&&!r.cancelled_at?`<button class="secondary small" data-action="reg-pay" data-id="${r.registration_id||r.id}" data-event="${id}">繳費</button>`:""}</li>`;
+  const item=(r,when)=>`<li class="student-item"><div><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span><small>${escapeHtml(r.region_name||"未分區")}・手機末三碼 ${escapeHtml(r.phone_last3||"---")}${r.source==="walk-in"?"・現場報名":""}${when?`・${when}`:""}</small><small>${payLabel(r)}${r.amount!=null?`・NT$${Number(r.amount).toLocaleString()}`:""}${r.receipt_no?`・收據／發票 ${escapeHtml(r.receipt_no)}`:""}${r.paid_at?`・${escapeHtml(r.paid_at)} 繳費`:""}</small></div>${canEvents()&&!r.cancelled_at?`<button class="secondary small" data-action="reg-pay" data-id="${r.registration_id||r.id}" data-event="${id}">繳費</button>`:""}</li>`;
   const list=(title,rows,when)=>`<h3>${title}（${rows.length}）</h3>${rows.length?`<ul class="student-list">${rows.map(r=>item(r,when(r))).join("")}</ul>`:`<p class="muted">沒有</p>`}`;
   const scope=canEvents()?"":`<p class="muted">只顯示${escapeHtml(regionName(state.region_id))}的會員</p>`;
   modal(`<h2>${escapeHtml(eventLabel(e))}</h2><p class="muted">${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・報名 ${attended.length+waiting.length}／${e.capacity}</p>${scope}
@@ -1179,7 +1192,7 @@ function sponsors(){
     <h2>各項目統計</h2><div class="table-wrap"><table><thead><tr><th>項目</th><th>筆數</th><th>應收</th><th>已收</th><th>未收</th></tr></thead><tbody>${summary||`<tr><td colspan="5" class="empty">尚無資料</td></tr>`}</tbody>${all.length?`<tfoot><tr class="total-row"><td>合計</td><td>${totals.count}</td><td>${money(totals.total)}</td><td>${money(totals.paid)}（${totals.paidCount} 筆）</td><td>${money(totals.total-totals.paid)}</td></tr></tfoot>`:""}</table></div>
     <h2 style="margin-top:22px">明細</h2><div class="toolbar"><select id="sponsorItemFilter"><option value="">全部項目</option>${items.map(i=>`<option ${i===item?"selected":""}>${escapeHtml(i)}</option>`).join("")}</select><select id="sponsorPaidFilter"><option value="">已收＋未收</option><option value="true" ${paid==="true"?"selected":""}>已收</option><option value="false" ${paid==="false"?"selected":""}>未收</option></select></div>
     <div class="sum-bar"><span>${item?escapeHtml(item):"全部項目"}${paid==="true"?"・只看已收":paid==="false"?"・只看未收":""}</span><span>${sum.count} 筆</span><span>應收 <strong>${money(sum.total)}</strong></span><span>已收 <strong>${money(sum.paid)}</strong></span><span>未收 <strong>${money(sum.total-sum.paid)}</strong></span></div>
-    <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>會員</th><th>項目</th><th>金額</th><th>狀態</th><th>感謝狀／收據編號</th><th>備註</th><th></th></tr></thead><tbody>${list.map(s=>`<tr><td>${escapeHtml(sponsorLabel(s))}</td><td>${escapeHtml(s.item)}</td><td>NT$${Number(s.amount).toLocaleString()}</td><td>${s.paid?`<span class="pill">已收</span> <small>${escapeHtml(s.paid_at||"")}</small>`:`<span class="pill warn">未收</span>`}</td><td>${escapeHtml(s.receipt_no||"")}</td><td>${escapeHtml(s.note||"")}</td><td><div class="row-actions">${s.paid?"":`<button data-action="mark-paid" data-id="${s.id}">標記已收</button>`}<button class="secondary" data-action="edit-sponsor" data-id="${s.id}">修改</button><button class="danger" data-action="delete-sponsor" data-id="${s.id}">刪除</button></div></td></tr>`).join("")||`<tr><td colspan="7" class="empty">沒有符合的紀錄</td></tr>`}</tbody>${list.length?`<tfoot><tr class="total-row"><td>合計（${sum.count} 筆）</td><td>${item?escapeHtml(item):"全部項目"}</td><td>應收 ${money(sum.total)}</td><td colspan="4">已收 ${money(sum.paid)}（${sum.paidCount} 筆）・未收 ${money(sum.total-sum.paid)}（${sum.count-sum.paidCount} 筆）</td></tr></tfoot>`:""}</table></div>`;
+    <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>會員</th><th>項目</th><th>金額</th><th>狀態</th><th>感謝狀／收據編號</th><th>備註</th><th></th></tr></thead><tbody>${list.map(s=>`<tr><td>${escapeHtml(sponsorLabel(s))}</td><td>${escapeHtml(s.item)}</td><td>NT$${Number(s.amount).toLocaleString()}</td><td>${s.paid?`<span class="pill">已收</span> <small>${escapeHtml(s.paid_at||"")}</small>`:`<span class="pill warn">未收</span>`}</td><td>${escapeHtml(s.receipt_no||"")}</td><td>${escapeHtml(s.note||"")}</td><td>${s.registration_id?`<small class="muted">活動報名費・到活動名單的「繳費」修改</small>`:`<div class="row-actions">${s.paid?"":`<button data-action="mark-paid" data-id="${s.id}">標記已收</button>`}<button class="secondary" data-action="edit-sponsor" data-id="${s.id}">修改</button><button class="danger" data-action="delete-sponsor" data-id="${s.id}">刪除</button></div>`}</td></tr>`).join("")||`<tr><td colspan="7" class="empty">沒有符合的紀錄</td></tr>`}</tbody>${list.length?`<tfoot><tr class="total-row"><td>合計（${sum.count} 筆）</td><td>${item?escapeHtml(item):"全部項目"}</td><td>應收 ${money(sum.total)}</td><td colspan="4">已收 ${money(sum.paid)}（${sum.paidCount} 筆）・未收 ${money(sum.total-sum.paid)}（${sum.count-sum.paidCount} 筆）</td></tr></tfoot>`:""}</table></div>`;
 }
 // 會員欄位：直接打姓名、會員編號或手機末三碼，下拉清單會篩出符合的人（志工不用在長清單裡找）
 const memberLabel=c=>`${c.member_no||""} ${c.name}・${regionName(c.region_id)}・${String(c.phone||"").slice(-3)}`.trim();
