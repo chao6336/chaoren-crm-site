@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261024-9";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261025-2";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -395,7 +395,7 @@ function checkin(){
 }
 
 function messages(){
-  return `${pageHead("LINE 訊息","訊息必須由幹部檢查對象與內容後，才能送出。",!isAdmin()?"":`<button data-action="new-campaign">＋ 新增專案</button>`)}<div class="notice">系統不會自動發送。按下「檢查並送出」後，還會再次顯示實際對象與訊息全文。</div><div class="grid">${state.campaigns.map(c=>`<article class="card"><span class="pill ${c.status!=="draft"?"off":""}">${({draft:"草稿",partial:"部分失敗",failed:"失敗",sent:"已送出",sending:"發送中"})[c.status]||c.status}</span><h3>${escapeHtml(c.name)}</h3><p class="muted">發送對象：${escapeHtml(audienceLabel(c))}</p><p>${escapeHtml(c.body)}</p><div class="kpi-line"><span>符合條件</span><strong>${c.audience==="broadcast"?"全部好友":c.eligible_count}</strong></div><div class="kpi-line"><span>成功／失敗</span><strong>${c.success_count}/${c.failed_count}</strong></div><div class="actions" style="margin-top:10px">${c.status!=="draft"?`<button class="secondary" data-action="campaign-deliveries" data-id="${c.id}">發送明細</button>`:""}${["draft","partial","failed"].includes(c.status)&&isAdmin()?`<button data-action="review-campaign" data-id="${c.id}">${c.status==="draft"?"檢查並送出":"重送失敗對象"}</button>`:""}${c.status==="draft"&&isAdmin()?`<button class="secondary" data-action="edit-campaign" data-id="${c.id}">修改</button>`:""}${c.status!=="sending"&&isAdmin()?`<button class="danger" data-action="delete-campaign" data-id="${c.id}">刪除</button>`:""}</div></article>`).join("")}</div>`;
+  return `${pageHead("LINE 訊息","訊息必須由幹部檢查對象與內容後，才能送出。",!isAdmin()?"":`<button data-action="new-campaign">＋ 新增專案</button>`)}<div class="notice">系統不會自動發送。按下「檢查並送出」後，還會再次顯示實際對象與訊息全文。</div><div class="grid">${state.campaigns.map(c=>`<article class="card"><span class="pill ${c.status!=="draft"?"off":""}">${({draft:"草稿",partial:"部分失敗",failed:"失敗",sent:"已送出",sending:"發送中"})[c.status]||c.status}</span><h3>${escapeHtml(c.name)}</h3><p class="muted">發送對象：${escapeHtml(audienceLabel(c))}</p>${c.image_url?`<img class="camp-img" src="${escapeHtml(c.image_url)}" alt="附加圖片">`:""}<p>${escapeHtml(c.body)}</p><div class="kpi-line"><span>符合條件</span><strong>${c.audience==="broadcast"?"全部好友":c.eligible_count}</strong></div><div class="kpi-line"><span>成功／失敗</span><strong>${c.success_count}/${c.failed_count}</strong></div><div class="actions" style="margin-top:10px">${c.status!=="draft"?`<button class="secondary" data-action="campaign-deliveries" data-id="${c.id}">發送明細</button>`:""}${["draft","partial","failed"].includes(c.status)&&isAdmin()?`<button data-action="review-campaign" data-id="${c.id}">${c.status==="draft"?"檢查並送出":"重送失敗對象"}</button>`:""}${c.status==="draft"&&isAdmin()?`<button class="secondary" data-action="edit-campaign" data-id="${c.id}">修改</button>`:""}${c.status!=="sending"&&isAdmin()?`<button class="danger" data-action="delete-campaign" data-id="${c.id}">刪除</button>`:""}</div></article>`).join("")}</div>`;
 }
 
 function governance(){
@@ -769,7 +769,7 @@ async function loadMe(){
   const row=(label,value)=>`<div class="kpi-line"><span>${label}</span><strong>${value?escapeHtml(value):`<span class="muted">未填</span>`}</strong></div>`;
   const pillClass={attended:"",registered:"",cancelled:" off",absent:" warn"};
   area.innerHTML=`<section class="card profile-head student-card"><div class="avatar" aria-hidden="true">${escapeHtml((c.name||"?").slice(0,1))}</div><div><h1>${escapeHtml(c.name)}</h1><p class="muted">會員編號 ${escapeHtml(c.member_no||"")}・${escapeHtml(c.region_name||"尚未分區")}${c.display_name&&!studentMode()?`・LINE：${escapeHtml(c.display_name)}`:""}</p>${studentMode()?`<button class="secondary small" data-action="student-logout">登出</button>`:""}</div></section>
-    <section class="card student-card"><div class="card-title"><h2>我的資料</h2><button class="secondary small" data-action="edit-profile">修改資料</button></div>${row("姓名",c.name)}${row("手機",showPhone(c.phone))}${row("Email",c.email)}${row("性別",c.gender)}${row("生日",c.birth_date)}${row("居住縣市",c.residence_city)}${row("地址",c.address)}${row("接收活動訊息",c.marketing_consent?"已同意":"未同意")}<p class="muted" style="margin-top:10px">會員編號、所屬區域需要更改時，請洽工作人員。</p></section>
+    <section class="card student-card"><div class="card-title"><h2>我的資料</h2><button class="secondary small" data-action="edit-profile">修改資料</button></div>${row("姓名",c.name)}${row("手機",showPhone(c.phone))}${row("Email",c.email)}${row("性別",c.gender)}${row("生日",c.birth_date)}${row("居住縣市",c.residence_city)}${row("地址",c.address)}${row("接收活動訊息",c.marketing_consent?"已同意":"未同意")}</section>
     <section class="card student-card"><h2>我報名的活動</h2>${upcoming.length?`<ul class="student-list">${upcoming.map(r=>item(eventLabel(r.events),`${fmtDate(r.events.starts_at)}・${escapeHtml(r.events.location||"")}`,`<span class="pill">已報名</span>`)).join("")}</ul>`:`<p class="muted">目前沒有報名中的活動。</p>`}</section>
     <section class="card student-card"><h2>活動紀錄</h2>${history.length?`<ul class="student-list">${history.map(r=>{const st=historyStatus(r,now);return item(eventLabel(r.events),`${fmtDate(r.events.starts_at)}・${escapeHtml(r.events.location||"")}${st==="attended"&&r.checked_in_at?`・報到 ${fmtDate(r.checked_in_at)}`:""}`,`<span class="pill${pillClass[st]}">${ATTENDANCE_LABELS[st]}</span>`)}).join("")}</ul>`:`<p class="muted">還沒有活動紀錄，期待在活動見到你。</p>`}</section>
     <section class="card student-card"><h2>近期活動</h2>${(data.events||[]).length?`<ul class="student-list">${data.events.map(e=>item(eventLabel(e),`${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・${escapeHtml(e.fee_note||"")}`,mine.has(e.id)?`<span class="pill">已報名</span>`:eventState(e)==="報名中"?`<a class="button" href="#register?event=${e.id}">報名</a>`:`<span class="pill off">${eventState(e)}</span>`)).join("")}</ul>`:`<p class="muted">近期沒有公開活動。</p>`}</section>`;
@@ -1274,6 +1274,7 @@ document.addEventListener("input",event=>{
   }
 });
 document.addEventListener("change",event=>{
+  if(event.target.id==="campaignImage"){ const f=event.target.files?.[0], img=$("#campaignImagePreview"); if(img){ img.hidden=!f; if(f) img.src=URL.createObjectURL(f); } return; }
   if(event.target.dataset.pick){ event.target.checked?campaignPick.add(event.target.dataset.pick):campaignPick.delete(event.target.dataset.pick); return updateAudienceCount(); }
   if(event.target.id==="pickTag"||event.target.id==="pickRegion") return renderPickList();
   if(event.target.name==="audience"&&event.target.closest("#campaignForm")){ document.querySelectorAll("#campaignForm [data-audience]").forEach(el=>el.hidden=el.dataset.audience!==event.target.value); return updateAudienceCount(); }
@@ -1306,7 +1307,11 @@ async function onSubmit(event){
     const audience=["all","selected","broadcast"].includes(data.audience)?data.audience:"event";
     if(audience==="selected"&&!campaignPick.size) return toast("請至少勾選一位學員");
     if(audience==="event"&&!data.event_id) return toast("請選擇活動");
-    const draft={name:data.name,body:data.body,audience,event_id:audience==="event"?data.event_id:null,contact_ids:audience==="selected"?[...campaignPick]:null};
+    let image_url=data.campaign_id?(state.campaigns.find(x=>x.id===data.campaign_id)?.image_url||null):null;
+    if(data.remove_image) image_url=null;
+    const file=$("#campaignImage")?.files?.[0];
+    if(file){ const up=await uploadCampaignImage(file); if(up.error) return toast(up.error); image_url=up.url; }
+    const draft={name:data.name,body:data.body,audience,event_id:audience==="event"?data.event_id:null,contact_ids:audience==="selected"?[...campaignPick]:null,image_url};
     const count=campaignRecipients(draft).length;
     if(live){
       const q=data.campaign_id?supabase.from("message_campaigns").update({...draft,eligible_count:count}).eq("id",data.campaign_id).eq("status","draft").select("id"):supabase.from("message_campaigns").insert({...draft,status:"draft",eligible_count:count}).select("id");
@@ -1466,6 +1471,7 @@ function campaignDraftForm(id){
       <div class="actions" style="margin:8px 0"><button type="button" class="secondary small" data-action="pick-all">勾選目前清單全部</button><button type="button" class="secondary small" data-action="pick-none">取消勾選目前清單</button></div>
       <div id="pickList" class="pick-list"></div></div>
     <div class="notice" style="margin-top:10px" id="audienceNote"></div>
+    <div class="field"><label>附加圖片（選填，JPG／PNG；學員會先看到圖片、再看到文字。不要放含個資的圖片）</label>${c?.image_url?`<div class="img-current"><img src="${escapeHtml(c.image_url)}" alt="目前的圖片"><label><input type="checkbox" name="remove_image"> 移除這張圖片</label></div>`:""}<input type="file" id="campaignImage" accept="image/jpeg,image/png"><img id="campaignImagePreview" alt="圖片預覽" hidden></div>
     <div class="field"><label>訊息內容（500 字以內）</label><textarea name="body" required maxlength="500">${escapeHtml(c?.body||"")}</textarea></div><button>儲存檔案</button></form>`);
   renderPickList();
 }
@@ -1491,6 +1497,23 @@ async function deleteCampaign(id){
   else state.campaigns=state.campaigns.filter(x=>x.id!==id);
   audit(sent?"刪除已送出的訊息紀錄":"刪除訊息草稿",c.name); persist(); render(); toast(sent?"已刪除訊息紀錄":"已刪除草稿");
 }
+// 推播附圖：先在瀏覽器縮到最長邊 1600px 的 JPG（通常小於 1MB，LINE 預覽圖也能直接用），再上傳到公開的 campaign-images
+async function uploadCampaignImage(file){
+  if(!/^image\/(jpeg|png)$/.test(file.type)) return {error:"圖片請用 JPG 或 PNG"};
+  if(file.size>20*1024*1024) return {error:"圖片太大（超過 20MB），請先縮小"};
+  let blob;
+  try{
+    const bmp=await createImageBitmap(file); const k=Math.min(1,1600/Math.max(bmp.width,bmp.height));
+    const cv=document.createElement("canvas"); cv.width=Math.round(bmp.width*k); cv.height=Math.round(bmp.height*k);
+    const ctx=cv.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,cv.width,cv.height); ctx.drawImage(bmp,0,0,cv.width,cv.height);
+    blob=await new Promise(r=>cv.toBlob(r,"image/jpeg",0.85));
+  }catch{ return {error:"讀不到這張圖片，請換一張"}; }
+  if(!live) return {url:await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(blob); })};
+  const path=`${new Date().toISOString().slice(0,10)}/${crypto.randomUUID()}.jpg`;
+  const {error}=await supabase.storage.from("campaign-images").upload(path,blob,{contentType:"image/jpeg",upsert:false});
+  if(error) return {error:"圖片上傳失敗："+error.message};
+  return {url:supabase.storage.from("campaign-images").getPublicUrl(path).data.publicUrl};
+}
 function pickCandidates(){
   const tag=$("#pickTag")?.value||"", region=$("#pickRegion")?.value||"", q=($("#pickSearch")?.value||"").trim().toLowerCase();
   return state.contacts.filter(campaignEligible).filter(c=>(!tag||(c.tags||[]).includes(tag))&&(!region||(region==="none"?!c.region_id:c.region_id===region))&&(!q||`${c.name} ${c.member_no||""}`.toLowerCase().includes(q)));
@@ -1509,7 +1532,7 @@ function updateAudienceCount(){
   el.innerHTML=`預計發送 <strong id="audienceCount">${n}</strong> 位。沒綁 LINE、沒同意接收活動訊息或已封鎖的人不會收到，也不會出現在清單。`;
 }
 function eligibleForEvent(eventId){ const ids=new Set(state.registrations.filter(r=>r.event_id===eventId&&!r.cancelled_at).map(r=>r.contact_id)); return state.contacts.filter(c=>ids.has(c.id)&&campaignEligible(c)); }
-function reviewCampaign(id){ const c=state.campaigns.find(x=>x.id===id); const people=campaignRecipients(c); modal(`<h2>最後確認</h2>${c.audience==="broadcast"?`<div class="notice">即將<strong>群發給官方帳號的全部好友</strong>（包含還沒加入 CRM 的好友），會用掉官方帳號每月的訊息額度；送出後無法收回。</div>`:`<div class="notice">即將發送給 <strong>${people.length}</strong> 位已同意且可聯絡的 LINE 好友（${escapeHtml(audienceLabel(c))}）。</div><details class="tag-box"><summary>收件人名單（${people.length}）</summary><p>${people.map(x=>escapeHtml(x.name)).join("、")||"（沒有人）"}</p></details>`}<p><strong>${escapeHtml(c.name)}</strong></p><p>${escapeHtml(c.body)}</p><form id="sendCampaignForm"><button type="button" data-send-id="${c.id}" id="confirmSend">確認送出</button> <button class="secondary" value="cancel">返回修改</button></form>`); $("#confirmSend").onclick=()=>sendCampaign(c,people); }
+function reviewCampaign(id){ const c=state.campaigns.find(x=>x.id===id); const people=campaignRecipients(c); modal(`<h2>最後確認</h2>${c.audience==="broadcast"?`<div class="notice">即將<strong>群發給官方帳號的全部好友</strong>（包含還沒加入 CRM 的好友），會用掉官方帳號每月的訊息額度；送出後無法收回。</div>`:`<div class="notice">即將發送給 <strong>${people.length}</strong> 位已同意且可聯絡的 LINE 好友（${escapeHtml(audienceLabel(c))}）。</div><details class="tag-box"><summary>收件人名單（${people.length}）</summary><p>${people.map(x=>escapeHtml(x.name)).join("、")||"（沒有人）"}</p></details>`}<p><strong>${escapeHtml(c.name)}</strong></p>${c.image_url?`<img class="camp-img" src="${escapeHtml(c.image_url)}" alt="附加圖片">`:""}<p>${escapeHtml(c.body)}</p><form id="sendCampaignForm"><button type="button" data-send-id="${c.id}" id="confirmSend">確認送出</button> <button class="secondary" value="cancel">返回修改</button></form>`); $("#confirmSend").onclick=()=>sendCampaign(c,people); }
 async function sendCampaign(c,people){
   $("#confirmSend").disabled=true;
   if(live){ const {data,error}=await supabase.functions.invoke("send-campaign",{body:{campaignId:c.id}}); if(error){$("#confirmSend").disabled=false;return toast(error.message);} c.success_count=data.success;c.failed_count=data.failed; await loadLiveData(); }
