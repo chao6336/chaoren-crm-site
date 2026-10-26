@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>SW-II｜前往中…</title>
+  <style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#eef3ec;color:#16231e;font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;text-align:center;padding:24px}a{color:#0d6b45}</style>
+</head>
+<body>
+  <!-- LINE 推播的短網址：記一次點擊後轉到原網址（點擊紀錄不含個資） -->
+  <p id="msg">前往中…</p>
+  <script src="../config.js"></script>
+  <script>
+    (async () => {
+      const msg = document.getElementById("msg");
+      const code = new URLSearchParams(location.search).get("k") || "";
+      const fail = () => { msg.innerHTML = '連結已失效。<br><a href="https://crm.sw-ii.com/">回到 SW-II 首頁</a>'; };
+      if (!/^[A-Za-z0-9]{6,12}$/.test(code)) return fail();
+      // 瀏覽器自己產生的隨機訪客碼，只用來算「不重複點擊」
+      let visitor = "";
+      try { visitor = localStorage.getItem("swii_visitor") || ""; if (!visitor) { visitor = crypto.randomUUID(); localStorage.setItem("swii_visitor", visitor); } } catch {}
+      try {
+        const cfg = window.CRM_CONFIG;
+        const res = await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/track_link_click`, { method: "POST", headers: { "Content-Type": "application/json", apikey: cfg.supabasePublishableKey }, body: JSON.stringify({ p_code: code, p_visitor: visitor }) });
+        const url = res.ok ? await res.json() : null;
+        if (typeof url === "string" && /^https?:\/\//.test(url)) location.replace(url); else fail();
+      } catch { fail(); }
+    })();
+  </script>
+</body>
+</html>

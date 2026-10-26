@@ -458,3 +458,100 @@ export function checkNewPassword(password = "", again = "") {
   if (password !== again) return "兩次輸入的密碼不一樣";
   return null;
 }
+
+// 週報：以週一 00:00（瀏覽器時區）為一週起點，算本週數字並和上週比
+export function weekStart(date = new Date()) {
+  const d = new Date(date); d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d;
+}
+
+// 推播追蹤：訊息裡的網址換成短網址（/go/?k=…），點擊時記一次再轉到原網址
+export const LINK_RE = /https?:\/\/[^\s<>"'，。！？、「」（）]+/g;
+// 自己網站（crm.sw-ii.com 或 LIFF）的連結加上推播代碼，報名時會記在 utm_campaign，用來算訂單數
+export function addUtm(url, campaignId) {
+  let u; try { u = new URL(url); } catch { return url; }
+  if (!["crm.sw-ii.com", "liff.line.me"].includes(u.hostname) || /utm_campaign=/.test(url)) return url;
+  const tag = `utm_source=line&utm_medium=push&utm_campaign=${campaignId}`;
+  // 這個網站從 # 後面讀參數（例如 #register?event=…），所以加在 # 後面
+  if (u.hash.length > 1) return url + (u.hash.includes("?") ? "&" : "?") + tag;
+  return url + (u.search ? "&" : "?") + tag;
+}
+
+export function weeklyReport({ contacts = [], registrations = [], events = [], campaigns = [], sponsorships = [], clickStats = [] }, start, costPerMessage = 0.15) {
+  const from = weekStart(start), to = new Date(from); to.setDate(to.getDate() + 7);
+  const prevFrom = new Date(from); prevFrom.setDate(prevFrom.getDate() - 7);
+  // paid_at 是日期字串（YYYY-MM-DD），當成當地午夜，不能被當成 UTC
+  const at = v => !v ? null : /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00`) : new Date(v);
+  const inRange = (v, a, b) => { const t = at(v); return !!t && t >= a && t < b; };
+  const people = contacts.filter(c => !c.anonymized_at);
+  const evName = id => { const e = events.find(x => x.id === id); return e ? (e.session_name ? `${e.title}｜${e.session_name}` : e.title) : "（已刪除）"; };
+  const calc = (a, b) => {
+    const regs = registrations.filter(r => inRange(r.registered_at, a, b));
+    const held = events.filter(e => inRange(e.starts_at, a, b));
+    const heldRegs = registrations.filter(r => held.some(e => e.id === r.event_id) && !r.cancelled_at);
+    const attended = heldRegs.filter(r => r.attendance_status === "attended").length;
+    const sent = campaigns.filter(c => ["sent", "partial"].includes(c.status) && inRange(c.sent_at, a, b));
+    const paid = sponsorships.filter(s => s.paid && inRange(s.paid_at, a, b));
+    const sum = list => list.reduce((t, s) => t + (Number(s.amount) || 0), 0);
+    // 每則推播的成效：點擊（不重複）、訂單（從推播連結來的報名）、營收（這些報名已收的報名費）、成本、ROAS
+    const camps = sent.map(c => {
+      const st = clickStats.find(x => x.campaign_id === c.id) || {};
+      const regsC = registrations.filter(r => r.utm_campaign === c.id && !r.cancelled_at);
+      const ids = new Set(regsC.map(r => r.id));
+      const delivered = c.audience === "broadcast" ? 0 : Number(c.success_count) || 0;
+      const revenue = sum(sponsorships.filter(s => s.paid && ids.has(s.registration_id)));
+      const cost = Math.round(delivered * costPerMessage * 100) / 100;
+      return { id: c.id, name: c.name || "（未命名）", broadcast: c.audience === "broadcast", sent_at: c.sent_at, delivered, clicks: Number(st.clicks) || 0, uniqueClicks: Number(st.unique_clicks) || 0,
+        ctr: delivered ? Math.round((Number(st.unique_clicks) || 0) / delivered * 10000) / 100 : null, orders: regsC.length, revenue, cost, roas: cost ? Math.round(revenue / cost * 100) / 100 : null };
+    });
+    const pushDelivered = camps.reduce((t, c) => t + c.delivered, 0), pushUnique = camps.filter(c => !c.broadcast).reduce((t, c) => t + c.uniqueClicks, 0);
+    const pushRevenue = camps.reduce((t, c) => t + c.revenue, 0), pushCost = Math.round(camps.reduce((t, c) => t + c.cost, 0) * 100) / 100;
+    return {
+      clicks: camps.reduce((t, c) => t + c.clicks, 0),
+      ctr: pushDelivered ? Math.round(pushUnique / pushDelivered * 10000) / 100 : 0,
+      orders: camps.reduce((t, c) => t + c.orders, 0),
+      pushRevenue, pushCost,
+      roas: pushCost ? Math.round(pushRevenue / pushCost * 100) / 100 : 0,
+      _camps: camps,
+      newMembers: people.filter(c => inRange(c.created_at, a, b)).length,
+      registrations: regs.length,
+      cancellations: registrations.filter(r => inRange(r.cancelled_at, a, b)).length,
+      checkins: registrations.filter(r => inRange(r.checked_in_at, a, b)).length,
+      sessionsHeld: held.length,
+      attendanceRate: heldRegs.length ? Math.round(attended / heldRegs.length * 100) : 0,
+      campaigns: sent.filter(c => c.audience !== "broadcast").length,
+      broadcasts: sent.filter(c => c.audience === "broadcast").length,
+      pushMessages: sent.filter(c => c.audience !== "broadcast").reduce((t, c) => t + (Number(c.success_count) || 0), 0),
+      revenue: sum(paid),
+      feeRevenue: sum(paid.filter(s => s.registration_id)),
+      donationRevenue: sum(paid.filter(s => !s.registration_id)),
+      newReceivable: sum(sponsorships.filter(s => inRange(s.created_at, a, b))),
+      _regs: regs, _held: held, _sent: sent
+    };
+  };
+  const cur = calc(from, to), prev = calc(prevFrom, from);
+  const diff = {}; for (const k of Object.keys(cur)) if (typeof cur[k] === "number") diff[k] = cur[k] - prev[k];
+  const byEvent = new Map(); for (const r of cur._regs) byEvent.set(r.event_id, (byEvent.get(r.event_id) || 0) + 1);
+  const topEvent = [...byEvent].sort((x, y) => y[1] - x[1])[0];
+  const rate = e => { const rs = registrations.filter(r => r.event_id === e.id && !r.cancelled_at); return rs.length ? { name: evName(e.id), rate: Math.round(rs.filter(r => r.attendance_status === "attended").length / rs.length * 100), count: rs.length } : null; };
+  const bestAttendance = cur._held.map(rate).filter(Boolean).sort((x, y) => y.rate - x.rate || y.count - x.count)[0] || null;
+  const bestCampaign = cur._sent.filter(c => c.audience !== "broadcast").sort((x, y) => (y.success_count || 0) - (x.success_count || 0))[0];
+  const active = people.filter(c => !at(c.created_at) || at(c.created_at) < to);
+  const camps = cur._camps, top = (key, ok = c => true) => camps.filter(c => ok(c) && c[key] != null && c[key] > 0).sort((x, y) => y[key] - x[key])[0] || null;
+  for (const o of [cur, prev]) { delete o._regs; delete o._held; delete o._sent; delete o._camps; }
+  return {
+    from, to: new Date(to.getTime() - 864e5), current: cur, previous: prev, diff,
+    activeMembers: active.length,
+    tagCoverage: active.length ? Math.round(active.filter(c => (c.tags || []).length).length / active.length * 10000) / 100 : 0,
+    lineReachable: active.filter(c => c.line_status === "active" && c.marketing_consent).length,
+    outstanding: sponsorships.filter(s => !s.paid).reduce((t, s) => t + (Number(s.amount) || 0), 0),
+    best: {
+      event: topEvent ? { name: evName(topEvent[0]), count: topEvent[1] } : null,
+      attendance: bestAttendance,
+      campaign: bestCampaign ? { name: bestCampaign.name || "（未命名）", count: bestCampaign.success_count || 0 } : null,
+      roas: top("roas"), orders: top("orders"), ctr: top("ctr")
+    },
+    campaigns: camps
+  };
+}

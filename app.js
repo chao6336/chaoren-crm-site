@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword } from "./lib.js?v=20261026-6";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE } from "./lib.js?v=20261026-8";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -91,7 +91,7 @@ function myRegistrations(){ return scopeRegistrations(state.registrations,state.
 function canEvents(){ return canManageEvents(state.role); }
 // 報名名單：雲端由 event_roster view 決定範圍；展示版用同一規則（lib.rosterFor）。
 function roster(){ return live ? (state.roster||[]).map(r=>({...r,id:r.registration_id})) : rosterFor(state.registrations,state.contacts,viewer(),regionName); }
-const ADMIN_ONLY_ROUTES=["messages","governance","users","import","sponsors","applications"];
+const ADMIN_ONLY_ROUTES=["messages","governance","users","import","sponsors","applications","weekly"];
 // 學員看的頁面：不顯示後台選單，資料只走 LINE 身分。
 const STUDENT_ROUTES=["me","scan","signin","activate","apply"];
 // 學員前台只開放這些頁面，其他頁面一律轉到 /admin/
@@ -203,8 +203,9 @@ async function loadLiveData(){
   ]);
   const staff = profile.data?.role === "admin" ? await supabase.from("staff_profiles").select("user_id,display_name,role,region_id,active") : {data:[]};
   const sponsorships = profile.data?.role === "admin" ? await supabase.from("sponsorships").select("*").order("created_at",{ascending:false}) : {data:[]};
+  const clickStats = profile.data?.role === "admin" ? await supabase.from("campaign_click_stats").select("*") : {data:[]};
   const applications = profile.data?.role === "admin" ? await supabase.from("student_applications").select("*").eq("status","pending").order("created_at") : {data:[]};
-  state={role:profile.data?.role||"none",eventsLoaded:true,region_id:profile.data?.region_id||null,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],applications:applications.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:"工作人員",action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
+  state={role:profile.data?.role||"none",eventsLoaded:true,region_id:profile.data?.region_id||null,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],clickStats:clickStats.data||[],applications:applications.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:"工作人員",action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
   showUser(profile.data?.display_name||session.user.email);
   $("#logoutBtn").hidden=state.role==="none";
 }
@@ -229,7 +230,7 @@ function render(){
   if($("#homeBtn")) $("#homeBtn").hidden=name==="register"&&!query().get("event");
   // 工作人員已有完整活動資料，不能被公開活動資料蓋掉
   if(live&&name==="register"&&!state.eventsLoaded&&!STAFF_ROLES.includes(state.role)){ $("#app").innerHTML="<div class='empty'>載入活動中…</div>"; loadPublicEvent().then(render); return; }
-  const views={dashboard,events,contacts,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors,"set-password":setPassword,signin,activate,apply,applications};
+  const views={dashboard,events,contacts,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors,weekly,"set-password":setPassword,signin,activate,apply,applications};
   $("#app").innerHTML=(views[name]||dashboard)();
   if(name==="me")loadMe();
   if(name==="users")loadStaffList();
@@ -258,6 +259,52 @@ function dashboard(){
 // 活動與課程共用同一套（場次、報名、名單、報到、繳費都一樣），只差 kind 與顯示的字
 const KIND_LABELS={event:"活動",course:"課程"};
 const kindOf=e=>e?.kind==="course"?"course":"event";
+// ───── 週報（只有總管理：含營收）─────
+const ymd=d=>d.toLocaleDateString("sv-SE");
+// 預設看上一個完整的週（和 MAAC 週報一樣）；本週可以按「本週累計」看
+// 每則 LINE 訊息的成本（算 ROAS 用），預設和 MAAC 一樣 0.15 元，可在週報頁修改（只記在這台電腦）
+function msgCost(){ try{ const v=Number(localStorage.getItem("swii_msg_cost")); return v>0?v:0.15; }catch{ return 0.15; } }
+function weeklyData(){ const w=query().get("w"); const start=weekStart(w?new Date(`${w}T00:00:00`):new Date(Date.now()-7*864e5)); return {start,r:weeklyReport({contacts:state.contacts,registrations:state.registrations,events:state.events,campaigns:state.campaigns,sponsorships:state.sponsorships,clickStats:clickStats()},start,msgCost())}; }
+function weekly(){
+  const {start,r}=weeklyData(), c=r.current, d=r.diff;
+  const shift=n=>{ const x=new Date(start); x.setDate(x.getDate()+n*7); return `#weekly?w=${ymd(x)}`; };
+  const isThisWeek=ymd(start)===ymd(weekStart());
+  const sign=n=>n>0?`+${n.toLocaleString()}`:n.toLocaleString();
+  const stat=(label,value,delta,unit="")=>`<div class="stat"><span>${label}</span><strong>${value}${unit?`<small class="muted"> ${unit}</small>`:""}</strong>${delta===undefined?"":`<small class="${delta<0?"down":delta>0?"up":"muted"}">與上週相比 ${sign(delta)}</small>`}</div>`;
+  const money=n=>n.toLocaleString();
+  const best=(label,b,fmt)=>`<div class="kpi-line"><span>${label}</span><strong>${b?fmt(b):"—"}</strong></div>`;
+  return `${pageHead("成效週報",`${ymd(r.from)} ～ ${ymd(r.to)}${isThisWeek?"（本週，還在累計中）":""}`,`<a class="button secondary" href="${shift(-1)}">← 上一週</a>${isThisWeek?"":`<a class="button secondary" href="${shift(1)}">${ymd(new Date(start.getTime()+7*864e5))===ymd(weekStart())?"本週累計 →":"下一週 →"}</a>`}<button class="secondary" data-action="export-weekly">匯出 CSV</button><button data-action="copy-weekly">複製文字摘要</button>`)}
+  <h2>本週概覽 👀</h2><section class="stats week-stats">${stat("本週新會員",c.newMembers,d.newMembers)}${stat("累積有效會員",r.activeMembers.toLocaleString())}${stat("標籤覆蓋率",r.tagCoverage,undefined,"%")}${stat("可收 LINE 推播",r.lineReachable,undefined,"位")}</section>
+  <h2>活動與課程 📅</h2><section class="stats week-stats">${stat("新報名",c.registrations,d.registrations)}${stat("取消報名",c.cancellations,d.cancellations)}${stat("報到人次",c.checkins,d.checkins)}${stat("舉辦場次",c.sessionsHeld,d.sessionsHeld)}${stat("出席率（本週場次）",c.attendanceRate,d.attendanceRate,"%")}</section>
+  <h2>LINE 推播 💬</h2><section class="stats week-stats">${stat("送出推播專案",c.campaigns,d.campaigns)}${stat("推播送達則數",c.pushMessages,d.pushMessages)}${stat("官方帳號群發",c.broadcasts,d.broadcasts,"次")}</section>
+  <h2>推播成效 📈</h2><section class="stats week-stats">${stat("連結點擊",c.clicks,d.clicks,"次")}${stat("點擊率 CTR",c.ctr,d.ctr,"%")}${stat("訂單數（推播帶來的報名）",c.orders,d.orders)}${stat("推播帶來營收",money(c.pushRevenue),d.pushRevenue,"NTD")}${stat("推播成本",money(c.pushCost),undefined,"NTD")}${stat("ROAS",c.roas,d.roas,"倍")}</section>
+  <div class="toolbar"><label class="muted">每則訊息成本 NT$ <input id="weeklyCost" type="number" min="0.01" max="10" step="0.01" value="${msgCost()}" style="width:80px"></label><small class="muted">ROAS＝推播帶來營收 ÷（送達則數 × 每則成本）。群發沒有送達人數，不算點擊率與成本。</small></div>
+  ${r.campaigns.length?`<div class="table-wrap"><table><thead><tr><th>推播</th><th>送達</th><th>點擊（不重複）</th><th>CTR</th><th>訂單</th><th>營收</th><th>成本</th><th>ROAS</th></tr></thead><tbody>${r.campaigns.map(x=>`<tr><td>${escapeHtml(x.name)}${x.broadcast?` <span class="pill off">群發</span>`:""}<br><small class="muted">${x.sent_at?fmtDate(x.sent_at):""}</small></td><td>${x.broadcast?"—":x.delivered}</td><td>${x.clicks}（${x.uniqueClicks}）</td><td>${x.ctr==null?"—":x.ctr+"%"}</td><td>${x.orders}</td><td>NT$${money(x.revenue)}</td><td>${x.broadcast?"—":"NT$"+money(x.cost)}</td><td>${x.roas==null?"—":x.roas}</td></tr>`).join("")}</tbody></table></div>`:`<p class="muted">這週沒有送出推播。</p>`}
+  <h2>本週營收表現 ✨</h2><section class="stats week-stats">${stat("本週已收總額",money(c.revenue),d.revenue,"NTD")}${stat("活動報名費",money(c.feeRevenue),d.feeRevenue,"NTD")}${stat("贊助",money(c.donationRevenue),d.donationRevenue,"NTD")}${stat("本週新增應收",money(c.newReceivable),d.newReceivable,"NTD")}${stat("目前未收（全部）",money(r.outstanding),undefined,"NTD")}</section>
+  <h2>本週最佳表現 🏆</h2><article class="card">${best("報名最多",r.best.event,b=>`${escapeHtml(b.name)}・${b.count} 人`)}${best("出席率最高的場次",r.best.attendance,b=>`${escapeHtml(b.name)}・${b.rate}%（${b.count} 人報名）`)}${best("送達最多的推播",r.best.campaign,b=>`${escapeHtml(b.name)}・${b.count} 則`)}${best("最佳 ROAS 推播",r.best.roas,b=>`${escapeHtml(b.name)}・${b.roas} 倍`)}${best("最佳訂單數推播",r.best.orders,b=>`${escapeHtml(b.name)}・${b.orders} 筆`)}${best("最佳 CTR 推播",r.best.ctr,b=>`${escapeHtml(b.name)}・${b.ctr}%`)}</article>
+  <p class="muted" style="margin-top:14px">一週從週一 00:00 算到週日 23:59。營收以「已收」且收款日期落在這週的贊助紀錄計算（含活動報名費）；推播成效看這週送出的推播，點擊與訂單會持續累計（訊息裡的網址發送時自動換成追蹤短網址，報名連結會記下是哪則推播帶來的）；標籤覆蓋率、可收推播、未收是目前的數字。</p>`;
+}
+function exportWeekly(){
+  const {r}=weeklyData(), c=r.current, p=r.previous;
+  const rows=[["概覽","本週新會員","newMembers"],["活動與課程","新報名","registrations"],["活動與課程","取消報名","cancellations"],["活動與課程","報到人次","checkins"],["活動與課程","舉辦場次","sessionsHeld"],["活動與課程","出席率（%）","attendanceRate"],["LINE 推播","送出推播專案","campaigns"],["LINE 推播","推播送達則數","pushMessages"],["LINE 推播","官方帳號群發","broadcasts"],["推播成效","連結點擊","clicks"],["推播成效","點擊率 CTR（%）","ctr"],["推播成效","訂單數","orders"],["推播成效","推播帶來營收","pushRevenue"],["推播成效","推播成本","pushCost"],["推播成效","ROAS","roas"],["營收","本週已收總額","revenue"],["營收","活動報名費","feeRevenue"],["營收","贊助","donationRevenue"],["營收","本週新增應收","newReceivable"]]
+    .map(([g,label,k])=>({group:g,label,cur:c[k],prev:p[k],diff:Math.round((c[k]-p[k])*100)/100}));
+  rows.splice(1,0,{group:"概覽",label:"累積有效會員",cur:r.activeMembers},{group:"概覽",label:"標籤覆蓋率（%）",cur:r.tagCoverage},{group:"概覽",label:"可收 LINE 推播",cur:r.lineReachable});
+  rows.push({group:"營收",label:"目前未收（全部）",cur:r.outstanding});
+  const summary=rowsToCsv(rows,[["區塊","group"],["項目","label"],["本週","cur"],["上週","prev"],["與上週相比","diff"]]);
+  const detail=rowsToCsv(r.campaigns.map(x=>({...x,type:x.broadcast?"群發":"推播",sent_at:x.sent_at?fmtDate(x.sent_at):"",ctr:x.ctr??"",roas:x.roas??"",delivered:x.broadcast?"":x.delivered,cost:x.broadcast?"":x.cost})),[["推播","name"],["類型","type"],["送出時間","sent_at"],["送達","delivered"],["點擊","clicks"],["不重複點擊","uniqueClicks"],["CTR（%）","ctr"],["訂單","orders"],["營收","revenue"],["成本","cost"],["ROAS","roas"]]);
+  download(`成效週報_${ymd(r.from)}_${ymd(r.to)}.csv`,`成效週報 ${ymd(r.from)} ～ ${ymd(r.to)}（每則訊息成本 NT$${msgCost()}）\r\n${summary}\r\n\r\n推播明細\r\n${detail}`,"text/csv;charset=utf-8");
+}
+function copyWeekly(){
+  const {r}=weeklyData(), c=r.current, d=r.diff, s=n=>n>0?`+${n}`:`${n}`;
+  const text=[`SW-II 成效週報 ${ymd(r.from)} ～ ${ymd(r.to)}`,
+    `【概覽】新會員 ${c.newMembers}（${s(d.newMembers)}）・累積有效會員 ${r.activeMembers}・標籤覆蓋率 ${r.tagCoverage}%`,
+    `【活動與課程】新報名 ${c.registrations}（${s(d.registrations)}）・報到 ${c.checkins}（${s(d.checkins)}）・舉辦 ${c.sessionsHeld} 場・出席率 ${c.attendanceRate}%`,
+    `【LINE 推播】專案 ${c.campaigns}・送達 ${c.pushMessages} 則・群發 ${c.broadcasts} 次`,
+    `【推播成效】點擊 ${c.clicks}・CTR ${c.ctr}%・訂單 ${c.orders}・ROAS ${c.roas}`,
+    `【營收】已收 NT$${c.revenue.toLocaleString()}（${s(d.revenue)}）：報名費 NT$${c.feeRevenue.toLocaleString()}、贊助 NT$${c.donationRevenue.toLocaleString()}・目前未收 NT$${r.outstanding.toLocaleString()}`,
+    ...(r.best.event?[`【報名最多】${r.best.event.name}（${r.best.event.count} 人）`]:[])].join("\n");
+  navigator.clipboard.writeText(text).then(()=>toast("已複製，可以貼到 LINE 群組"),()=>{ modal(`<h2>週報摘要</h2><textarea style="width:100%;min-height:200px">${escapeHtml(text)}</textarea>`); });
+}
 function events(){
   const create=canEvents()?`<button data-action="edit-event">＋ 建立活動</button><button data-action="edit-event" data-kind="course">＋ 建立課程</button>`:"";
   const kind=query().get("kind")||""; const list=state.events.filter(e=>!kind||kindOf(e)===kind);
@@ -1305,6 +1352,8 @@ async function onClick(event){
   if(action==="approve-application") return reviewApplication(btn.dataset.id,true);
   if(action==="reject-application") return reviewApplication(btn.dataset.id,false);
   if(action==="logout"){ await supabase?.auth.signOut(); location.hash="login"; return location.reload(); }
+  if(action==="copy-weekly") return copyWeekly();
+  if(action==="export-weekly") return exportWeekly();
   if(action==="edit-event"){ event.preventDefault(); return eventForm(btn.dataset.id,btn.dataset.kind); }
   if(action==="add-session") return addSessionRow();
   if(action==="remove-session") return removeSessionRow(btn);
@@ -1376,6 +1425,7 @@ document.addEventListener("change",event=>{
   if(event.target.id==="eventSwitch")location.hash=`checkin?event=${event.target.value}`;
   if(event.target.id==="regionFilter")location.hash=event.target.value?`contacts?region=${event.target.value}`:"contacts";
   if(event.target.id==="demoUser")switchDemoUser(event.target.value);
+  if(event.target.id==="weeklyCost"){ const v=Number(event.target.value); if(v>0){ try{ localStorage.setItem("swii_msg_cost",String(v)); }catch{} render(); } }
   if(event.target.id==="importFile")readImportFile(event.target.files[0]);
   if(event.target.dataset.mapField){ importState.map[event.target.dataset.mapField]=event.target.value===""?undefined:Number(event.target.value); render(); }
   if(event.target.id==="sponsorItemFilter"||event.target.id==="sponsorPaidFilter"){ const p=new URLSearchParams(); const i=$("#sponsorItemFilter").value, pd=$("#sponsorPaidFilter").value; if(i)p.set("item",i); if(pd)p.set("paid",pd); location.hash="sponsors"+(p.toString()?"?"+p:""); }
@@ -1627,8 +1677,27 @@ function updateAudienceCount(){
 }
 function eligibleForEvent(eventId){ const ids=new Set(state.registrations.filter(r=>r.event_id===eventId&&!r.cancelled_at).map(r=>r.contact_id)); return state.contacts.filter(c=>ids.has(c.id)&&campaignEligible(c)); }
 function reviewCampaign(id){ const c=state.campaigns.find(x=>x.id===id); const people=campaignRecipients(c); modal(`<h2>最後確認</h2>${c.audience==="broadcast"?`<div class="notice">即將<strong>群發給官方帳號的全部好友</strong>（包含還沒加入 CRM 的好友），會用掉官方帳號每月的訊息額度；送出後無法收回。</div>`:`<div class="notice">即將發送給 <strong>${people.length}</strong> 位已同意且可聯絡的 LINE 好友（${escapeHtml(audienceLabel(c))}）。</div><details class="tag-box"><summary>收件人名單（${people.length}）</summary><p>${people.map(x=>escapeHtml(x.name)).join("、")||"（沒有人）"}</p></details>`}<p><strong>${escapeHtml(c.name)}</strong></p>${c.image_url?`<img class="camp-img" src="${escapeHtml(c.image_url)}" alt="附加圖片">`:""}<p>${escapeHtml(c.body)}</p><form id="sendCampaignForm"><button type="button" data-send-id="${c.id}" id="confirmSend">確認送出</button> <button class="secondary" value="cancel">返回修改</button></form>`); $("#confirmSend").onclick=()=>sendCampaign(c,people); }
+// 發送前把訊息裡的網址換成追蹤短網址（/go/?k=…，已換過的跳過），週報用來算點擊率與訂單數；換不成就照原文發送
+const shortCode=()=>{ const abc="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"; return [...crypto.getRandomValues(new Uint8Array(8))].map(n=>abc[n%abc.length]).join(""); };
+async function trackCampaignLinks(c){
+  const goBase=`${SITE_BASE}/go/?k=`, map={}, rows=[];
+  for(const u of new Set(c.body.match(LINK_RE)||[])){ if(u.startsWith(goBase))continue; const code=shortCode(); map[u]=goBase+code; rows.push({code,campaign_id:c.id,url:addUtm(u,c.id)}); }
+  if(!rows.length)return;
+  const body=c.body.replace(LINK_RE,m=>map[m]||m); if(body.length>500)return;
+  if(live){ const {error}=await supabase.from("campaign_links").insert(rows); if(error)return; const {error:e2}=await supabase.from("message_campaigns").update({body}).eq("id",c.id); if(e2)return; }
+  else (state.campaign_links||(state.campaign_links=[])).push(...rows);
+  c.body=body;
+}
+// 每則推播的點擊數：正式站讀 campaign_click_stats；展示版用本機紀錄
+function clickStats(){
+  if(live)return state.clickStats||[];
+  const links=state.campaign_links||[], clicks=state.link_clicks||[], by={};
+  for(const l of links){ const s=by[l.campaign_id]||(by[l.campaign_id]={campaign_id:l.campaign_id,clicks:0,v:new Set()}); for(const k of clicks.filter(x=>x.code===l.code)){ s.clicks++; s.v.add(k.visitor); } }
+  return Object.values(by).map(s=>({campaign_id:s.campaign_id,clicks:s.clicks,unique_clicks:s.v.size}));
+}
 async function sendCampaign(c,people){
   $("#confirmSend").disabled=true;
+  await trackCampaignLinks(c);
   if(live){ const {data,error}=await supabase.functions.invoke("send-campaign",{body:{campaignId:c.id}}); if(error){$("#confirmSend").disabled=false;return toast(error.message);} c.success_count=data.success;c.failed_count=data.failed; await loadLiveData(); }
   else { c.success_count=c.audience==="broadcast"?1:people.length;c.failed_count=0;c.status="sent";c.sent_at=new Date().toISOString();c.deliveries=c.audience==="broadcast"?[]:people.map(x=>({contact_id:x.id,status:"sent",error_code:null,attempted_at:c.sent_at})); }
   audit("確認並發送 LINE 訊息",c.name);persist();closeModal();render();toast(`已完成：成功 ${c.success_count}、失敗 ${c.failed_count}`);
