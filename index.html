@@ -14,7 +14,7 @@
       if(/[?&]flow=set-password/.test(location.search)||/access_token=|error_description=/.test(location.hash)||/^(dashboard|events|contacts|checkin|sponsors|import|messages|governance|users|login|set-password)$/.test(r))
         location.replace("admin/"+location.search+location.hash); })();
   </script>
-  <link rel="stylesheet" href="styles.css?v=20261029-7">
+  <link rel="stylesheet" href="styles.css?v=20261030-1">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
@@ -30,6 +30,7 @@
       <a href="#dashboard" data-route="dashboard">總覽</a>
       <a href="#events" data-route="events">活動</a>
       <a href="#contacts" data-route="contacts">會員資料</a>
+      <a href="#tags" data-route="tags">標籤</a>
       <a href="#checkin" data-route="checkin">現場報到</a>
       <a href="#sponsors" data-route="sponsors">贊助紀錄</a>
       <a href="#import" data-route="import">匯入名冊</a>
@@ -45,7 +46,7 @@
   <dialog id="modal"><button type="button" class="dialog-close" data-action="close-modal" aria-label="關閉">×</button><div id="modalBody"></div></dialog>
   <div id="toast" role="status" aria-live="polite"></div>
 
-  <script src="config.js?v=20261029-7"></script>
-  <script type="module" src="app.js?v=20261029-7"></script>
+  <script src="config.js?v=20261030-1"></script>
+  <script type="module" src="app.js?v=20261030-1"></script>
 </body>
 </html>

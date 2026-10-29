@@ -458,6 +458,77 @@ export function courseTagsAfterPayment(tags = [], title = "", paid, otherPaidTit
   return otherPaidTitles.some(t => paidCourseTag(t) === tag) ? tags : tags.filter(t => t !== tag);
 }
 
+// 標籤管理（參考 MAAC）：標籤名稱最多 40 字；時效空白＝永久，填 N＝貼上後 N 天內有效（1～3650）；分類最多 20 字。
+export const TAG_NAME_MAX = 40;
+export function tagExpiryLabel(validDays) {
+  return validDays ? `貼標後 ${validDays} 天` : "永久";
+}
+export function tagExpiresAt(validDays, now = new Date()) {
+  return validDays ? new Date(now.getTime() + validDays * 864e5).toISOString() : null;
+}
+export function parseValidDays(value) {
+  const s = String(value ?? "").trim();
+  if (!s) return { value: null };
+  const n = Number(s);
+  return Number.isInteger(n) && n >= 1 && n <= 3650 ? { value: n } : { error: "時效要填 1～3650 的整數天數，空白＝永久" };
+}
+// 建立標籤：一行一個，去掉空白與重複，一次最多 100 個
+export function parseTagNames(text = "") {
+  const names = [], errors = [];
+  for (const line of String(text).split(/\r?\n/)) {
+    const name = line.trim();
+    if (!name || names.includes(name)) continue;
+    if (name.length > TAG_NAME_MAX) errors.push(`「${name.slice(0, 12)}…」超過 ${TAG_NAME_MAX} 字`);
+    else names.push(name);
+  }
+  if (names.length > 100) errors.push(`一次最多 100 個，現在有 ${names.length} 個`);
+  return { names: names.slice(0, 100), errors };
+}
+export function filterTags(tags = [], { q = "", expiry = "", category = "" } = {}) {
+  const k = q.trim().toLowerCase();
+  return tags.filter(t => (!k || t.name.toLowerCase().includes(k))
+    && (!expiry || (expiry === "permanent" ? !t.valid_days : !!t.valid_days))
+    && (!category || (category === "none" ? !t.category : t.category === category)));
+}
+// 標籤 CSV：第一列是欄位名稱 name／valid_days／category（也接受中文「標籤名稱／時效天數／分類」）。
+// 檔案裡沒有的欄位就不動既有值；有欄位但空白：時效＝永久、分類＝清空。最多 1000 列。
+export function parseTagCsv(rows = []) {
+  const [head = [], ...body] = rows;
+  const col = keys => head.findIndex(h => keys.includes(String(h).trim().toLowerCase()));
+  const iName = col(["name", "標籤名稱", "標籤"]), iDays = col(["valid_days", "available_days", "時效天數", "時效"]), iCat = col(["category", "categories", "分類"]);
+  if (iName < 0) return { rows: [], errors: ["找不到 name（標籤名稱）欄位"] };
+  if (body.length > 1000) return { rows: [], errors: [`一次最多 1000 列，現在有 ${body.length} 列`] };
+  const out = [], errors = [], seen = new Set();
+  body.forEach((r, i) => {
+    const line = i + 2, name = String(r[iName] ?? "").trim();
+    if (!name) return errors.push(`第 ${line} 列沒有標籤名稱`);
+    if (name.length > TAG_NAME_MAX) return errors.push(`第 ${line} 列名稱超過 ${TAG_NAME_MAX} 字`);
+    if (seen.has(name)) return errors.push(`第 ${line} 列「${name}」重複`);
+    const row = { name };
+    if (iDays >= 0) { const d = parseValidDays(r[iDays]); if (d.error) return errors.push(`第 ${line} 列：${d.error}`); row.valid_days = d.value; }
+    if (iCat >= 0) { const c = String(r[iCat] ?? "").split(/[,，]/)[0].trim(); if (c.length > 20) return errors.push(`第 ${line} 列分類超過 20 字`); row.category = c || null; }
+    seen.add(name); out.push(row);
+  });
+  return { rows: out, errors };
+}
+// 批次貼標：每行一位，可以是會員編號、手機或姓名。同名不只一位的列出來請人改用會員編號。
+export function matchContactsByKeys(contacts = [], text = "") {
+  const digits = v => String(v ?? "").replace(/\D/g, "");
+  const matched = new Map(), missing = [], ambiguous = [];
+  for (const raw of String(text).split(/\r?\n/)) {
+    const key = raw.trim();
+    if (!key) continue;
+    const d = digits(key);
+    let hits = contacts.filter(c => c.member_no && c.member_no.toLowerCase() === key.toLowerCase());
+    if (!hits.length && d.length >= 9) hits = contacts.filter(c => digits(c.phone).slice(-9) === d.slice(-9));
+    if (!hits.length) hits = contacts.filter(c => c.name === key);
+    if (!hits.length) missing.push(key);
+    else if (hits.length > 1) ambiguous.push(`${key}（${hits.length} 位）`);
+    else matched.set(hits[0].id, hits[0]);
+  }
+  return { matched: [...matched.values()], missing, ambiguous };
+}
+
 // 學員在「我的活動」自己修改基本資料：只開放這幾欄，規則與後端 member 函式（update_profile）相同。
 // 會員編號、所屬區域、標籤、備註、身分證不開放學員修改。
 export function checkProfile(p = {}, today = new Date()) {
