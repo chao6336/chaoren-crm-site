@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, feeAmount, isFreeEvent, courseTagsAfterPayment } from "./lib.js?v=20261029-6";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, feeAmount, isFreeEvent, courseTagsAfterPayment } from "./lib.js?v=20261029-7";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -42,7 +42,7 @@ const seed = {
   // 展示用：學員頁面以哪個 LINE 帳號登入；報到碼只存在總管理可讀的地方
   demoLine: "Udemo01", checkin_codes: {},
   regions: [{id:"north",name:"北區"},{id:"taoyuan",name:"桃區"},{id:"central",name:"中區"},{id:"south",name:"南區"}],
-  staff: [{id:"s1",display_name:"louis趙",email:"louis@example.com",role:"admin",region_id:null,active:true},{id:"s2",display_name:"北區負責人",email:"north@example.com",role:"region_lead",region_id:"north",active:true},{id:"s3",display_name:"中區負責人",email:"central@example.com",role:"region_lead",region_id:"central",active:true},{id:"s4",display_name:"活動組 小李",email:"events@example.com",role:"event_staff",region_id:null,active:true}],
+  staff: [{id:"s1",display_name:"louis趙",email:"louis@example.com",role:"admin",region_id:null,active:true},{id:"s2",display_name:"北區負責人",email:"north@example.com",role:"region_lead",region_id:"north",active:true},{id:"s3",display_name:"中區負責人",email:"central@example.com",role:"region_lead",region_id:"central",active:true},{id:"s4",display_name:"活動組 小李",email:"events@example.com",role:"event_staff",region_id:null,active:true},{id:"s5",display_name:"會計 小陳",email:"accounting@example.com",role:"accountant",region_id:null,active:true}],
   events: [
     { id:"evt-0", title:"今日共修（展示）", theme:"掃碼報到測試用，開始時間＝打開展示版後一小時", starts_at:new Date(Date.now()+3600e3).toISOString(), registration_deadline:new Date(Date.now()+1800e3).toISOString(), location:"晁人文鼎協會", capacity:50, status:"published", registration_count:1, fee_note:"免費" },
     { id:"evt-1", title:"城市留白｜閱讀與默想", theme:"從忙碌中重新聽見自己", starts_at:"2026-11-15T14:00:00+08:00", registration_deadline:"2026-11-13T23:59:00+08:00", location:"晁人文鼎協會", capacity:24, status:"published", registration_count:4, fee_note:"體驗活動 NT$300" },
@@ -89,9 +89,18 @@ function regionName(id){ return state.regions?.find(r=>r.id===id)?.name||"未分
 function myContacts(){ return scopeContacts(state.contacts,viewer()); }
 function myRegistrations(){ return scopeRegistrations(state.registrations,state.contacts,viewer()); }
 function canEvents(){ return canManageEvents(state.role); }
+function canPay(){ return canHandlePayments(state.role); }
 // 報名名單：雲端由 event_roster view 決定範圍；展示版用同一規則（lib.rosterFor）。
 function roster(){ return live ? (state.roster||[]).map(r=>({...r,id:r.registration_id})) : rosterFor(state.registrations,state.contacts,viewer(),regionName); }
-const ADMIN_ONLY_ROUTES=["messages","governance","users","import","sponsors","applications","weekly"];
+const ADMIN_ONLY_ROUTES=["messages","governance","users","import","applications","weekly"];
+// 這個身分能不能進這一頁（側邊選單也照這個藏起來）
+function canOpen(route){
+  if(ADMIN_ONLY_ROUTES.includes(route)) return isAdmin();
+  if(route==="sponsors") return canManageMoney(state.role);
+  if(route==="contacts") return canBrowseMembers(state.role);
+  if(route==="checkin") return state.role!=="accountant";
+  return true;
+}
 // 學員看的頁面：不顯示後台選單，資料只走 LINE 身分。
 const STUDENT_ROUTES=["me","scan","signin","activate","apply"];
 // 學員前台只開放這些頁面，其他頁面一律轉到 /admin/
@@ -202,7 +211,7 @@ async function loadLiveData(){
     supabase.from("audit_log").select("created_at,action,target_type,target_id").order("created_at",{ascending:false}).limit(50)
   ]);
   const staff = profile.data?.role === "admin" ? await supabase.from("staff_profiles").select("user_id,display_name,role,region_id,active") : {data:[]};
-  const sponsorships = profile.data?.role === "admin" ? await supabase.from("sponsorships").select("*").order("created_at",{ascending:false}) : {data:[]};
+  const sponsorships = canManageMoney(profile.data?.role) ? await supabase.from("sponsorships").select("*").order("created_at",{ascending:false}) : {data:[]};
   const clickStats = profile.data?.role === "admin" ? await supabase.from("campaign_click_stats").select("*") : {data:[]};
   const applications = profile.data?.role === "admin" ? await supabase.from("student_applications").select("*").eq("status","pending").order("created_at") : {data:[]};
   state={role:profile.data?.role||"none",eventsLoaded:true,region_id:profile.data?.region_id||null,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],clickStats:clickStats.data||[],applications:applications.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:"工作人員",action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
@@ -214,7 +223,7 @@ function render(){
   const name=route();
   if(!IS_ADMIN&&!PUBLIC_ROUTES.includes(name)){ location.replace(ADMIN_HOME+location.hash); return; }
   if(IS_ADMIN&&(STUDENT_ROUTES.includes(name)||live&&name==="register"&&!STAFF_ROLES.includes(state.role))){ location.replace(publicUrl()); return; }
-  if(state.role!=="public"&&((ADMIN_ONLY_ROUTES.includes(name)&&!isAdmin())||(name==="contacts"&&!canBrowseMembers(state.role)))){ location.hash="dashboard"; return; }
+  if(state.role!=="public"&&!canOpen(name)){ location.hash="dashboard"; return; }
   // 雲端模式未登入（或帳號未開通）：只能看登入頁與學員頁，後台選單整個藏起來。
   // 未登入、設定密碼中、或是學員（public）：都不顯示工作人員選單；學員前台永遠不顯示
   const signedOut=!IS_ADMIN||live&&["none","setting-password","link-pending","public"].includes(state.role);
@@ -222,7 +231,7 @@ function render(){
   document.body.classList.toggle("signed-out",signedOut);
   document.body.classList.toggle("student-view",STUDENT_ROUTES.includes(name));
   const appLink=document.querySelector('.sidebar a[data-route="applications"]'); if(appLink) appLink.textContent=`待開通${(state.applications||[]).length?`（${state.applications.length}）`:""}`;
-  document.querySelectorAll(".sidebar a").forEach(a=>{ a.classList.toggle("active",a.dataset.route===name); if(!a.hasAttribute("data-demo-only"))a.hidden=(ADMIN_ONLY_ROUTES.includes(a.dataset.route)&&!isAdmin())||(a.dataset.route==="contacts"&&!canBrowseMembers(state.role)); });
+  document.querySelectorAll(".sidebar a").forEach(a=>{ a.classList.toggle("active",a.dataset.route===name); if(!a.hasAttribute("data-demo-only"))a.hidden=!canOpen(a.dataset.route); });
   // 學員從個人頁點「報名」進來時，報名頁還沒載入過活動資料：先去雲端抓再畫
   // 左上角：學員前台回活動清單，後台回總覽
   $(".brand").setAttribute("href",IS_ADMIN?"#dashboard":"#register");
@@ -246,14 +255,14 @@ function dashboard(){
   const regs=roster();
   const s=dashboardStats(state.events,regs,myContacts());
   const next=state.events.filter(e=>new Date(e.starts_at)>new Date()).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at))[0];
-  const scopeNote=isAdmin()?"把活動、參加者與後續關懷放在同一個地方。":state.role==="event_staff"?"活動幹部：負責活動建立、報名與報到；報名名單只顯示姓名、區域與手機後三碼。":`以下數字只計算${regionName(state.region_id)}的會員。`;
+  const scopeNote=isAdmin()?"把活動、參加者與後續關懷放在同一個地方。":state.role==="event_staff"?"活動幹部：負責活動建立、報名與報到；報名名單只顯示姓名、區域與手機後三碼。":state.role==="accountant"?"會計：登記活動／課程繳費、管理贊助紀錄；報名名單只顯示姓名、區域與手機後三碼。":`以下數字只計算${regionName(state.region_id)}的會員。`;
   const unassigned=isAdmin()?state.contacts.filter(c=>!c.region_id&&!c.anonymized_at).length:0;
   return `${pageHead("營運總覽",scopeNote)}
   <section class="stats">
     <div class="stat"><span>活動數</span><strong>${s.events}</strong></div><div class="stat"><span>有效報名</span><strong>${s.registrations}</strong></div>
     <div class="stat"><span>出席率</span><strong>${s.attendanceRate}%</strong></div><div class="stat"><span>取消率</span><strong>${s.cancellationRate}%</strong></div>${canBrowseMembers(state.role)?`<div class="stat"><span>會員</span><strong>${s.contacts}</strong></div>`:""}
   </section>
-  <section class="grid"><article class="card"><h2>下一場活動</h2>${next?`<h3>${escapeHtml(eventLabel(next))}</h3><p>${fmtDate(next.starts_at)}・${escapeHtml(next.location)}</p><div class="kpi-line"><span>報名</span><strong>${next.registration_count}/${next.capacity}</strong></div><div class="actions"><a class="button" href="#checkin?event=${next.id}">開啟報到</a><a class="button secondary" href="#register?event=${next.id}">查看報名頁</a></div>`:"<p class='muted'>目前沒有未來活動。</p>"}</article>
+  <section class="grid"><article class="card"><h2>下一場活動</h2>${next?`<h3>${escapeHtml(eventLabel(next))}</h3><p>${fmtDate(next.starts_at)}・${escapeHtml(next.location)}</p><div class="kpi-line"><span>報名</span><strong>${next.registration_count}/${next.capacity}</strong></div><div class="actions">${canOpen("checkin")?`<a class="button" href="#checkin?event=${next.id}">開啟報到</a>`:""}<a class="button secondary" href="#register?event=${next.id}">查看報名頁</a></div>`:"<p class='muted'>目前沒有未來活動。</p>"}</article>
   <article class="card"><h2>需要注意</h2><div class="kpi-line"><span>待繳費</span><strong>${regs.filter(r=>r.payment_status==="pending"&&!r.cancelled_at).length}</strong></div>${isAdmin()?`<div class="kpi-line"><span><a href="#applications">待開通學員</a></span><strong>${(state.applications||[]).length}</strong></div><div class="kpi-line"><span>待確認訊息</span><strong>${state.campaigns.filter(c=>c.status==="draft").length}</strong></div><div class="kpi-line"><span>尚未分區的會員</span><strong>${unassigned}</strong></div>`:""}${canBrowseMembers(state.role)?`<div class="kpi-line"><span>無法 LINE 聯絡</span><strong>${myContacts().filter(c=>!campaignEligible(c)).length}</strong></div>`:""}</article></section>`;
 }
 
@@ -313,7 +322,7 @@ function eventsPage(kind){
   if(kind==="event"&&query().get("kind")==="course"){ location.replace("#courses"); return ""; } // 舊書籤 #events?kind=course
   const K=KIND_LABELS[kind], home=KIND_ROUTES[kind], list=state.events.filter(e=>kindOf(e)===kind);
   const create=`<button class="secondary" data-action="export-pick" data-kind="${kind}">匯出</button>${canEvents()?`<button data-action="edit-event" data-kind="${kind}">＋ 建立${K}</button>`:""}`;
-  return `${pageHead(`${K}管理`,`建立${K}、查看報名進度並取得公開連結。`,create)}<div class="table-wrap"><table><thead><tr><th>${K}</th><th>日期</th><th>地點</th><th>報名</th><th>狀態</th><th>操作</th></tr></thead><tbody>${list.map(e=>`<tr><td><a href="#register?event=${e.id}" title="打開報名頁"><strong>${escapeHtml(eventLabel(e))}</strong></a><br><small>${escapeHtml(e.theme)}</small></td><td>${fmtDate(e.starts_at)}</td><td>${escapeHtml(e.location)}</td><td>${e.registration_count}/${e.capacity}</td><td><span class="pill">${eventState(e)}</span></td><td><a href="#roster?event=${e.id}">名單</a>　<a href="#checkin?event=${e.id}">報到</a>${canEvents()?`　<a href="#${home}" data-action="edit-event" data-id="${e.id}">編輯</a>　<a href="#${home}" class="danger-link" data-action="delete-event" data-id="${e.id}">刪除</a>`:""}</td></tr>`).join("")||`<tr><td colspan="6" class="empty">還沒有${K}</td></tr>`}</tbody></table></div>`;
+  return `${pageHead(`${K}管理`,`建立${K}、查看報名進度並取得公開連結。`,create)}<div class="table-wrap"><table><thead><tr><th>${K}</th><th>日期</th><th>地點</th><th>報名</th><th>狀態</th><th>操作</th></tr></thead><tbody>${list.map(e=>`<tr><td><a href="#register?event=${e.id}" title="打開報名頁"><strong>${escapeHtml(eventLabel(e))}</strong></a><br><small>${escapeHtml(e.theme)}</small></td><td>${fmtDate(e.starts_at)}</td><td>${escapeHtml(e.location)}</td><td>${e.registration_count}/${e.capacity}</td><td><span class="pill">${eventState(e)}</span></td><td><a href="#roster?event=${e.id}">名單</a>${canOpen("checkin")?`　<a href="#checkin?event=${e.id}">報到</a>`:""}${canEvents()?`　<a href="#${home}" data-action="edit-event" data-id="${e.id}">編輯</a>　<a href="#${home}" class="danger-link" data-action="delete-event" data-id="${e.id}">刪除</a>`:""}</td></tr>`).join("")||`<tr><td colspan="6" class="empty">還沒有${K}</td></tr>`}</tbody></table></div>`;
 }
 
 function regionOptions(selected,{withAll=false,withNone=false}={}){
@@ -338,7 +347,7 @@ const PAY_LABELS={pending:"未繳費",paid:"已繳費",free:"免費",refunded:"�
 const payLabel=r=>`<span class="pill${r.payment_status==="paid"||r.payment_status==="free"?"":" warn"}">${PAY_LABELS[r.payment_status]||"未繳費"}</span>`;
 // 名單裡按「繳費」：選已繳／未繳／免費，填繳費日期與收據／發票編號，儲存後回到名單（不提供一鍵切換，避免誤按）
 function regPayForm(regId,eventId){
-  const r=roster().find(x=>(x.registration_id||x.id)===regId); if(!r||!canEvents()) return;
+  const r=roster().find(x=>(x.registration_id||x.id)===regId); if(!r||!canPay()) return;
   const opt=(v,t)=>`<label><input type="radio" name="payment_status" value="${v}" ${(r.payment_status||"pending")===v?"checked":""}> ${t}</label>`;
   modal(`<h2>繳費紀錄</h2><p>${escapeHtml(r.name)} ${escapeHtml(r.member_no||"")}</p><form id="regPayForm"><input type="hidden" name="reg_id" value="${regId}"><input type="hidden" name="event_id" value="${eventId}"><div class="form-grid">
     <div class="field full"><label>繳費狀態</label><div class="actions">${opt("pending","未繳費")}${opt("paid","已繳費")}${opt("free","免費")}${opt("refunded","已退款")}</div></div>
@@ -351,7 +360,8 @@ function regPayForm(regId,eventId){
 async function saveRegPay(data){
   const status=PAY_LABELS[data.payment_status]?data.payment_status:"pending";
   const patch={payment_status:status,paid_at:status==="paid"?(data.paid_at||localToday()):(data.paid_at||null),receipt_no:(data.receipt_no||"").trim()||null,amount:data.amount===""||data.amount==null?null:Number(data.amount)};
-  if(live){ const {error}=await supabase.from("registrations").update(patch).eq("id",data.reg_id); if(error) return toast("儲存失敗："+error.message); await loadLiveData(); }
+  // 雲端走 set_registration_payment：只改繳費四欄，會計也能用（會計沒有改報名其他欄位的權限）
+  if(live){ const {error}=await supabase.rpc("set_registration_payment",{p_registration_id:data.reg_id,p_status:patch.payment_status,p_amount:patch.amount,p_paid_at:patch.paid_at,p_receipt_no:patch.receipt_no}); if(error) return toast("儲存失敗："+(error.message.includes("FORBIDDEN")?"你沒有登記繳費的權限":error.message)); await loadLiveData(); }
   else { const r=state.registrations.find(x=>x.id===data.reg_id); if(r){ Object.assign(r,patch); syncFeeDemo(r); tagPaidCourseDemo(r); } }
   audit("更新報名繳費",PAY_LABELS[status]); persist(); closeModal(); render(); toast("已儲存繳費紀錄");
 }
@@ -421,13 +431,13 @@ function rosterPage(){
   const count=k=>regs.filter(r=>rosterStatusOf(r)===k).length;
   const when=r=>r.cancelled_at?`取消 ${fmtDate(r.cancelled_at)}`:r.checked_in_at?`報到 ${fmtDate(r.checked_in_at)}`:r.registered_at?`報名 ${fmtDate(r.registered_at)}`:"";
   const sel=(id,value,opts)=>`<select id="${id}">${opts.map(([v,t])=>`<option value="${v}" ${v===value?"selected":""}>${t}</option>`).join("")}</select>`;
-  const actions=`<a class="button secondary" href="#${home}">回${K}管理</a><a class="button secondary" href="#checkin?event=${e.id}">到報到頁</a><button class="secondary" data-action="export-one" data-id="${e.id}">匯出 CSV</button>`;
+  const actions=`<a class="button secondary" href="#${home}">回${K}管理</a>${canOpen("checkin")?`<a class="button secondary" href="#checkin?event=${e.id}">到報到頁</a>`:""}<button class="secondary" data-action="export-one" data-id="${e.id}">匯出 CSV</button>`;
   const row=r=>{ const st=rosterStatusOf(r);
     return `<tr data-roster-row data-status="${st}" data-pay="${escapeHtml(r.payment_status||"pending")}" data-search="${escapeHtml([r.name,r.member_no,r.phone_last3,r.region_name].join(" ").toLowerCase())}">
       <td><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span></td><td>${escapeHtml(r.region_name||"未分區")}</td><td>${escapeHtml(r.phone_last3||"---")}</td>
       <td><span class="pill${st==="cancelled"?" off":""}">${ROSTER_STATUS[st]}</span>${r.source==="walk-in"?` <small class="muted">現場報名</small>`:""}<br><small class="muted">${when(r)}</small></td>
       ${free?"":`<td>${payLabel(r)}<br><small class="muted">${[r.amount!=null?`NT$${Number(r.amount).toLocaleString()}`:"",r.receipt_no?`收據／發票 ${escapeHtml(r.receipt_no)}`:"",r.paid_at?`${escapeHtml(r.paid_at)} 繳費`:""].filter(Boolean).join("・")}</small></td>
-      <td>${canEvents()&&!r.cancelled_at?`<button class="secondary small" data-action="reg-pay" data-id="${r.registration_id||r.id}" data-event="${id}">繳費</button>`:""}</td>`}</tr>`; };
+      <td>${canPay()&&!r.cancelled_at?`<button class="secondary small" data-action="reg-pay" data-id="${r.registration_id||r.id}" data-event="${id}">繳費</button>`:""}</td>`}</tr>`; };
   return `${pageHead(escapeHtml(eventLabel(e)),`${K}・${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・報名 ${count("attended")+count("waiting")}／${e.capacity}`,actions)}
     ${canEvents()?"":`<p class="muted">只顯示${escapeHtml(regionName(state.region_id))}的會員</p>`}
     <p>已報到 <strong>${count("attended")}</strong>・未報到 <strong>${count("waiting")}</strong>・已取消 <strong>${count("cancelled")}</strong>${free?"":`・已繳費 <strong>${regs.filter(r=>!r.cancelled_at&&r.payment_status==="paid").length}</strong>`}</p>
@@ -556,7 +566,11 @@ function governance(){
 
 function users(){
   if(!isAdmin())return `${pageHead("使用者","只有總管理可以管理帳號。")}<div class="notice">你沒有使用者管理權限。</div>`;
-  return `${pageHead("使用者管理","總管理看得到全部資料；活動幹部負責活動、報名與報到（只看報名名單）；區負責人只看得到指定區域的會員與報到。",`<button data-action="invite-user">＋ 邀請工作人員</button>`)}<div id="staffArea"><div class="empty">載入中…</div></div>`;
+  // 權限一覽：和 canOpen、lib 的 canManageEvents／canHandlePayments／canManageMoney、資料庫 RLS 一致
+  const y="✓", n="—";
+  const perms=[["活動／課程：建立、編輯、刪除",y,y,n,n],["報名名單（全部區域）",y,y,"只看自己區",y],["登記繳費、匯出名單",y,y,n,y],["現場報到",y,y,"只限自己區",n],["會員資料頁",y,n,"只看自己區",n],["贊助紀錄：新增、修改、標記已收",y,n,n,y],["贊助紀錄：刪除",y,n,n,n],["LINE 訊息、週報、匯入、資料治理、使用者",y,n,n,n],["完整手機、Email、地址",y,n,n,n]];
+  return `${pageHead("使用者管理","邀請工作人員並設定權限；下表是各權限能做的事。",`<button data-action="invite-user">＋ 邀請工作人員</button>`)}<div id="staffArea"><div class="empty">載入中…</div></div>
+    <h2 style="margin-top:22px">權限一覽</h2><div class="table-wrap"><table><thead><tr><th>功能</th>${["admin","event_staff","region_lead","accountant"].map(k=>`<th>${ROLE_LABELS[k]}</th>`).join("")}</tr></thead><tbody>${perms.map(([f,...v])=>`<tr><td>${f}</td>${v.map(x=>`<td>${x}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
 function register(){
@@ -580,7 +594,7 @@ function register(){
 
 // 報名頁右側：先用 LINE 確認身分。會員一鍵報名（不用再填資料）、已報名顯示狀態與取消；不是會員才顯示報名表。
 let regMember=null; // {eventId, status:"checking"|"member"|"guest", name, registered, regIds, loggedOut}
-const STAFF_ROLES=["admin","event_staff","region_lead"];
+const STAFF_ROLES=["admin","event_staff","region_lead","accountant"];
 // 同名多場次的勾選清單：已報名、截止或額滿的場次不能勾
 function sessionPicker(sessions,mine=new Set()){
   return `<div class="field full"><label>選擇場次 *（可複選）</label>${sessions.map(s=>{const st=eventState(s),done=mine.has(s.id);return `<label class="session-option"><input type="checkbox" name="session" value="${s.id}" ${st!=="報名中"||done?"disabled":""}><span>${s.session_name?`<strong>${escapeHtml(s.session_name)}</strong><br>`:""}${fmtDate(s.starts_at)}・${escapeHtml(s.location||"")}</span><small class="muted">${done?"已報名":st==="報名中"?`名額 ${s.registration_count}/${s.capacity}`:st}</small></label>`}).join("")}</div>`;
@@ -1286,7 +1300,7 @@ function sponsorBlock(contactId){
   return `<h3>贊助紀錄 <small class="muted">（只有總管理看得到）</small></h3>${list.length?`<ul class="plain">${list.map(s=>`<li>${escapeHtml(s.item)}・NT$${Number(s.amount).toLocaleString()}・${s.paid?`已收${s.paid_at?`（${s.paid_at}）`:""}`:"未收"}</li>`).join("")}</ul>`:`<p class="muted">尚無紀錄</p>`}<button class="secondary" data-action="new-sponsor" data-contact="${contactId}">＋ 新增贊助</button>`;
 }
 function sponsors(){
-  if(!isAdmin())return pageHead("贊助紀錄","只有總管理可以查看。");
+  if(!canManageMoney(state.role))return pageHead("贊助紀錄","只有總管理與會計可以查看。");
   const q=query(); const item=q.get("item")||""; const paid=q.get("paid")||"";
   const all=state.sponsorships||[]; const items=[...new Set(all.map(s=>s.item))].sort((a,b)=>b.localeCompare(a,"zh-Hant"));
   const list=all.filter(s=>(!item||s.item===item)&&(!paid||String(s.paid)===paid));
@@ -1295,11 +1309,11 @@ function sponsors(){
   const money=n=>`NT$${n.toLocaleString()}`;
   const totals=sponsorshipSummary(all).reduce((t,x)=>({count:t.count+x.count,total:t.total+x.total,paid:t.paid+x.paid,paidCount:t.paidCount+x.paidCount}),{count:0,total:0,paid:0,paidCount:0});
   const summary=sponsorshipSummary(all).map(s=>`<tr><td>${escapeHtml(s.item)}</td><td>${s.count}</td><td>NT$${s.total.toLocaleString()}</td><td>NT$${s.paid.toLocaleString()}（${s.paidCount} 筆）</td><td>NT$${(s.total-s.paid).toLocaleString()}</td></tr>`).join("");
-  return `${pageHead("贊助紀錄","與金錢有關的資料只有總管理看得到；活動幹部、區負責人與學員都看不到。",`<button data-action="new-sponsor">＋ 新增一筆</button><button class="secondary" data-action="batch-sponsor">批次建立</button><button class="secondary" data-action="export-sponsors">匯出 CSV</button>`)}
+  return `${pageHead("贊助紀錄","與金錢有關的資料只有總管理與會計看得到；活動幹部、區負責人與學員都看不到。刪除紀錄只有總管理可以。",`<button data-action="new-sponsor">＋ 新增一筆</button><button class="secondary" data-action="batch-sponsor">批次建立</button><button class="secondary" data-action="export-sponsors">匯出 CSV</button>`)}
     <h2>各項目統計</h2><div class="table-wrap"><table><thead><tr><th>項目</th><th>筆數</th><th>應收</th><th>已收</th><th>未收</th></tr></thead><tbody>${summary||`<tr><td colspan="5" class="empty">尚無資料</td></tr>`}</tbody>${all.length?`<tfoot><tr class="total-row"><td>合計</td><td>${totals.count}</td><td>${money(totals.total)}</td><td>${money(totals.paid)}（${totals.paidCount} 筆）</td><td>${money(totals.total-totals.paid)}</td></tr></tfoot>`:""}</table></div>
     <h2 style="margin-top:22px">明細</h2><div class="toolbar"><select id="sponsorItemFilter"><option value="">全部項目</option>${items.map(i=>`<option ${i===item?"selected":""}>${escapeHtml(i)}</option>`).join("")}</select><select id="sponsorPaidFilter"><option value="">已收＋未收</option><option value="true" ${paid==="true"?"selected":""}>已收</option><option value="false" ${paid==="false"?"selected":""}>未收</option></select></div>
     <div class="sum-bar"><span>${item?escapeHtml(item):"全部項目"}${paid==="true"?"・只看已收":paid==="false"?"・只看未收":""}</span><span>${sum.count} 筆</span><span>應收 <strong>${money(sum.total)}</strong></span><span>已收 <strong>${money(sum.paid)}</strong></span><span>未收 <strong>${money(sum.total-sum.paid)}</strong></span></div>
-    <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>會員</th><th>項目</th><th>金額</th><th>狀態</th><th>感謝狀／收據編號</th><th>備註</th><th></th></tr></thead><tbody>${list.map(s=>`<tr><td>${escapeHtml(sponsorLabel(s))}</td><td>${escapeHtml(s.item)}</td><td>NT$${Number(s.amount).toLocaleString()}</td><td>${s.paid?`<span class="pill">已收</span> <small>${escapeHtml(s.paid_at||"")}</small>`:`<span class="pill warn">未收</span>`}</td><td>${escapeHtml(s.receipt_no||"")}</td><td>${escapeHtml(s.note||"")}</td><td>${s.registration_id?`<small class="muted">活動報名費・到活動名單的「繳費」修改</small>`:`<div class="row-actions">${s.paid?"":`<button data-action="mark-paid" data-id="${s.id}">標記已收</button>`}<button class="secondary" data-action="edit-sponsor" data-id="${s.id}">修改</button><button class="danger" data-action="delete-sponsor" data-id="${s.id}">刪除</button></div>`}</td></tr>`).join("")||`<tr><td colspan="7" class="empty">沒有符合的紀錄</td></tr>`}</tbody>${list.length?`<tfoot><tr class="total-row"><td>合計（${sum.count} 筆）</td><td>${item?escapeHtml(item):"全部項目"}</td><td>應收 ${money(sum.total)}</td><td colspan="4">已收 ${money(sum.paid)}（${sum.paidCount} 筆）・未收 ${money(sum.total-sum.paid)}（${sum.count-sum.paidCount} 筆）</td></tr></tfoot>`:""}</table></div>`;
+    <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>會員</th><th>項目</th><th>金額</th><th>狀態</th><th>感謝狀／收據編號</th><th>備註</th><th></th></tr></thead><tbody>${list.map(s=>`<tr><td>${escapeHtml(sponsorLabel(s))}</td><td>${escapeHtml(s.item)}</td><td>NT$${Number(s.amount).toLocaleString()}</td><td>${s.paid?`<span class="pill">已收</span> <small>${escapeHtml(s.paid_at||"")}</small>`:`<span class="pill warn">未收</span>`}</td><td>${escapeHtml(s.receipt_no||"")}</td><td>${escapeHtml(s.note||"")}</td><td>${s.registration_id?`<small class="muted">活動報名費・到活動名單的「繳費」修改</small>`:`<div class="row-actions">${s.paid?"":`<button data-action="mark-paid" data-id="${s.id}">標記已收</button>`}<button class="secondary" data-action="edit-sponsor" data-id="${s.id}">修改</button>${isAdmin()?`<button class="danger" data-action="delete-sponsor" data-id="${s.id}">刪除</button>`:""}</div>`}</td></tr>`).join("")||`<tr><td colspan="7" class="empty">沒有符合的紀錄</td></tr>`}</tbody>${list.length?`<tfoot><tr class="total-row"><td>合計（${sum.count} 筆）</td><td>${item?escapeHtml(item):"全部項目"}</td><td>應收 ${money(sum.total)}</td><td colspan="4">已收 ${money(sum.paid)}（${sum.paidCount} 筆）・未收 ${money(sum.total-sum.paid)}（${sum.count-sum.paidCount} 筆）</td></tr></tfoot>`:""}</table></div>`;
 }
 // 會員欄位：直接打姓名、會員編號或手機末三碼，下拉清單會篩出符合的人（志工不用在長清單裡找）
 const memberLabel=c=>`${c.member_no||""} ${c.name}・${regionName(c.region_id)}・${String(c.phone||"").slice(-3)}`.trim();
@@ -1318,7 +1332,7 @@ function pickMember(q){
 }
 function itemDatalist(){ return `<datalist id="sponsorItems">${[...new Set((state.sponsorships||[]).map(s=>s.item))].map(i=>`<option value="${escapeHtml(i)}">`).join("")}</datalist>`; }
 function sponsorForm(contactId,editId){
-  if(!isAdmin())return;
+  if(!canManageMoney(state.role))return;
   const e=editId?(state.sponsorships||[]).find(x=>x.id===editId):null;
   modal(`<h2>${e?"修改":"新增"}贊助紀錄</h2><form id="sponsorForm">${e?`<input type="hidden" name="sponsor_id" value="${e.id}">`:""}<div class="form-grid">
     ${e&&!e.contact_id?`<div class="field full"><label>會員</label><p>${escapeHtml(sponsorLabel(e))}</p></div>`:memberPicker(e?e.contact_id:contactId)}
@@ -1331,7 +1345,7 @@ function sponsorForm(contactId,editId){
     <button class="field full">儲存</button></div></form>`);
 }
 function batchSponsorForm(){
-  if(!isAdmin())return;
+  if(!canManageMoney(state.role))return;
   modal(`<h2>批次建立贊助紀錄</h2><p class="muted">例如每年清明，替指定區域的每位會員各建一筆「未收」，收到款後再逐筆標記已收。已經有同一項目的會員會略過。</p><form id="batchSponsorForm"><div class="form-grid">
     <div class="field"><label>項目 *</label><input name="item" required maxlength="60" list="sponsorItems" placeholder="例如：2026 清明">${itemDatalist()}</div>
     <div class="field"><label>每人金額（元）*</label><input name="amount" type="number" min="0" max="10000000" required value="200"></div>
@@ -1366,14 +1380,14 @@ async function saveBatchSponsor(data){
 }
 // 標記已收：先開小視窗填收款日期與感謝狀／收據編號，按確認才改。改回未收只能從「修改」刻意取消勾選，避免誤按。
 function markPaidForm(id){
-  const s=(state.sponsorships||[]).find(x=>x.id===id); if(!s||!isAdmin())return;
+  const s=(state.sponsorships||[]).find(x=>x.id===id); if(!s||!canManageMoney(state.role))return;
   modal(`<h2>標記已收</h2><p>${escapeHtml(sponsorLabel(s))}・${escapeHtml(s.item)}・NT$${Number(s.amount||0).toLocaleString()}</p><form id="markPaidForm"><input type="hidden" name="sponsor_id" value="${s.id}"><div class="form-grid">
     <div class="field"><label>收款日期 *</label><input name="paid_at" type="date" required value="${localToday()}"></div>
     <div class="field"><label>感謝狀／收據編號</label><input name="receipt_no" maxlength="40" autocomplete="off" value="${escapeHtml(s.receipt_no||"")}"></div>
     <button class="field full">確認已收款</button></div></form>`);
 }
 async function togglePaid(id,{paid_at,receipt_no}={}){
-  const s=(state.sponsorships||[]).find(x=>x.id===id); if(!s||!isAdmin()||s.paid)return;
+  const s=(state.sponsorships||[]).find(x=>x.id===id); if(!s||!canManageMoney(state.role)||s.paid)return;
   const next={paid:true,paid_at:paid_at||localToday(),receipt_no:(receipt_no||"").trim()||s.receipt_no||null};
   if(live){ const {error}=await supabase.from("sponsorships").update(next).eq("id",id); if(error)return toast("更新失敗："+error.message); }
   Object.assign(s,next); audit("贊助標記已收",`${sponsorLabel(s)} ${s.item}`); persist(); closeModal(); render(); toast("已標記已收");
@@ -1415,7 +1429,7 @@ async function onClick(event){
   if(action==="copy-link"){ const el=$("#linkText"); el.select(); try{ await navigator.clipboard.writeText(el.value); toast("已複製"); }catch{ document.execCommand("copy"); toast("已複製"); } return; }
   if(action==="staff-edit") return staffEditForm(btn.dataset.id);
   if(action==="staff-reset"){ const s=(state.staffList||[]).find(x=>x.user_id===btn.dataset.id); const res=s?.invited_pending?await callStaff("invite",{email:s.email,display_name:s.display_name,role:s.role,region_id:s.region_id}):await callStaff("reset",{user_id:btn.dataset.id}); if(res.error&&s?.invited_pending){ const again=await callStaff("reset",{user_id:btn.dataset.id}); if(again.error) return toast(again.error); return showLinkModal("邀請連結（重新產生）",again.email,again.link); } if(res.error) return toast(res.error); return showLinkModal(s?.invited_pending?"邀請連結（重新產生）":"重設密碼連結",res.email,res.link); }
-  if(action==="invite-user") return modal(`<h2>邀請工作人員</h2><p class="muted">建立後會產生一條邀請連結，請用 LINE 傳給對方；對方點開自己設定密碼。</p><form id="inviteForm"><div class="field"><label>Email</label><input name="email" type="email" required></div><div class="field"><label>顯示名稱</label><input name="display_name" required></div><div class="field"><label>權限</label><select name="role"><option value="region_lead">區負責人</option><option value="event_staff">活動幹部</option><option value="admin">總管理</option></select></div><div class="field"><label>負責區域（區負責人必填）</label><select name="region_id">${regionOptions(null)}</select></div><button style="margin-top:12px">建立並產生邀請連結</button></form>`);
+  if(action==="invite-user") return modal(`<h2>邀請工作人員</h2><p class="muted">建立後會產生一條邀請連結，請用 LINE 傳給對方；對方點開自己設定密碼。</p><form id="inviteForm"><div class="field"><label>Email</label><input name="email" type="email" required></div><div class="field"><label>顯示名稱</label><input name="display_name" required></div><div class="field"><label>權限</label><select name="role"><option value="region_lead">區負責人</option><option value="event_staff">活動幹部</option><option value="accountant">會計</option><option value="admin">總管理</option></select></div><div class="field"><label>負責區域（區負責人必填）</label><select name="region_id">${regionOptions(null)}</select></div><button style="margin-top:12px">建立並產生邀請連結</button></form>`);
   if(action==="view-contact") return viewContact(btn.dataset.id);
   if(action==="delete-contact") return deleteContactForm(btn.dataset.id);
   if(action==="delete-event"){ event.preventDefault(); return deleteEventForm(btn.dataset.id); }

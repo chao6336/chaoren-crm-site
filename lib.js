@@ -1,4 +1,17 @@
-export const ROLE_LABELS = { admin: "總管理", event_staff: "活動幹部", region_lead: "區負責人" };
+export const ROLE_LABELS = { admin: "總管理", event_staff: "活動幹部", region_lead: "區負責人", accountant: "會計" };
+
+// 會計：管錢的事。看全部活動／課程的報名名單（姓名、區域、手機後三碼）、登記繳費、匯出名單、
+// 管贊助紀錄（新增、修改、標記已收；刪除只有總管理）。不能建立／編輯活動、報到、看會員資料頁或完整個資。
+export function canHandlePayments(role) {
+  return role === "admin" || role === "event_staff" || role === "accountant";
+}
+export function canManageMoney(role) {
+  return role === "admin" || role === "accountant";
+}
+// 看全部區域的報名名單
+export function canSeeAllRosters(role) {
+  return canManageEvents(role) || role === "accountant";
+}
 
 // 建立／編輯活動、產報到 QR、處理報名與報到。
 export function canManageEvents(role) {
@@ -146,10 +159,10 @@ export function scopeContacts(contacts, viewer) {
   return contacts.filter(contact => canSeeContact(contact, viewer));
 }
 
-// 報名名單（報到用）：總管理與活動幹部看全部；區負責人只看自己區。只帶報到需要的最少欄位。
+// 報名名單（報到用）：總管理、活動幹部與會計看全部；區負責人只看自己區。只帶報到需要的最少欄位。
 export function rosterFor(registrations, contacts, viewer, regionName = () => "") {
   const byId = new Map(contacts.map(c => [c.id, c]));
-  const list = canManageEvents(viewer.role) ? registrations : scopeRegistrations(registrations, contacts, viewer);
+  const list = canSeeAllRosters(viewer.role) ? registrations : scopeRegistrations(registrations, contacts, viewer);
   return list.map(r => {
     const c = byId.get(r.contact_id) || {};
     return { ...r, member_no: c.member_no || "", name: c.name || "未知", region_id: c.region_id || null, region_name: c.region_id ? regionName(c.region_id) : "未分區", phone_last3: String(c.phone || "").slice(-3) };
