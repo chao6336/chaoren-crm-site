@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE } from "./lib.js?v=20261026-8";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, feeAmount, isFreeEvent, courseTagsAfterPayment } from "./lib.js?v=20261029-6";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -230,9 +230,10 @@ function render(){
   if($("#homeBtn")) $("#homeBtn").hidden=name==="register"&&!query().get("event");
   // 工作人員已有完整活動資料，不能被公開活動資料蓋掉
   if(live&&name==="register"&&!state.eventsLoaded&&!STAFF_ROLES.includes(state.role)){ $("#app").innerHTML="<div class='empty'>載入活動中…</div>"; loadPublicEvent().then(render); return; }
-  const views={dashboard,events,contacts,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors,weekly,"set-password":setPassword,signin,activate,apply,applications};
+  const views={dashboard,events,courses,roster:rosterPage,contacts,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors,weekly,"set-password":setPassword,signin,activate,apply,applications};
   $("#app").innerHTML=(views[name]||dashboard)();
   if(name==="me")loadMe();
+  if(name==="roster"){ filterRoster(); const k=kindOf(state.events.find(e=>e.id===query().get("event"))); document.querySelector(`.sidebar a[data-route="${KIND_ROUTES[k]}"]`)?.classList.add("active"); }
   if(name==="users")loadStaffList();
   if(name==="scan")runScan();
   if(name==="activate")loadActivate();
@@ -305,11 +306,14 @@ function copyWeekly(){
     ...(r.best.event?[`【報名最多】${r.best.event.name}（${r.best.event.count} 人）`]:[])].join("\n");
   navigator.clipboard.writeText(text).then(()=>toast("已複製，可以貼到 LINE 群組"),()=>{ modal(`<h2>週報摘要</h2><textarea style="width:100%;min-height:200px">${escapeHtml(text)}</textarea>`); });
 }
-function events(){
-  const create=canEvents()?`<button data-action="edit-event">＋ 建立活動</button><button data-action="edit-event" data-kind="course">＋ 建立課程</button>`:"";
-  const kind=query().get("kind")||""; const list=state.events.filter(e=>!kind||kindOf(e)===kind);
-  const tab=(k,t)=>`<a class="button ${kind===k?"":"secondary"} small" href="#events${k?`?kind=${k}`:""}">${t}（${k?state.events.filter(e=>kindOf(e)===k).length:state.events.length}）</a>`;
-  return `${pageHead("活動管理","建立活動或課程、查看報名進度並取得公開連結。",create)}<div class="toolbar">${tab("","全部")}${tab("event","活動")}${tab("course","課程")}</div><div class="table-wrap"><table><thead><tr><th>活動／課程</th><th>日期</th><th>地點</th><th>報名</th><th>狀態</th><th>操作</th></tr></thead><tbody>${list.map(e=>`<tr><td>${kindOf(e)==="course"?`<span class="pill">課程</span> `:""}<strong>${escapeHtml(eventLabel(e))}</strong><br><small>${escapeHtml(e.theme)}</small></td><td>${fmtDate(e.starts_at)}</td><td>${escapeHtml(e.location)}</td><td>${e.registration_count}/${e.capacity}</td><td><span class="pill">${eventState(e)}</span></td><td><a href="#events" data-action="event-roster" data-id="${e.id}">名單</a>　<a href="#events" data-action="export-roster" data-id="${e.id}">匯出</a>　<a href="#register?event=${e.id}">報名頁</a>　<a href="#checkin?event=${e.id}">報到</a>${canEvents()?`　<a href="#events" data-action="edit-event" data-id="${e.id}">編輯</a>　<a href="#events" class="danger-link" data-action="delete-event" data-id="${e.id}">刪除</a>`:""}</td></tr>`).join("")||`<tr><td colspan="6" class="empty">還沒有${kind?KIND_LABELS[kind]:"活動或課程"}</td></tr>`}</tbody></table></div>`;
+// 活動管理（#events）和課程管理（#courses）分兩頁，各自只列、只建立自己這一類
+const KIND_ROUTES={event:"events",course:"courses"};
+const events=()=>eventsPage("event"), courses=()=>eventsPage("course");
+function eventsPage(kind){
+  if(kind==="event"&&query().get("kind")==="course"){ location.replace("#courses"); return ""; } // 舊書籤 #events?kind=course
+  const K=KIND_LABELS[kind], home=KIND_ROUTES[kind], list=state.events.filter(e=>kindOf(e)===kind);
+  const create=`<button class="secondary" data-action="export-pick" data-kind="${kind}">匯出</button>${canEvents()?`<button data-action="edit-event" data-kind="${kind}">＋ 建立${K}</button>`:""}`;
+  return `${pageHead(`${K}管理`,`建立${K}、查看報名進度並取得公開連結。`,create)}<div class="table-wrap"><table><thead><tr><th>${K}</th><th>日期</th><th>地點</th><th>報名</th><th>狀態</th><th>操作</th></tr></thead><tbody>${list.map(e=>`<tr><td><a href="#register?event=${e.id}" title="打開報名頁"><strong>${escapeHtml(eventLabel(e))}</strong></a><br><small>${escapeHtml(e.theme)}</small></td><td>${fmtDate(e.starts_at)}</td><td>${escapeHtml(e.location)}</td><td>${e.registration_count}/${e.capacity}</td><td><span class="pill">${eventState(e)}</span></td><td><a href="#roster?event=${e.id}">名單</a>　<a href="#checkin?event=${e.id}">報到</a>${canEvents()?`　<a href="#${home}" data-action="edit-event" data-id="${e.id}">編輯</a>　<a href="#${home}" class="danger-link" data-action="delete-event" data-id="${e.id}">刪除</a>`:""}</td></tr>`).join("")||`<tr><td colspan="6" class="empty">還沒有${K}</td></tr>`}</tbody></table></div>`;
 }
 
 function regionOptions(selected,{withAll=false,withNone=false}={}){
@@ -344,14 +348,18 @@ function regPayForm(regId,eventId){
     <p class="field full muted">有填金額時，未繳費／已繳費會同步到「贊助紀錄」（項目＝活動名稱），一起算進應收、已收、未收；免費、已退款或金額空白則不列入。</p>
     <button class="field full">儲存</button></div></form>`);
 }
-// 從費用說明抓金額當預設值（例如「體驗活動 NT$300」→ 300；「免費」→ 空白）
-const feeAmount=e=>{ const m=String(e?.fee_note||"").replace(/,/g,"").match(/\d+/); return m?Number(m[0]):null; };
 async function saveRegPay(data){
   const status=PAY_LABELS[data.payment_status]?data.payment_status:"pending";
   const patch={payment_status:status,paid_at:status==="paid"?(data.paid_at||localToday()):(data.paid_at||null),receipt_no:(data.receipt_no||"").trim()||null,amount:data.amount===""||data.amount==null?null:Number(data.amount)};
   if(live){ const {error}=await supabase.from("registrations").update(patch).eq("id",data.reg_id); if(error) return toast("儲存失敗："+error.message); await loadLiveData(); }
-  else { const r=state.registrations.find(x=>x.id===data.reg_id); if(r){ Object.assign(r,patch); syncFeeDemo(r); } }
-  audit("更新報名繳費",PAY_LABELS[status]); persist(); eventRoster(data.event_id); toast("已儲存繳費紀錄");
+  else { const r=state.registrations.find(x=>x.id===data.reg_id); if(r){ Object.assign(r,patch); syncFeeDemo(r); tagPaidCourseDemo(r); } }
+  audit("更新報名繳費",PAY_LABELS[status]); persist(); closeModal(); render(); toast("已儲存繳費紀錄");
+}
+// 展示版模擬資料庫觸發器：課程已繳費就貼「課程名稱 已繳費」標籤（正式站由 tag_paid_course 處理）
+function tagPaidCourseDemo(r){
+  const e=state.events.find(x=>x.id===r.event_id), c=state.contacts.find(x=>x.id===r.contact_id); if(!e||!c||kindOf(e)!=="course") return;
+  const others=state.registrations.filter(x=>x.contact_id===r.contact_id&&x.id!==r.id&&x.payment_status==="paid"&&!x.cancelled_at).map(x=>state.events.find(ev=>ev.id===x.event_id)).filter(ev=>kindOf(ev)==="course").map(ev=>ev.title);
+  c.tags=courseTagsAfterPayment(c.tags||[],e.title,r.payment_status==="paid"&&!r.cancelled_at,others);
 }
 // 展示版模擬資料庫觸發器：報名費同步到贊助紀錄（正式站由 sync_registration_fee 處理）
 function syncFeeDemo(r){
@@ -362,33 +370,75 @@ function syncFeeDemo(r){
     if(i>=0) Object.assign(list[i],row); else list.unshift({id:crypto.randomUUID(),note:"活動報名費",...row});
   } else if(i>=0) list.splice(i,1);
 }
-function exportRoster(id){
-  const e=state.events.find(x=>x.id===id); if(!e) return;
-  const status={attended:"已報到",registered:"已報名",cancelled:"已取消",absent:"未出席"};
-  const regs=roster().filter(r=>r.event_id===id).sort((a,b)=>String(a.registered_at||"").localeCompare(String(b.registered_at||"")));
-  if(!regs.length) return toast("這場活動還沒有人報名");
-  const rows=regs.map(r=>{ const c=state.contacts.find(x=>x.id===r.contact_id)||{};
-    return {member_no:r.member_no||c.member_no||"",name:r.name||c.name||"",gender:c.gender||"",region:r.region_name||regionName(c.region_id),city:c.residence_city||"",
-      phone:isAdmin()&&c.phone?displayPhone(c.phone):(r.phone_last3?`***${r.phone_last3}`:""),email:isAdmin()?(c.email||""):"",
-      status:r.cancelled_at?"已取消":status[r.attendance_status]||r.attendance_status||"",pay:PAY_LABELS[r.payment_status]||"未繳費",amount:r.amount??"",paid_at:r.paid_at||"",receipt_no:r.receipt_no||"",registered_at:r.registered_at?fmtDate(r.registered_at):"",checked_in_at:r.checked_in_at?fmtDate(r.checked_in_at):""}; });
-  const cols=[["會員編號","member_no"],["姓名","name"],["性別","gender"],["區域","region"],["居住縣市","city"],["手機","phone"],...(isAdmin()?[["Email","email"]]:[]),["狀態","status"],["繳費","pay"],["金額","amount"],["繳費日期","paid_at"],["收據／發票編號","receipt_no"],["報名時間","registered_at"],["報到時間","checked_in_at"]];
-  const day=String(e.starts_at||"").slice(0,10);
-  download(`報名名單_${eventLabel(e).replace(/[\/:*?"<>|]/g,"_")}_${day}.csv`,rowsToCsv(rows,cols),"text/csv;charset=utf-8");
+// 活動／課程管理右上角「匯出」：只列這一頁的類別，勾選一或多場（可依狀態、關鍵字篩選），合併成一個 CSV；多場時每列前面加名稱與日期
+function exportPicker(kind){
+  const K=KIND_LABELS[kind]||"活動", mine=state.events.filter(e=>kindOf(e)===kind);
+  const states=[...new Set(mine.map(e=>eventState(e)))];
+  const sel=(id,opts)=>`<select id="${id}">${opts.map(([v,t])=>`<option value="${v}">${t}</option>`).join("")}</select>`;
+  const rows=[...mine].sort((a,b)=>String(a.starts_at||"").localeCompare(String(b.starts_at||""))).map(e=>{
+    const n=roster().filter(r=>r.event_id===e.id).length;
+    return `<li class="student-item" data-export-row data-state="${escapeHtml(eventState(e))}" data-search="${escapeHtml(`${eventLabel(e)} ${e.location||""}`.toLowerCase())}"><label><input type="checkbox" name="export_event" value="${e.id}" ${n?"":"disabled"}> <strong>${escapeHtml(eventLabel(e))}</strong><small>${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・${eventState(e)}・${n?`${n} 筆報名`:"沒有報名"}</small></label></li>`;
+  }).join("");
+  modal(`<h2>匯出${K}報名名單</h2><p class="muted">勾選要匯出的${K}，可複選；多場會合併成一個 CSV。</p>
+    <div class="toolbar">${sel("exportState",[["","全部狀態"],...states.map(s=>[escapeHtml(s),escapeHtml(s)])])}<input id="exportSearch" placeholder="搜尋名稱或地點" autocomplete="off"></div>
+    <div class="actions"><button class="secondary small" data-action="export-all">全選篩選結果</button><button class="secondary small" data-action="export-none">全部取消</button><span class="muted" id="exportCount"></span></div>
+    <ul class="student-list" id="exportList">${rows||`<li class="muted">還沒有${K}</li>`}</ul>
+    <div class="actions"><button data-action="export-selected">匯出 CSV</button><button class="secondary" data-action="close-modal">關閉</button></div>`);
+  filterExportList();
 }
-function eventRoster(id){
-  const e=state.events.find(x=>x.id===id); if(!e)return;
-  const regs=roster().filter(r=>r.event_id===id);
-  const attended=regs.filter(r=>!r.cancelled_at&&r.attendance_status==="attended");
-  const waiting=regs.filter(r=>!r.cancelled_at&&r.attendance_status!=="attended");
-  const cancelled=regs.filter(r=>r.cancelled_at);
-  const item=(r,when)=>`<li class="student-item"><div><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span><small>${escapeHtml(r.region_name||"未分區")}・手機末三碼 ${escapeHtml(r.phone_last3||"---")}${r.source==="walk-in"?"・現場報名":""}${when?`・${when}`:""}</small><small>${payLabel(r)}${r.amount!=null?`・NT$${Number(r.amount).toLocaleString()}`:""}${r.receipt_no?`・收據／發票 ${escapeHtml(r.receipt_no)}`:""}${r.paid_at?`・${escapeHtml(r.paid_at)} 繳費`:""}</small></div>${canEvents()&&!r.cancelled_at?`<button class="secondary small" data-action="reg-pay" data-id="${r.registration_id||r.id}" data-event="${id}">繳費</button>`:""}</li>`;
-  const list=(title,rows,when)=>`<h3>${title}（${rows.length}）</h3>${rows.length?`<ul class="student-list">${rows.map(r=>item(r,when(r))).join("")}</ul>`:`<p class="muted">沒有</p>`}`;
-  const scope=canEvents()?"":`<p class="muted">只顯示${escapeHtml(regionName(state.region_id))}的會員</p>`;
-  modal(`<h2>${escapeHtml(eventLabel(e))}</h2><p class="muted">${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・報名 ${attended.length+waiting.length}／${e.capacity}</p>${scope}
-    ${list("已報到",attended,r=>r.checked_in_at?`報到 ${fmtDate(r.checked_in_at)}`:"")}
-    ${list("已報名、未報到",waiting,r=>r.registered_at?`報名 ${fmtDate(r.registered_at)}`:"")}
-    ${cancelled.length?list("已取消",cancelled,r=>r.cancelled_at?`取消 ${fmtDate(r.cancelled_at)}`:""):""}
-    <div class="actions" style="margin-top:14px"><a class="button" href="#checkin?event=${e.id}" data-action="close-modal">到報到頁</a><button type="button" class="secondary" data-action="close-modal">關閉</button></div>`);
+function filterExportList(){
+  const st=$("#exportState")?.value||"", q=($("#exportSearch")?.value||"").toLowerCase().trim();
+  document.querySelectorAll("[data-export-row]").forEach(li=>li.hidden=(st&&li.dataset.state!==st)||(q&&!li.dataset.search.includes(q)));
+  updateExportCount();
+}
+const exportChecked=()=>[...document.querySelectorAll('[data-export-row]:not([hidden]) input[name="export_event"]:checked')].map(x=>x.value);
+function updateExportCount(){ const el=$("#exportCount"); if(el) el.textContent=`已選 ${exportChecked().length} 場`; }
+function exportRoster(ids){
+  const list=ids.map(id=>state.events.find(x=>x.id===id)).filter(Boolean); if(!list.length) return toast("請至少勾選一場");
+  const multi=list.length>1;
+  const status={attended:"已報到",registered:"已報名",cancelled:"已取消",absent:"未出席"};
+  const rows=list.flatMap(e=>roster().filter(r=>r.event_id===e.id).sort((a,b)=>String(a.registered_at||"").localeCompare(String(b.registered_at||""))).map(r=>{ const c=state.contacts.find(x=>x.id===r.contact_id)||{}, free=isFreeEvent(e);
+    return {event:eventLabel(e),event_date:e.starts_at?fmtDate(e.starts_at):"",member_no:r.member_no||c.member_no||"",name:r.name||c.name||"",gender:c.gender||"",region:r.region_name||regionName(c.region_id),city:c.residence_city||"",
+      phone:isAdmin()&&c.phone?displayPhone(c.phone):(r.phone_last3?`***${r.phone_last3}`:""),email:isAdmin()?(c.email||""):"",
+      status:r.cancelled_at?"已取消":status[r.attendance_status]||r.attendance_status||"",pay:free?"免費":PAY_LABELS[r.payment_status]||"未繳費",amount:free?"":r.amount??"",paid_at:free?"":r.paid_at||"",receipt_no:free?"":r.receipt_no||"",registered_at:r.registered_at?fmtDate(r.registered_at):"",checked_in_at:r.checked_in_at?fmtDate(r.checked_in_at):""}; }));
+  if(!rows.length) return toast(multi?"勾選的場次都還沒有人報名":"這場活動還沒有人報名");
+  const cols=[...(multi?[["活動／課程","event"],["活動日期","event_date"]]:[]),["會員編號","member_no"],["姓名","name"],["性別","gender"],["區域","region"],["居住縣市","city"],["手機","phone"],...(isAdmin()?[["Email","email"]]:[]),["狀態","status"],...(list.every(isFreeEvent)?[]:[["繳費","pay"],["金額","amount"],["繳費日期","paid_at"],["收據／發票編號","receipt_no"]]),["報名時間","registered_at"],["報到時間","checked_in_at"]];
+  const name=multi?`報名名單_${list.length}場_${localToday()}.csv`:`報名名單_${eventLabel(list[0]).replace(/[\/:*?"<>|]/g,"_")}_${String(list[0].starts_at||"").slice(0,10)}.csv`;
+  download(name,rowsToCsv(rows,cols),"text/csv;charset=utf-8"); toast(`已匯出 ${rows.length} 筆`);
+}
+// 名單頁（#roster?event=…）：一場可能有 100～500 人，所以做成整頁表格，可打姓名／會員編號／手機末三碼搜尋，
+// 並依報到狀態、繳費狀態篩選；篩選條件記在 rosterView，存完繳費重畫頁面時還在。範圍和報到頁一樣（區負責人只看自己區域）
+let rosterView={event:null,q:"",status:"",pay:""};
+const ROSTER_STATUS={attended:"已報到",waiting:"已報名、未報到",cancelled:"已取消"};
+const rosterStatusOf=r=>r.cancelled_at?"cancelled":r.attendance_status==="attended"?"attended":"waiting";
+function rosterPage(){
+  const id=query().get("event"), e=state.events.find(x=>x.id===id);
+  if(!e) return `${pageHead("報名名單","找不到這場活動，可能已刪除。",`<a class="button secondary" href="#events">回活動管理</a>`)}`;
+  if(rosterView.event!==id) rosterView={event:id,q:"",status:"",pay:""};
+  const K=KIND_LABELS[kindOf(e)], home=KIND_ROUTES[kindOf(e)], free=isFreeEvent(e); // 免費活動／課程不顯示繳費
+  const order={attended:0,waiting:1,cancelled:2};
+  const regs=roster().filter(r=>r.event_id===id).sort((a,b)=>order[rosterStatusOf(a)]-order[rosterStatusOf(b)]||String(a.registered_at||"").localeCompare(String(b.registered_at||"")));
+  const count=k=>regs.filter(r=>rosterStatusOf(r)===k).length;
+  const when=r=>r.cancelled_at?`取消 ${fmtDate(r.cancelled_at)}`:r.checked_in_at?`報到 ${fmtDate(r.checked_in_at)}`:r.registered_at?`報名 ${fmtDate(r.registered_at)}`:"";
+  const sel=(id,value,opts)=>`<select id="${id}">${opts.map(([v,t])=>`<option value="${v}" ${v===value?"selected":""}>${t}</option>`).join("")}</select>`;
+  const actions=`<a class="button secondary" href="#${home}">回${K}管理</a><a class="button secondary" href="#checkin?event=${e.id}">到報到頁</a><button class="secondary" data-action="export-one" data-id="${e.id}">匯出 CSV</button>`;
+  const row=r=>{ const st=rosterStatusOf(r);
+    return `<tr data-roster-row data-status="${st}" data-pay="${escapeHtml(r.payment_status||"pending")}" data-search="${escapeHtml([r.name,r.member_no,r.phone_last3,r.region_name].join(" ").toLowerCase())}">
+      <td><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span></td><td>${escapeHtml(r.region_name||"未分區")}</td><td>${escapeHtml(r.phone_last3||"---")}</td>
+      <td><span class="pill${st==="cancelled"?" off":""}">${ROSTER_STATUS[st]}</span>${r.source==="walk-in"?` <small class="muted">現場報名</small>`:""}<br><small class="muted">${when(r)}</small></td>
+      ${free?"":`<td>${payLabel(r)}<br><small class="muted">${[r.amount!=null?`NT$${Number(r.amount).toLocaleString()}`:"",r.receipt_no?`收據／發票 ${escapeHtml(r.receipt_no)}`:"",r.paid_at?`${escapeHtml(r.paid_at)} 繳費`:""].filter(Boolean).join("・")}</small></td>
+      <td>${canEvents()&&!r.cancelled_at?`<button class="secondary small" data-action="reg-pay" data-id="${r.registration_id||r.id}" data-event="${id}">繳費</button>`:""}</td>`}</tr>`; };
+  return `${pageHead(escapeHtml(eventLabel(e)),`${K}・${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・報名 ${count("attended")+count("waiting")}／${e.capacity}`,actions)}
+    ${canEvents()?"":`<p class="muted">只顯示${escapeHtml(regionName(state.region_id))}的會員</p>`}
+    <p>已報到 <strong>${count("attended")}</strong>・未報到 <strong>${count("waiting")}</strong>・已取消 <strong>${count("cancelled")}</strong>${free?"":`・已繳費 <strong>${regs.filter(r=>!r.cancelled_at&&r.payment_status==="paid").length}</strong>`}</p>
+    <div class="toolbar" style="margin-bottom:14px"><input id="rosterSearch" class="search" type="search" placeholder="輸入姓名、會員編號或手機末三碼" value="${escapeHtml(rosterView.q)}" autocomplete="off">
+      ${sel("rosterStatus",rosterView.status,[["","全部狀態"],...Object.entries(ROSTER_STATUS)])}${free?"":sel("rosterPay",rosterView.pay,[["","全部繳費狀態"],...Object.entries(PAY_LABELS)])}<span class="muted" id="rosterShown"></span></div>
+    <div class="table-wrap"><table><thead><tr><th>姓名</th><th>區域</th><th>手機末三碼</th><th>狀態</th>${free?"":"<th>繳費</th><th></th>"}</tr></thead><tbody>${regs.map(row).join("")||`<tr><td colspan="6" class="empty">還沒有人報名</td></tr>`}</tbody></table></div>`;
+}
+function filterRoster(){
+  const q=rosterView.q.toLowerCase().trim(); let shown=0;
+  document.querySelectorAll("[data-roster-row]").forEach(tr=>{ tr.hidden=(q&&!tr.dataset.search.includes(q))||(rosterView.status&&tr.dataset.status!==rosterView.status)||(rosterView.pay&&tr.dataset.pay!==rosterView.pay); if(!tr.hidden) shown++; });
+  const el=$("#rosterShown"); if(el) el.textContent=`顯示 ${shown}／${document.querySelectorAll("[data-roster-row]").length} 人`;
 }
 function contactRows(rows){ return rows.map(c=>`<tr class="clickable" data-action="view-contact" data-id="${c.id}" data-search="${escapeHtml([c.member_no,c.name,c.display_name,...(c.tags||[])].join(" ").toLowerCase())}"><td class="member-no">${escapeHtml(c.member_no||"")}</td><td><strong>${escapeHtml(c.name)}</strong><br><small>${escapeHtml(c.display_name)}</small></td><td>${escapeHtml(c.gender||"—")}／${c.age??"—"}</td><td>${escapeHtml(c.region_name||regionName(c.region_id))}</td><td>${escapeHtml(showPhone(c.phone))}</td><td>${tagPills(c.tags)}</td><td><span class="pill ${c.line_status!=="active"?"off":""}">${({active:"可聯絡",blocked:"已封鎖"})[c.line_status]||"未綁定"}</span></td></tr>`).join(""); }
 
@@ -1117,7 +1167,7 @@ async function deleteEvent(data){
     if(state.checkin_codes) delete state.checkin_codes[e.id];
     state.events=state.events.filter(x=>x.id!==e.id);
   }
-  audit("刪除活動",e.title); persist(); closeModal(); location.hash="#events"; render(); toast("已刪除活動");
+  audit("刪除活動",e.title); persist(); closeModal(); location.hash="#"+KIND_ROUTES[kindOf(e)]; render(); toast(`已刪除${KIND_LABELS[kindOf(e)]}`);
 }
 async function saveEvent(data){
   if(!canEvents())return toast("沒有權限");
@@ -1149,7 +1199,10 @@ async function saveEvent(data){
       if(r.id) Object.assign(state.events.find(e=>e.id===r.id),fields); else state.events.push({id:crypto.randomUUID(),...fields,registration_count:0});
     }
   }
-  audit(`${data.event_id?"編輯":"建立"}${K}`,shared.title+(rows.length>1?`（${rows.length} 場）`:"")); persist(); closeModal(); render(); toast(`${K}已${data.event_id?"更新":"建立"}`);
+  audit(`${data.event_id?"編輯":"建立"}${K}`,shared.title+(rows.length>1?`（${rows.length} 場）`:"")); persist(); closeModal();
+  // 在編輯表單把類型改成另一類時，跳到那一類的管理頁，才看得到剛存的這筆
+  const home=KIND_ROUTES[shared.kind]; if(["events","courses"].includes(route())&&route()!==home) location.hash=home; else render();
+  toast(`${K}已${data.event_id?"更新":"建立"}`);
 }
 
 // ───── Excel／CSV 匯入（總管理）─────
@@ -1366,9 +1419,11 @@ async function onClick(event){
   if(action==="view-contact") return viewContact(btn.dataset.id);
   if(action==="delete-contact") return deleteContactForm(btn.dataset.id);
   if(action==="delete-event"){ event.preventDefault(); return deleteEventForm(btn.dataset.id); }
-  if(action==="event-roster"){ event.preventDefault(); return eventRoster(btn.dataset.id); }
+  if(action==="export-one") return exportRoster([btn.dataset.id]);
   if(action==="reg-pay") return regPayForm(btn.dataset.id,btn.dataset.event);
-  if(action==="export-roster"){ event.preventDefault(); return exportRoster(btn.dataset.id); }
+  if(action==="export-pick") return exportPicker(btn.dataset.kind);
+  if(action==="export-all"||action==="export-none"){ document.querySelectorAll('[data-export-row]:not([hidden]) input[name="export_event"]:not(:disabled)').forEach(x=>x.checked=action==="export-all"); return updateExportCount(); }
+  if(action==="export-selected") return exportRoster(exportChecked());
   if(action==="import-template") return download("會員名冊範本.csv",IMPORT_FIELDS.map(([,label])=>label).join(",")+"\r\n王小美,0912345678,女,51/03/18,北區,台北市大安區和平東路一段 1 號,may@example.com,,清明法會志工","text/csv;charset=utf-8");
   if(action==="import-run") return runImport();
   if(action==="import-reset"){ importState=null; return render(); }
@@ -1408,6 +1463,8 @@ async function onClick(event){
 
 document.addEventListener("input",event=>{
   if(event.target.id==="pickSearch") return renderPickList();
+  if(event.target.id==="exportSearch") return filterExportList();
+  if(event.target.id==="rosterSearch"){ rosterView.q=event.target.value; return filterRoster(); }
   if(event.target.name==="member_query"){ const c=pickMember(event.target.value), el=$("#memberPicked"); if(el) el.textContent=c?`已選：${contactLabel(c.id)}`:"從下拉清單點選一位"; return; }
   if(event.target.id==="contactSearch"||event.target.id==="checkinSearch"){
     const value=event.target.value.toLowerCase().trim();
@@ -1418,6 +1475,9 @@ document.addEventListener("change",event=>{
   if(event.target.id==="campaignImage"){ const f=event.target.files?.[0], img=$("#campaignImagePreview"); if(img){ img.hidden=!f; if(f) img.src=URL.createObjectURL(f); } return; }
   if(event.target.dataset.pick){ event.target.checked?campaignPick.add(event.target.dataset.pick):campaignPick.delete(event.target.dataset.pick); return updateAudienceCount(); }
   if(event.target.id==="pickTag"||event.target.id==="pickRegion") return renderPickList();
+  if(event.target.id==="exportState") return filterExportList();
+  if(event.target.id==="rosterStatus"||event.target.id==="rosterPay"){ rosterView[event.target.id==="rosterStatus"?"status":"pay"]=event.target.value; return filterRoster(); }
+  if(event.target.name==="export_event") return updateExportCount();
   if(event.target.name==="audience"&&event.target.closest("#campaignForm")){ document.querySelectorAll("#campaignForm [data-audience]").forEach(el=>el.hidden=el.dataset.audience!==event.target.value); return updateAudienceCount(); }
   if(event.target.name==="event_id"&&event.target.closest("#campaignForm")) return updateAudienceCount();
   if(event.target.name==="login_type"&&event.target.closest("#signinForm")) document.querySelectorAll("#signinForm [data-login]").forEach(el=>el.hidden=el.dataset.login!==event.target.value);

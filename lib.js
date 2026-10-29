@@ -189,6 +189,18 @@ export function eventLabel(event) {
   return event.session_name ? `${event.title}｜${event.session_name}` : event.title;
 }
 
+// 從費用說明抓金額（例如「體驗活動 NT$300」→ 300；「免費」→ null）
+export function feeAmount(event) {
+  const m = String(event?.fee_note || "").replace(/,/g, "").match(/\d+/);
+  return m ? Number(m[0]) : null;
+}
+
+// 免費活動／課程：費用說明空白、寫「免費」或金額 0；這種場次的名單不需要繳費功能
+export function isFreeEvent(event) {
+  const amount = feeAmount(event), note = String(event?.fee_note || "").trim();
+  return amount === 0 || (amount == null && (!note || note.includes("免費")));
+}
+
 export function campaignEligible(contact) {
   return Boolean(contact.line_user_id && contact.marketing_consent && contact.line_status === "active" && !contact.anonymized_at);
 }
@@ -418,6 +430,19 @@ export function eventTagsAfterCheckin(tags = [], title = "", attended, otherAtte
   if (!name) return tags;
   if (attended) return tags.includes(name) ? tags : [...tags, name];
   return otherAttendedTitles.some(t => String(t).trim().slice(0, 40) === name) ? tags : tags.filter(t => t !== name);
+}
+
+// 課程繳費標籤：課程報名改成「已繳費」就貼「課程名稱 已繳費」（同名多場次共用一個）；
+// 改回未繳費／免費／已退款或取消報名時拿掉，但同名課程還有其他已繳費紀錄就保留。規則與資料庫 tag_paid_course 相同。
+export function paidCourseTag(title = "") {
+  const name = String(title).trim().slice(0, 36);
+  return name ? `${name} 已繳費` : "";
+}
+export function courseTagsAfterPayment(tags = [], title = "", paid, otherPaidTitles = []) {
+  const tag = paidCourseTag(title);
+  if (!tag) return tags;
+  if (paid) return tags.includes(tag) ? tags : [...tags, tag];
+  return otherPaidTitles.some(t => paidCourseTag(t) === tag) ? tags : tags.filter(t => t !== tag);
 }
 
 // 學員在「我的活動」自己修改基本資料：只開放這幾欄，規則與後端 member 函式（update_profile）相同。
