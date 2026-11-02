@@ -1,26 +1,67 @@
 export const ROLE_LABELS = { admin: "總管理", event_staff: "活動幹部", region_lead: "區負責人", accountant: "會計" };
 
-// 會計：管錢的事。看全部活動／課程的報名名單（姓名、區域、手機後三碼）、登記繳費、匯出名單、
+// 可以個別勾選開放的功能（2026-11-02）。角色是起點，總管理在使用者管理可以多勾或取消；
+// 沒勾過的人（permissions 是 null）就用角色預設。總管理永遠全部都有。
+// 資料庫 has_perm() 用同一組代號和預設值（2026-11-02_staff_permissions.sql），兩邊要一起改。
+// 區負責人自己區的會員與報到是角色本身就有的，不在勾選範圍內。
+export const PERMS = [
+  ["events", "活動／課程：建立、編輯、刪除、產報到 QR"],
+  ["roster", "報名名單（全部區域）"],
+  ["payments", "登記繳費、匯出名單"],
+  ["checkin", "現場報到（全部區域）"],
+  ["members", "會員資料頁（全部區域，個資遮罩）"],
+  ["sponsors", "贊助紀錄：新增、修改、標記已收"]
+];
+export const ROLE_PERMS = {
+  admin: PERMS.map(([key]) => key),
+  event_staff: ["events", "roster", "payments", "checkin"],
+  region_lead: [],
+  accountant: ["roster", "payments", "sponsors"]
+};
+// who：角色字串，或 { role, permissions }
+export function permsOf(who) {
+  const v = typeof who === "string" ? { role: who } : who || {};
+  if (v.role === "admin") return ROLE_PERMS.admin;
+  return Array.isArray(v.permissions) ? v.permissions.filter(p => ROLE_PERMS.admin.includes(p)) : ROLE_PERMS[v.role] || [];
+}
+export function hasPerm(who, perm) {
+  return permsOf(who).includes(perm);
+}
+// 勾選結果和角色預設一樣就存 null，之後改角色預設時會跟著變
+export function permsToSave(role, picked) {
+  if (role === "admin") return null;
+  const list = ROLE_PERMS.admin.filter(p => picked.includes(p));
+  const base = ROLE_PERMS[role] || [];
+  return list.length === base.length && list.every(p => base.includes(p)) ? null : list;
+}
+
+// 會計預設：管錢的事。看全部活動／課程的報名名單（姓名、區域、手機後三碼）、登記繳費、匯出名單、
 // 管贊助紀錄（新增、修改、標記已收；刪除只有總管理）。不能建立／編輯活動、報到、看會員資料頁或完整個資。
-export function canHandlePayments(role) {
-  return role === "admin" || role === "event_staff" || role === "accountant";
+export function canHandlePayments(who) {
+  return hasPerm(who, "payments");
 }
-export function canManageMoney(role) {
-  return role === "admin" || role === "accountant";
+export function canManageMoney(who) {
+  return hasPerm(who, "sponsors");
 }
-// 看全部區域的報名名單
-export function canSeeAllRosters(role) {
-  return canManageEvents(role) || role === "accountant";
-}
-
-// 建立／編輯活動、產報到 QR、處理報名與報到。
-export function canManageEvents(role) {
-  return role === "admin" || role === "event_staff";
+// 看全部區域的報名名單（報到、登記繳費也要看得到名單）
+export function canSeeAllRosters(who) {
+  return ["roster", "checkin", "payments"].some(p => hasPerm(who, p));
 }
 
-// 會員資料頁：總管理與區負責人（活動幹部只看報名名單）。
-export function canBrowseMembers(role) {
-  return role === "admin" || role === "region_lead";
+// 建立／編輯活動、產報到 QR、處理報名。
+export function canManageEvents(who) {
+  return hasPerm(who, "events");
+}
+
+// 會員資料頁：總管理、區負責人（自己區），或被勾選「會員資料頁」的人（全部區域）。
+export function canBrowseMembers(who) {
+  const role = typeof who === "string" ? who : who?.role;
+  return role === "region_lead" || hasPerm(who, "members");
+}
+// 現場報到頁：區負責人（自己區），或有「現場報到」的人
+export function canCheckin(who) {
+  const role = typeof who === "string" ? who : who?.role;
+  return role === "region_lead" || hasPerm(who, "checkin");
 }
 export const GENDERS = ["男", "女", "其他"];
 
@@ -151,7 +192,7 @@ export function visibleContact(contact, role) {
 
 // 區負責人只看得到自己區的會員；沒有區域的會員只有總管理看得到。
 export function canSeeContact(contact, viewer) {
-  if (viewer.role === "admin") return true;
+  if (viewer.role === "admin" || hasPerm(viewer, "members")) return true;
   return viewer.role === "region_lead" && Boolean(contact.region_id) && contact.region_id === viewer.region_id;
 }
 

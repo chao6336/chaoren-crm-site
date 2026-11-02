@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, filterTags, parseTagCsv, matchContactsByKeys } from "./lib.js?v=20261030-1";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, filterTags, parseTagCsv, matchContactsByKeys } from "./lib.js?v=20261102-1";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -84,22 +84,22 @@ function loadDemo(){
 }
 // 展示模式配發下一個會員編號（雲端由資料庫自動配發）
 function nextMemberNo(){ const max=Math.max(0,...state.contacts.map(c=>Number(String(c.member_no||"").replace(/\D/g,""))||0)); const n=max+1; return "T"+String(n).padStart(4,"0"); }
-function viewer(){ return {role:state.role,region_id:state.region_id}; }
+function viewer(){ return {role:state.role,region_id:state.region_id,permissions:state.permissions??null}; }
 function isAdmin(){ return state.role==="admin"; }
 function regionName(id){ return state.regions?.find(r=>r.id===id)?.name||"未分區"; }
 function myContacts(){ return scopeContacts(state.contacts,viewer()); }
 function myRegistrations(){ return scopeRegistrations(state.registrations,state.contacts,viewer()); }
-function canEvents(){ return canManageEvents(state.role); }
-function canPay(){ return canHandlePayments(state.role); }
+function canEvents(){ return canManageEvents(viewer()); }
+function canPay(){ return canHandlePayments(viewer()); }
 // 報名名單：雲端由 event_roster view 決定範圍；展示版用同一規則（lib.rosterFor）。
 function roster(){ return live ? (state.roster||[]).map(r=>({...r,id:r.registration_id})) : rosterFor(state.registrations,state.contacts,viewer(),regionName); }
 const ADMIN_ONLY_ROUTES=["tags","messages","governance","users","import","applications","weekly"];
 // 這個身分能不能進這一頁（側邊選單也照這個藏起來）
 function canOpen(route){
   if(ADMIN_ONLY_ROUTES.includes(route)) return isAdmin();
-  if(route==="sponsors") return canManageMoney(state.role);
-  if(route==="contacts") return canBrowseMembers(state.role);
-  if(route==="checkin") return state.role!=="accountant";
+  if(route==="sponsors") return canManageMoney(viewer());
+  if(route==="contacts") return canBrowseMembers(viewer());
+  if(route==="checkin") return canCheckin(viewer());
   return true;
 }
 // 學員看的頁面：不顯示後台選單，資料只走 LINE 身分。
@@ -110,7 +110,7 @@ const PUBLIC_ROUTES=["register",...STUDENT_ROUTES];
 const publicUrl=(hash=location.hash)=>STUDENT_HOME+hash;
 function switchDemoUser(staffId){
   const s=state.staff.find(x=>x.id===staffId); if(!s)return;
-  Object.assign(state,{as:s.id,role:s.role,region_id:s.region_id||null});
+  Object.assign(state,{as:s.id,role:s.role,region_id:s.region_id||null,permissions:s.permissions??null});
   persist(); showUser(s.display_name); render();
 }
 function showUser(name){
@@ -202,7 +202,8 @@ async function loadLiveData(){
   if(!session){ location.hash="login"; return; }
   // 範圍限制由資料庫負責（contacts_safe 與 RLS），前端的過濾只是第二道保險。
   const [profile,regions,events,contacts,registrations,rosterRows,campaigns,audit] = await Promise.all([
-    supabase.from("staff_profiles").select("role,display_name,region_id").eq("user_id",session.user.id).single(),
+    // 用 * 讀：資料庫還沒加 permissions 欄位時也不會壞
+    supabase.from("staff_profiles").select("*").eq("user_id",session.user.id).single(),
     supabase.from("regions").select("id,name").order("sort_order"),
     supabase.from("events_with_counts").select("*").order("starts_at"),
     supabase.from("contacts_safe").select("*").order("last_interaction_at",{ascending:false}),
@@ -211,12 +212,12 @@ async function loadLiveData(){
     supabase.from("message_campaigns").select("*").order("created_at",{ascending:false}),
     supabase.from("audit_log").select("created_at,action,target_type,target_id").order("created_at",{ascending:false}).limit(50)
   ]);
-  const staff = profile.data?.role === "admin" ? await supabase.from("staff_profiles").select("user_id,display_name,role,region_id,active") : {data:[]};
-  const sponsorships = canManageMoney(profile.data?.role) ? await supabase.from("sponsorships").select("*").order("created_at",{ascending:false}) : {data:[]};
+  const staff = profile.data?.role === "admin" ? await supabase.from("staff_profiles").select("*") : {data:[]};
+  const sponsorships = canManageMoney(profile.data||{}) ? await supabase.from("sponsorships").select("*").order("created_at",{ascending:false}) : {data:[]};
   const clickStats = profile.data?.role === "admin" ? await supabase.from("campaign_click_stats").select("*") : {data:[]};
   const tags = profile.data?.role === "admin" ? await supabase.from("tag_stats").select("*") : {data:[]};
   const applications = profile.data?.role === "admin" ? await supabase.from("student_applications").select("*").eq("status","pending").order("created_at") : {data:[]};
-  state={role:profile.data?.role||"none",eventsLoaded:true,region_id:profile.data?.region_id||null,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],clickStats:clickStats.data||[],applications:applications.data||[],tags:tags.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:"工作人員",action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
+  state={role:profile.data?.role||"none",eventsLoaded:true,region_id:profile.data?.region_id||null,permissions:profile.data?.permissions??null,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],clickStats:clickStats.data||[],applications:applications.data||[],tags:tags.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:"工作人員",action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
   showUser(profile.data?.display_name||session.user.email);
   $("#logoutBtn").hidden=state.role==="none";
 }
@@ -263,10 +264,10 @@ function dashboard(){
   return `${pageHead("營運總覽",scopeNote)}
   <section class="stats">
     <div class="stat"><span>活動數</span><strong>${s.events}</strong></div><div class="stat"><span>有效報名</span><strong>${s.registrations}</strong></div>
-    <div class="stat"><span>出席率</span><strong>${s.attendanceRate}%</strong></div><div class="stat"><span>取消率</span><strong>${s.cancellationRate}%</strong></div>${canBrowseMembers(state.role)?`<div class="stat"><span>會員</span><strong>${s.contacts}</strong></div>`:""}
+    <div class="stat"><span>出席率</span><strong>${s.attendanceRate}%</strong></div><div class="stat"><span>取消率</span><strong>${s.cancellationRate}%</strong></div>${canBrowseMembers(viewer())?`<div class="stat"><span>會員</span><strong>${s.contacts}</strong></div>`:""}
   </section>
   <section class="grid"><article class="card"><h2>下一場活動</h2>${next?`<h3>${escapeHtml(eventLabel(next))}</h3><p>${fmtDate(next.starts_at)}・${escapeHtml(next.location)}</p><div class="kpi-line"><span>報名</span><strong>${next.registration_count}/${next.capacity}</strong></div><div class="actions">${canOpen("checkin")?`<a class="button" href="#checkin?event=${next.id}">開啟報到</a>`:""}<a class="button secondary" href="#register?event=${next.id}">查看報名頁</a></div>`:"<p class='muted'>目前沒有未來活動。</p>"}</article>
-  <article class="card"><h2>需要注意</h2><div class="kpi-line"><span>待繳費</span><strong>${regs.filter(r=>r.payment_status==="pending"&&!r.cancelled_at).length}</strong></div>${isAdmin()?`<div class="kpi-line"><span><a href="#applications">待開通學員</a></span><strong>${(state.applications||[]).length}</strong></div><div class="kpi-line"><span>待確認訊息</span><strong>${state.campaigns.filter(c=>c.status==="draft").length}</strong></div><div class="kpi-line"><span>尚未分區的會員</span><strong>${unassigned}</strong></div>`:""}${canBrowseMembers(state.role)?`<div class="kpi-line"><span>無法 LINE 聯絡</span><strong>${myContacts().filter(c=>!campaignEligible(c)).length}</strong></div>`:""}</article></section>`;
+  <article class="card"><h2>需要注意</h2><div class="kpi-line"><span>待繳費</span><strong>${regs.filter(r=>r.payment_status==="pending"&&!r.cancelled_at).length}</strong></div>${isAdmin()?`<div class="kpi-line"><span><a href="#applications">待開通學員</a></span><strong>${(state.applications||[]).length}</strong></div><div class="kpi-line"><span>待確認訊息</span><strong>${state.campaigns.filter(c=>c.status==="draft").length}</strong></div><div class="kpi-line"><span>尚未分區的會員</span><strong>${unassigned}</strong></div>`:""}${canBrowseMembers(viewer())?`<div class="kpi-line"><span>無法 LINE 聯絡</span><strong>${myContacts().filter(c=>!campaignEligible(c)).length}</strong></div>`:""}</article></section>`;
 }
 
 // 活動與課程共用同一套（場次、報名、名單、報到、繳費都一樣），只差 kind 與顯示的字
@@ -377,11 +378,16 @@ function tagPaidCourseDemo(r){
 // 展示版模擬資料庫觸發器：報名費同步到贊助紀錄（正式站由 sync_registration_fee 處理）
 function syncFeeDemo(r){
   const list=state.sponsorships||(state.sponsorships=[]); const i=list.findIndex(s=>s.registration_id===r.id);
-  if(["pending","paid"].includes(r.payment_status)&&r.amount>0){
+  if(["pending","paid"].includes(r.payment_status)&&r.amount>0&&(!r.cancelled_at||r.payment_status==="paid")){
     const e=state.events.find(x=>x.id===r.event_id)||{};
     const row={contact_id:r.contact_id,item:eventLabel(e).slice(0,60),amount:r.amount,paid:r.payment_status==="paid",paid_at:r.payment_status==="paid"?r.paid_at:null,receipt_no:r.receipt_no,registration_id:r.id};
     if(i>=0) Object.assign(list[i],row); else list.unshift({id:crypto.randomUUID(),note:"活動報名費",...row});
   } else if(i>=0) list.splice(i,1);
+}
+// 展示版模擬 registration_default_amount：收費場次一報名就帶入費用說明的金額，贊助紀錄出現未收
+function registerFeeDemo(r){
+  if(r.amount==null&&["pending","paid"].includes(r.payment_status)){ const a=feeAmount(state.events.find(x=>x.id===r.event_id)); if(a>0) r.amount=a; }
+  syncFeeDemo(r);
 }
 // 活動／課程管理右上角「匯出」：只列這一頁的類別，勾選一或多場（可依狀態、關鍵字篩選），合併成一個 CSV；多場時每列前面加名稱與日期
 function exportPicker(kind){
@@ -747,8 +753,9 @@ function users(){
   if(!isAdmin())return `${pageHead("使用者","只有總管理可以管理帳號。")}<div class="notice">你沒有使用者管理權限。</div>`;
   // 權限一覽：和 canOpen、lib 的 canManageEvents／canHandlePayments／canManageMoney、資料庫 RLS 一致
   const y="✓", n="—";
-  const perms=[["活動／課程：建立、編輯、刪除",y,y,n,n],["報名名單（全部區域）",y,y,"只看自己區",y],["登記繳費、匯出名單",y,y,n,y],["現場報到",y,y,"只限自己區",n],["會員資料頁",y,n,"只看自己區",n],["贊助紀錄：新增、修改、標記已收",y,n,n,y],["贊助紀錄：刪除",y,n,n,n],["LINE 訊息、週報、匯入、資料治理、使用者",y,n,n,n],["完整手機、Email、地址",y,n,n,n]];
-  return `${pageHead("使用者管理","邀請工作人員並設定權限；下表是各權限能做的事。",`<button data-action="invite-user">＋ 邀請工作人員</button>`)}<div id="staffArea"><div class="empty">載入中…</div></div>
+  const own={roster:"只看自己區",checkin:"只限自己區",members:"只看自己區"};
+  const perms=[...PERMS.map(([k,label])=>[label,...["admin","event_staff","region_lead","accountant"].map(r=>ROLE_PERMS[r].includes(k)?y:r==="region_lead"&&own[k]||n)]),...ADMIN_ONLY_PERMS.map(f=>[f,y,n,n,n])];
+  return `${pageHead("使用者管理","邀請工作人員並設定權限；下表是各權限的預設，邀請或修改時可以再個別勾選。",`<button data-action="invite-user">＋ 邀請工作人員</button>`)}<div id="staffArea"><div class="empty">載入中…</div></div>
     <h2 style="margin-top:22px">權限一覽</h2><div class="table-wrap"><table><thead><tr><th>功能</th>${["admin","event_staff","region_lead","accountant"].map(k=>`<th>${ROLE_LABELS[k]}</th>`).join("")}</tr></thead><tbody>${perms.map(([f,...v])=>`<tr><td>${f}</td>${v.map(x=>`<td>${x}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
@@ -1038,7 +1045,8 @@ function demoMemberApi(action,payload){
     if(reg&&!reg.cancelled_at)return {ok:true,already:true,name:me.name,eventTitle:event.title};
     if(event.registration_count>=event.capacity)return {error:"活動已額滿"};
     if(reg) Object.assign(reg,{attendance_status:"registered",cancelled_at:null,registered_at:new Date().toISOString()});
-    else state.registrations.push({id:crypto.randomUUID(),event_id:event.id,contact_id:me.id,attendance_status:"registered",payment_status:"pending",source:"line",registered_at:new Date().toISOString(),cancelled_at:null});
+    else state.registrations.push(reg={id:crypto.randomUUID(),event_id:event.id,contact_id:me.id,attendance_status:"registered",payment_status:"pending",source:"line",registered_at:new Date().toISOString(),cancelled_at:null});
+    registerFeeDemo(reg);
     event.registration_count=(event.registration_count||0)+1; persist();
     return {ok:true,already:false,name:me.name,eventTitle:event.title};
   }
@@ -1052,7 +1060,7 @@ function demoMemberApi(action,payload){
     let reg=state.registrations.find(r=>r.event_id===event.id&&r.contact_id===me.id); let already=false;
     if(!reg){ reg={id:crypto.randomUUID(),event_id:event.id,contact_id:me.id,payment_status:"pending",source:"walk-in",registered_at:new Date().toISOString()}; state.registrations.push(reg); event.registration_count=(event.registration_count||0)+1; }
     else if(reg.attendance_status==="attended"&&!reg.cancelled_at) already=true;
-    if(!already){ Object.assign(reg,{attendance_status:"attended",cancelled_at:null,checked_in_at:new Date().toISOString()}); me.last_interaction_at=new Date().toISOString(); me.tags=eventTagsAfterCheckin(me.tags||[],event.title,true); }
+    if(!already){ Object.assign(reg,{attendance_status:"attended",cancelled_at:null,checked_in_at:new Date().toISOString()}); registerFeeDemo(reg); me.last_interaction_at=new Date().toISOString(); me.tags=eventTagsAfterCheckin(me.tags||[],event.title,true); }
     persist(); return {ok:true,already,joined,checkedInAt:reg.checked_in_at,name:me.name,eventTitle:event.title,region:me.region_id?regionName(me.region_id):null};
   }
 }
@@ -1230,7 +1238,7 @@ async function callStaff(action,payload={}){
 function demoStaff(action,payload){
   const fakeLink=`${SITE_BASE}/?flow=set-password#展示用連結`;
   if(action==="list") return {staff:state.staff.map(s=>({...s,user_id:s.id,invited_pending:false}))};
-  if(action==="invite"){ if(payload.role==="region_lead"&&!payload.region_id) return {error:"區負責人必須指定區域"}; const id=crypto.randomUUID(); state.staff.push({id,display_name:payload.display_name,email:payload.email,role:payload.role,region_id:payload.role==="region_lead"?payload.region_id:null,active:true}); persist(); return {ok:true,link:fakeLink,email:payload.email}; }
+  if(action==="invite"){ if(payload.role==="region_lead"&&!payload.region_id) return {error:"區負責人必須指定區域"}; const id=crypto.randomUUID(); state.staff.push({id,display_name:payload.display_name,email:payload.email,role:payload.role,region_id:payload.role==="region_lead"?payload.region_id:null,permissions:payload.role==="admin"?null:payload.permissions??null,active:true}); persist(); return {ok:true,link:fakeLink,email:payload.email}; }
   if(action==="reset") return {ok:true,link:fakeLink,email:state.staff.find(s=>s.id===payload.user_id)?.email};
   if(action==="student_status"){ const a=(state.student_accounts||{})[payload.contact_id]; return {ok:true,account:a?{login_type:a.login_type,login:a.login,last_sign_in_at:null}:null}; }
   if(action==="student_link"){
@@ -1240,7 +1248,7 @@ function demoStaff(action,payload){
     state.student_accounts={...(state.student_accounts||{}),[c.id]:{...(state.student_accounts||{})[c.id],login_type:type,login,used:false}};
     return {ok:true,link:`${STUDENT_HOME}#activate?t=demo-${c.id}`,login,login_type:type,name:c.name};
   }
-  if(action==="update"){ const s=state.staff.find(x=>x.id===payload.user_id); if(s.id===state.as&&(payload.active===false||(payload.role&&payload.role!=="admin"))) return {error:"不能停用或降級自己的帳號，避免沒有總管理"}; Object.assign(s,{...(payload.role?{role:payload.role,region_id:payload.role==="region_lead"?payload.region_id:null}:{}),...(typeof payload.active==="boolean"?{active:payload.active}:{})}); persist(); return {ok:true}; }
+  if(action==="update"){ const s=state.staff.find(x=>x.id===payload.user_id); if(s.id===state.as&&(payload.active===false||(payload.role&&payload.role!=="admin"))) return {error:"不能停用或降級自己的帳號，避免沒有總管理"}; Object.assign(s,{...(payload.role?{role:payload.role,region_id:payload.role==="region_lead"?payload.region_id:null}:{}),...("permissions" in payload?{permissions:(payload.role||s.role)==="admin"?null:payload.permissions}:{}),...(typeof payload.active==="boolean"?{active:payload.active}:{})}); persist(); return {ok:true}; }
 }
 async function loadStaffList(){
   if(!isAdmin()) return;
@@ -1249,9 +1257,18 @@ async function loadStaffList(){
   if(res.error){ $("#staffArea").innerHTML=`<div class="notice">${escapeHtml(res.error)}</div>`; return; }
   state.staffList=res.staff;
   const status=s=>!s.active?"<span class='pill off'>已停用</span>":s.invited_pending?"<span class='pill warn'>等待設定密碼</span>":"<span class='pill'>使用中</span>";
-  $("#staffArea").innerHTML=`<div class="table-wrap"><table><thead><tr><th>姓名</th><th>Email</th><th>權限</th><th>負責區域</th><th>狀態</th><th></th></tr></thead><tbody>${res.staff.map(s=>{ const m=memberByEmail(s.email); return `<tr><td>${escapeHtml(s.display_name)}${m?`<br><small class="muted">會員 ${escapeHtml(m.member_no||"")}・姓名已同步</small>`:""}</td><td>${escapeHtml(s.email||"")}</td><td>${ROLE_LABELS[s.role]||s.role}</td><td>${s.role==="region_lead"?escapeHtml(regionName(s.region_id)):s.role==="event_staff"?"全部（報名名單）":"全部"}</td><td>${status(s)}</td><td class="row-actions"><button class="secondary" data-action="staff-edit" data-id="${s.user_id}">修改</button><button class="secondary" data-action="staff-reset" data-id="${s.user_id}">${s.invited_pending?"重新產生邀請":"重設密碼連結"}</button></td></tr>`+""; }).join("")}</tbody></table></div>`;
+  $("#staffArea").innerHTML=`<div class="table-wrap"><table><thead><tr><th>姓名</th><th>Email</th><th>權限</th><th>負責區域</th><th>狀態</th><th></th></tr></thead><tbody>${res.staff.map(s=>{ const m=memberByEmail(s.email); return `<tr><td>${escapeHtml(s.display_name)}${m?`<br><small class="muted">會員 ${escapeHtml(m.member_no||"")}・姓名已同步</small>`:""}</td><td>${escapeHtml(s.email||"")}</td><td>${ROLE_LABELS[s.role]||s.role}${Array.isArray(s.permissions)&&s.role!=="admin"?`<br><small class="muted">自訂：${escapeHtml(permsOf(s).map(p=>PERM_SHORT[p]).join("、")||"無")}</small>`:""}</td><td>${s.role==="region_lead"?escapeHtml(regionName(s.region_id)):s.role==="event_staff"?"全部（報名名單）":"全部"}</td><td>${status(s)}</td><td class="row-actions"><button class="secondary" data-action="staff-edit" data-id="${s.user_id}">修改</button><button class="secondary" data-action="staff-reset" data-id="${s.user_id}">${s.invited_pending?"重新產生邀請":"重設密碼連結"}</button></td></tr>`+""; }).join("")}</tbody></table></div>`;
 }
 // 工作人員與會員以 Email 對應（不分大小寫）；資料庫會自動把工作人員名稱同步成會員姓名
+// 邀請工作人員：輸入顯示名稱時，從有 Email 的會員找同名的人帶入 Email（同名多位就不自動帶）
+function inviteMembers(){ return state.contacts.filter(c=>c.email&&!c.anonymized_at&&!String(c.email).includes("***")); }
+function inviteMemberDatalist(){ return `<datalist id="inviteMembers">${inviteMembers().map(c=>`<option value="${escapeHtml(c.name)}" label="${escapeHtml(`${c.member_no||""} ${c.email}`.trim())}">`).join("")}</datalist>`; }
+function fillInviteEmail(input){
+  const email=input.form.elements.email, hint=$("#invitePicked"), name=input.value.trim(), hits=name?inviteMembers().filter(c=>c.name===name):[];
+  if(hits.length===1){ if(!email.value||email.dataset.auto==="1"){ email.value=hits[0].email; email.dataset.auto="1"; } if(hint) hint.textContent=`已帶入會員 ${hits[0].member_no||""} 的 Email`; return; }
+  if(email.dataset.auto==="1"){ email.value=""; email.dataset.auto=""; }
+  if(hint) hint.textContent=hits.length>1?`同名會員有 ${hits.length} 位，請手動填 Email`:"";
+}
 function memberByEmail(email){ const e=String(email||"").trim().toLowerCase(); return e?state.contacts.find(c=>String(c.email||"").trim().toLowerCase()===e&&!c.anonymized_at):null; }
 function showLinkModal(title,email,link){
   modal(`<h2>${title}</h2><p>請把下面這條連結<strong>用 LINE 私訊傳給 ${escapeHtml(email||"對方")}</strong>。對方點開後自己設定密碼就能登入。</p>
@@ -1291,11 +1308,20 @@ function demoStudentLink(action,payload){
   Object.assign(a,{password:payload.password,used:true}); state.demoStudent=id; persist(); return {ok:true};
 }
 
+// 權限勾選：角色是起點，可以多勾或取消；總管理全部都有、不能取消。只有總管理的功能列出來但不能勾。
+const PERM_SHORT={events:"活動管理",roster:"報名名單",payments:"繳費匯出",checkin:"報到",members:"會員資料",sponsors:"贊助"};
+const ADMIN_ONLY_PERMS=["贊助紀錄：刪除","LINE 訊息、週報、匯入、資料治理、使用者","完整手機、Email、地址"];
+function permChecks(role,permissions){
+  const on=permsOf({role,permissions}), admin=role==="admin";
+  return `<fieldset class="perm-box" data-perm-box><legend>開放的功能（依權限預設勾好，可再調整）</legend>${PERMS.map(([k,label])=>`<label><input type="checkbox" name="perm" value="${k}" ${on.includes(k)?"checked":""} ${admin?"disabled":""}> ${label}</label>`).join("")}${ADMIN_ONLY_PERMS.map(f=>`<label class="muted"><input type="checkbox" ${admin?"checked":""} disabled> ${f}（只有總管理）</label>`).join("")}${role==="region_lead"?`<small class="muted">區負責人本來就能看自己區的會員、名單與報到；這裡勾的是「全部區域」。</small>`:""}</fieldset>`;
+}
+function pickedPerms(form){ return permsToSave(form.elements.role.value,[...form.querySelectorAll("[name=perm]:checked")].map(x=>x.value)); }
 async function staffEditForm(userId){
   const s=(state.staffList||[]).find(x=>x.user_id===userId); if(!s) return;
   modal(`<h2>修改：${escapeHtml(s.display_name)}</h2><form id="staffEditForm"><input type="hidden" name="user_id" value="${s.user_id}"><div class="form-grid">
     <div class="field"><label>權限</label><select name="role">${Object.entries(ROLE_LABELS).map(([k,v])=>`<option value="${k}" ${s.role===k?"selected":""}>${v}</option>`).join("")}</select></div>
     <div class="field"><label>負責區域（區負責人必填）</label><select name="region_id">${regionOptions(s.region_id)}</select></div>
+    <div class="field full">${permChecks(s.role,s.permissions)}</div>
     <label class="field full"><span><input type="checkbox" name="active" ${s.active?"checked":""}> 帳號啟用中（取消勾選＝停用，對方將無法登入後台）</span></label>
     <button class="field full">儲存</button></div></form>`);
 }
@@ -1479,7 +1505,7 @@ function sponsorBlock(contactId){
   return `<h3>贊助紀錄 <small class="muted">（只有總管理看得到）</small></h3>${list.length?`<ul class="plain">${list.map(s=>`<li>${escapeHtml(s.item)}・NT$${Number(s.amount).toLocaleString()}・${s.paid?`已收${s.paid_at?`（${s.paid_at}）`:""}`:"未收"}</li>`).join("")}</ul>`:`<p class="muted">尚無紀錄</p>`}<button class="secondary" data-action="new-sponsor" data-contact="${contactId}">＋ 新增贊助</button>`;
 }
 function sponsors(){
-  if(!canManageMoney(state.role))return pageHead("贊助紀錄","只有總管理與會計可以查看。");
+  if(!canManageMoney(viewer()))return pageHead("贊助紀錄","只有總管理與會計可以查看。");
   const q=query(); const item=q.get("item")||""; const paid=q.get("paid")||"";
   const all=state.sponsorships||[]; const items=[...new Set(all.map(s=>s.item))].sort((a,b)=>b.localeCompare(a,"zh-Hant"));
   const list=all.filter(s=>(!item||s.item===item)&&(!paid||String(s.paid)===paid));
@@ -1511,7 +1537,7 @@ function pickMember(q){
 }
 function itemDatalist(){ return `<datalist id="sponsorItems">${[...new Set((state.sponsorships||[]).map(s=>s.item))].map(i=>`<option value="${escapeHtml(i)}">`).join("")}</datalist>`; }
 function sponsorForm(contactId,editId){
-  if(!canManageMoney(state.role))return;
+  if(!canManageMoney(viewer()))return;
   const e=editId?(state.sponsorships||[]).find(x=>x.id===editId):null;
   modal(`<h2>${e?"修改":"新增"}贊助紀錄</h2><form id="sponsorForm">${e?`<input type="hidden" name="sponsor_id" value="${e.id}">`:""}<div class="form-grid">
     ${e&&!e.contact_id?`<div class="field full"><label>會員</label><p>${escapeHtml(sponsorLabel(e))}</p></div>`:memberPicker(e?e.contact_id:contactId)}
@@ -1524,7 +1550,7 @@ function sponsorForm(contactId,editId){
     <button class="field full">儲存</button></div></form>`);
 }
 function batchSponsorForm(){
-  if(!canManageMoney(state.role))return;
+  if(!canManageMoney(viewer()))return;
   modal(`<h2>批次建立贊助紀錄</h2><p class="muted">例如每年清明，替指定區域的每位會員各建一筆「未收」，收到款後再逐筆標記已收。已經有同一項目的會員會略過。</p><form id="batchSponsorForm"><div class="form-grid">
     <div class="field"><label>項目 *</label><input name="item" required maxlength="60" list="sponsorItems" placeholder="例如：2026 清明">${itemDatalist()}</div>
     <div class="field"><label>每人金額（元）*</label><input name="amount" type="number" min="0" max="10000000" required value="200"></div>
@@ -1559,14 +1585,14 @@ async function saveBatchSponsor(data){
 }
 // 標記已收：先開小視窗填收款日期與感謝狀／收據編號，按確認才改。改回未收只能從「修改」刻意取消勾選，避免誤按。
 function markPaidForm(id){
-  const s=(state.sponsorships||[]).find(x=>x.id===id); if(!s||!canManageMoney(state.role))return;
+  const s=(state.sponsorships||[]).find(x=>x.id===id); if(!s||!canManageMoney(viewer()))return;
   modal(`<h2>標記已收</h2><p>${escapeHtml(sponsorLabel(s))}・${escapeHtml(s.item)}・NT$${Number(s.amount||0).toLocaleString()}</p><form id="markPaidForm"><input type="hidden" name="sponsor_id" value="${s.id}"><div class="form-grid">
     <div class="field"><label>收款日期 *</label><input name="paid_at" type="date" required value="${localToday()}"></div>
     <div class="field"><label>感謝狀／收據編號</label><input name="receipt_no" maxlength="40" autocomplete="off" value="${escapeHtml(s.receipt_no||"")}"></div>
     <button class="field full">確認已收款</button></div></form>`);
 }
 async function togglePaid(id,{paid_at,receipt_no}={}){
-  const s=(state.sponsorships||[]).find(x=>x.id===id); if(!s||!canManageMoney(state.role)||s.paid)return;
+  const s=(state.sponsorships||[]).find(x=>x.id===id); if(!s||!canManageMoney(viewer())||s.paid)return;
   const next={paid:true,paid_at:paid_at||localToday(),receipt_no:(receipt_no||"").trim()||s.receipt_no||null};
   if(live){ const {error}=await supabase.from("sponsorships").update(next).eq("id",id); if(error)return toast("更新失敗："+error.message); }
   Object.assign(s,next); audit("贊助標記已收",`${sponsorLabel(s)} ${s.item}`); persist(); closeModal(); render(); toast("已標記已收");
@@ -1607,8 +1633,8 @@ async function onClick(event){
   if(action==="redeem-link") return redeemLink(btn);
   if(action==="copy-link"){ const el=$("#linkText"); el.select(); try{ await navigator.clipboard.writeText(el.value); toast("已複製"); }catch{ document.execCommand("copy"); toast("已複製"); } return; }
   if(action==="staff-edit") return staffEditForm(btn.dataset.id);
-  if(action==="staff-reset"){ const s=(state.staffList||[]).find(x=>x.user_id===btn.dataset.id); const res=s?.invited_pending?await callStaff("invite",{email:s.email,display_name:s.display_name,role:s.role,region_id:s.region_id}):await callStaff("reset",{user_id:btn.dataset.id}); if(res.error&&s?.invited_pending){ const again=await callStaff("reset",{user_id:btn.dataset.id}); if(again.error) return toast(again.error); return showLinkModal("邀請連結（重新產生）",again.email,again.link); } if(res.error) return toast(res.error); return showLinkModal(s?.invited_pending?"邀請連結（重新產生）":"重設密碼連結",res.email,res.link); }
-  if(action==="invite-user") return modal(`<h2>邀請工作人員</h2><p class="muted">建立後會產生一條邀請連結，請用 LINE 傳給對方；對方點開自己設定密碼。</p><form id="inviteForm"><div class="field"><label>Email</label><input name="email" type="email" required></div><div class="field"><label>顯示名稱</label><input name="display_name" required></div><div class="field"><label>權限</label><select name="role"><option value="region_lead">區負責人</option><option value="event_staff">活動幹部</option><option value="accountant">會計</option><option value="admin">總管理</option></select></div><div class="field"><label>負責區域（區負責人必填）</label><select name="region_id">${regionOptions(null)}</select></div><button style="margin-top:12px">建立並產生邀請連結</button></form>`);
+  if(action==="staff-reset"){ const s=(state.staffList||[]).find(x=>x.user_id===btn.dataset.id); const res=s?.invited_pending?await callStaff("invite",{email:s.email,display_name:s.display_name,role:s.role,region_id:s.region_id,permissions:s.permissions??null}):await callStaff("reset",{user_id:btn.dataset.id}); if(res.error&&s?.invited_pending){ const again=await callStaff("reset",{user_id:btn.dataset.id}); if(again.error) return toast(again.error); return showLinkModal("邀請連結（重新產生）",again.email,again.link); } if(res.error) return toast(res.error); return showLinkModal(s?.invited_pending?"邀請連結（重新產生）":"重設密碼連結",res.email,res.link); }
+  if(action==="invite-user") return modal(`<h2>邀請工作人員</h2><p class="muted">建立後會產生一條邀請連結，請用 LINE 傳給對方；對方點開自己設定密碼。</p><form id="inviteForm"><div class="field"><label>顯示名稱（輸入會員姓名會自動帶入 Email）</label><input name="display_name" list="inviteMembers" autocomplete="off" required>${inviteMemberDatalist()}<small class="muted" id="invitePicked"></small></div><div class="field"><label>Email</label><input name="email" type="email" required></div><div class="field"><label>權限</label><select name="role"><option value="region_lead">區負責人</option><option value="event_staff">活動幹部</option><option value="accountant">會計</option><option value="admin">總管理</option></select></div><div class="field"><label>負責區域（區負責人必填）</label><select name="region_id">${regionOptions(null)}</select></div>${permChecks("region_lead",null)}<button style="margin-top:12px">建立並產生邀請連結</button></form>`);
   if(action==="view-contact") return viewContact(btn.dataset.id);
   if(action==="delete-contact") return deleteContactForm(btn.dataset.id);
   if(action==="delete-event"){ event.preventDefault(); return deleteEventForm(btn.dataset.id); }
@@ -1675,6 +1701,8 @@ document.addEventListener("input",event=>{
   if(event.target.id==="rosterSearch"){ rosterView.q=event.target.value; return filterRoster(); }
   if(event.target.id==="tagSearch"){ tagView.q=event.target.value; return filterTagRows(); }
   if(event.target.id==="tagNames") return updateTagCreateCount();
+  if(event.target.name==="display_name"&&event.target.form?.id==="inviteForm") return fillInviteEmail(event.target);
+  if(event.target.name==="email"&&event.target.form?.id==="inviteForm"){ event.target.dataset.auto=""; return; }
   if(event.target.name==="member_query"){ const c=pickMember(event.target.value), el=$("#memberPicked"); if(el) el.textContent=c?`已選：${contactLabel(c.id)}`:"從下拉清單點選一位"; return; }
   if(event.target.id==="contactSearch"||event.target.id==="checkinSearch"){
     const value=event.target.value.toLowerCase().trim();
@@ -1682,6 +1710,7 @@ document.addEventListener("input",event=>{
   }
 });
 document.addEventListener("change",event=>{
+  if(event.target.name==="role"&&["inviteForm","staffEditForm"].includes(event.target.form?.id)){ const box=event.target.form.querySelector("[data-perm-box]"); if(box) box.outerHTML=permChecks(event.target.value,null); return; }
   if(event.target.id==="campaignImage"){ const f=event.target.files?.[0], img=$("#campaignImagePreview"); if(img){ img.hidden=!f; if(f) img.src=URL.createObjectURL(f); } return; }
   if(event.target.dataset.pick){ event.target.checked?campaignPick.add(event.target.dataset.pick):campaignPick.delete(event.target.dataset.pick); return updateAudienceCount(); }
   if(event.target.id==="pickTag"||event.target.id==="pickRegion") return renderPickList();
@@ -1755,10 +1784,10 @@ async function onSubmit(event){
   if(event.target.id==="deleteContactForm") return deleteContact(data);
   if(event.target.id==="deleteEventForm") return deleteEvent(data);
   if(event.target.id==="forgotForm") return sendResetEmail(data);
-  if(event.target.id==="staffEditForm"){ const res=await callStaff("update",{user_id:data.user_id,role:data.role,region_id:data.region_id||null,active:data.active==="on"}); if(res.error) return toast(res.error); closeModal(); audit("修改工作人員",data.user_id); persist(); render(); return toast("已更新"); }
+  if(event.target.id==="staffEditForm"){ const res=await callStaff("update",{user_id:data.user_id,role:data.role,region_id:data.region_id||null,active:data.active==="on",permissions:pickedPerms(event.target)}); if(res.error) return toast(res.error); closeModal(); audit("修改工作人員",data.user_id); persist(); render(); return toast("已更新"); }
   if(event.target.id==="inviteForm"){
     if(data.role==="region_lead"&&!data.region_id) return toast("區負責人必須指定區域");
-    const res=await callStaff("invite",{...data,region_id:data.role==="region_lead"?data.region_id:null});
+    const res=await callStaff("invite",{email:data.email,display_name:data.display_name,role:data.role,region_id:data.role==="region_lead"?data.region_id:null,permissions:pickedPerms(event.target)});
     if(res.error) return toast(res.error);
     audit("邀請工作人員",data.email); persist(); render(); showLinkModal("邀請連結",res.email,res.link);
   }
@@ -1814,6 +1843,7 @@ function demoRegister(data){
     if(eventState(e)!=="報名中") return `目前${eventState(e)}`;
     if(existing) Object.assign(existing,{attendance_status:"registered",cancelled_at:null,registered_at:new Date().toISOString()});
     else state.registrations.push({id:crypto.randomUUID(),event_id:data.event_id,contact_id:contact.id,attendance_status:"registered",payment_status:"pending",registered_at:new Date().toISOString(),cancelled_at:null,lead_city:data.lead_city||null,contact_mode:data.contact_mode||null,sleep_issue:data.sleep_issue||null,stress_issue:data.stress_issue||null,weekly_practice_interest:data.weekly_practice_interest==="on",online_trial_interest:data.online_trial_interest==="on",...snsAttribution(data)});
+    registerFeeDemo(existing||state.registrations[state.registrations.length-1]);
     e.registration_count++;
     return null;
 }
@@ -1823,7 +1853,7 @@ async function cancelRegistration(eventId){
     const contact=state.demoStudent?state.contacts.find(c=>c.id===state.demoStudent):state.contacts.find(c=>c.line_user_id===state.demoLine);
     const reg=contact&&state.registrations.find(r=>r.event_id===eventId&&r.contact_id===contact.id&&!r.cancelled_at);
     if(!reg)return toast("找不到可取消的報名");
-    reg.cancelled_at=new Date().toISOString();reg.attendance_status="cancelled";
+    reg.cancelled_at=new Date().toISOString();reg.attendance_status="cancelled"; syncFeeDemo(reg);
     const e=state.events.find(x=>x.id===eventId); if(e&&e.registration_count>0)e.registration_count--;persist();toast("已取消報名");
     forgetRegistration(eventId); render();return;
   }
