@@ -210,14 +210,14 @@ async function loadLiveData(){
     supabase.from("registrations").select("*").order("registered_at",{ascending:false}),
     supabase.from("event_roster").select("*"),
     supabase.from("message_campaigns").select("*").order("created_at",{ascending:false}),
-    supabase.from("audit_log").select("created_at,action,target_type,target_id").order("created_at",{ascending:false}).limit(50)
+    supabase.from("audit_log").select("created_at,actor_id,action,target_type,target_id").order("created_at",{ascending:false}).limit(50)
   ]);
   const staff = profile.data?.role === "admin" ? await supabase.from("staff_profiles").select("*") : {data:[]};
   const sponsorships = canManageMoney(profile.data||{}) ? await supabase.from("sponsorships").select("*").order("created_at",{ascending:false}) : {data:[]};
   const clickStats = profile.data?.role === "admin" ? await supabase.from("campaign_click_stats").select("*") : {data:[]};
   const tags = profile.data?.role === "admin" ? await supabase.from("tag_stats").select("*") : {data:[]};
   const applications = profile.data?.role === "admin" ? await supabase.from("student_applications").select("*").eq("status","pending").order("created_at") : {data:[]};
-  state={role:profile.data?.role||"none",eventsLoaded:true,region_id:profile.data?.region_id||null,permissions:profile.data?.permissions??null,display_name:profile.data?.display_name||session.user.email,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],clickStats:clickStats.data||[],applications:applications.data||[],tags:tags.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:"工作人員",action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
+  state={role:profile.data?.role||"none",eventsLoaded:true,region_id:profile.data?.region_id||null,permissions:profile.data?.permissions??null,display_name:profile.data?.display_name||session.user.email,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],clickStats:clickStats.data||[],applications:applications.data||[],tags:tags.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:auditActor(x.actor_id,staff.data),action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
   showUser(profile.data?.display_name||session.user.email);
   $("#logoutBtn").hidden=state.role==="none";
 }
@@ -2021,6 +2021,8 @@ async function sendCampaign(c,people){
   else { c.success_count=c.audience==="broadcast"?1:people.length;c.failed_count=0;c.status="sent";c.sent_at=new Date().toISOString();c.deliveries=c.audience==="broadcast"?[]:people.map(x=>({contact_id:x.id,status:"sent",error_code:null,attempted_at:c.sent_at})); }
   audit("確認並發送 LINE 訊息",c.name);persist();closeModal();render();toast(`已完成：成功 ${c.success_count}、失敗 ${c.failed_count}`);
 }
+// 資料庫紀錄的操作人：用工作人員名單對出真名；沒有 actor_id 是系統自動，對不到的是學員或已刪除的工作人員
+function auditActor(id,staff){ if(!id) return "系統"; return (staff||[]).find(s=>s.user_id===id)?.display_name||"學員／已刪除帳號"; }
 // 雲端：staff 列表沒有 id、也沒有 state.as，直接用登入者的名字（以前會誤配到名單第一位）
 function audit(action,target){ state.audit.unshift({at:new Date().toLocaleString("zh-TW"),actor:(live?state.display_name:state.staff?.find(s=>s.id===state.as)?.display_name)||"工作人員",action,target}); }
 function download(name,content,type){ const blob=new Blob([type.startsWith("text/csv")?"\ufeff"+content:content],{type});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);audit("匯出資料",name);persist();toast(`已下載 ${name}`); }
