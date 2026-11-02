@@ -1249,6 +1249,7 @@ function demoStaff(action,payload){
     return {ok:true,link:`${STUDENT_HOME}#activate?t=demo-${c.id}`,login,login_type:type,name:c.name};
   }
   if(action==="update"){ const s=state.staff.find(x=>x.id===payload.user_id); if(s.id===state.as&&(payload.active===false||(payload.role&&payload.role!=="admin"))) return {error:"不能停用或降級自己的帳號，避免沒有總管理"}; Object.assign(s,{...(payload.role?{role:payload.role,region_id:payload.role==="region_lead"?payload.region_id:null}:{}),...("permissions" in payload?{permissions:(payload.role||s.role)==="admin"?null:payload.permissions}:{}),...(typeof payload.active==="boolean"?{active:payload.active}:{})}); persist(); return {ok:true}; }
+  if(action==="delete"){ const s=state.staff.find(x=>x.id===payload.user_id); if(!s) return {error:"找不到這位工作人員"}; if(s.id===state.as) return {error:"不能刪除自己的帳號"}; if(payload.confirm_name!==s.display_name) return {error:"姓名不符，未刪除"}; if(s.role==="admin"&&s.active&&state.staff.filter(x=>x.role==="admin"&&x.active).length<=1) return {error:"至少要留一位使用中的總管理"}; state.staff=state.staff.filter(x=>x!==s); persist(); return {ok:true}; }
 }
 async function loadStaffList(){
   if(!isAdmin()) return;
@@ -1323,7 +1324,15 @@ async function staffEditForm(userId){
     <div class="field"><label>負責區域（區負責人必填）</label><select name="region_id">${regionOptions(s.region_id)}</select></div>
     <div class="field full">${permChecks(s.role,s.permissions)}</div>
     <label class="field full"><span><input type="checkbox" name="active" ${s.active?"checked":""}> 帳號啟用中（取消勾選＝停用，對方將無法登入後台）</span></label>
-    <button class="field full">儲存</button></div></form>`);
+    <button class="field full">儲存</button></div></form>
+    <div class="actions" style="margin-top:18px;justify-content:flex-end"><button type="button" class="danger" data-action="staff-delete" data-id="${s.user_id}">刪除這位工作人員</button></div>`);
+}
+// 刪除工作人員：要輸入顯示名稱確認。只是暫時不用的話，用「停用」就好（可以再啟用）
+function staffDeleteForm(userId){
+  const s=(state.staffList||[]).find(x=>x.user_id===userId); if(!s) return;
+  modal(`<h2>刪除工作人員</h2><div class="notice">刪除後，<strong>${escapeHtml(s.display_name)}</strong>（${escapeHtml(s.email||"")}）會從工作人員名單移除，<strong>不能再登入後台</strong>。<br>操作紀錄、建立過的活動都會保留；會員資料不受影響。之後同一個 Email 可以重新邀請。<br>只是暫時不用的話，建議改用「停用」。</div>
+    <form id="staffDeleteForm"><input type="hidden" name="user_id" value="${s.user_id}"><div class="field"><label>請輸入顯示名稱「${escapeHtml(s.display_name)}」確認</label><input name="confirm_name" required autocomplete="off"></div>
+    <div class="actions" style="margin-top:14px"><button class="danger">確認刪除</button><button type="button" class="secondary" data-action="close-modal">取消</button></div></form>`);
 }
 
 // ───── 活動建立與編輯（總管理、活動幹部）─────
@@ -1633,6 +1642,7 @@ async function onClick(event){
   if(action==="redeem-link") return redeemLink(btn);
   if(action==="copy-link"){ const el=$("#linkText"); el.select(); try{ await navigator.clipboard.writeText(el.value); toast("已複製"); }catch{ document.execCommand("copy"); toast("已複製"); } return; }
   if(action==="staff-edit") return staffEditForm(btn.dataset.id);
+  if(action==="staff-delete") return staffDeleteForm(btn.dataset.id);
   if(action==="staff-reset"){ const s=(state.staffList||[]).find(x=>x.user_id===btn.dataset.id); const res=s?.invited_pending?await callStaff("invite",{email:s.email,display_name:s.display_name,role:s.role,region_id:s.region_id,permissions:s.permissions??null}):await callStaff("reset",{user_id:btn.dataset.id}); if(res.error&&s?.invited_pending){ const again=await callStaff("reset",{user_id:btn.dataset.id}); if(again.error) return toast(again.error); return showLinkModal("邀請連結（重新產生）",again.email,again.link); } if(res.error) return toast(res.error); return showLinkModal(s?.invited_pending?"邀請連結（重新產生）":"重設密碼連結",res.email,res.link); }
   if(action==="invite-user") return modal(`<h2>邀請工作人員</h2><p class="muted">建立後會產生一條邀請連結，請用 LINE 傳給對方；對方點開自己設定密碼。</p><form id="inviteForm"><div class="field"><label>顯示名稱（輸入會員姓名會自動帶入 Email）</label><input name="display_name" list="inviteMembers" autocomplete="off" required>${inviteMemberDatalist()}<small class="muted" id="invitePicked"></small></div><div class="field"><label>Email</label><input name="email" type="email" required></div><div class="field"><label>權限</label><select name="role"><option value="region_lead">區負責人</option><option value="event_staff">活動幹部</option><option value="accountant">會計</option><option value="admin">總管理</option></select></div><div class="field"><label>負責區域（區負責人必填）</label><select name="region_id">${regionOptions(null)}</select></div>${permChecks("region_lead",null)}<button style="margin-top:12px">建立並產生邀請連結</button></form>`);
   if(action==="view-contact") return viewContact(btn.dataset.id);
@@ -1736,7 +1746,7 @@ document.addEventListener("change",event=>{
 });
 
 async function onSubmit(event){
-  if(!["eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","regPayForm","tagCreateForm","tagEditForm","tagCategoryForm","tagAssignForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","deleteContactForm","deleteEventForm","profileForm","signinForm","activateForm","studentLinkForm","applyForm"].includes(event.target.id))return;
+  if(!["eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","regPayForm","tagCreateForm","tagEditForm","tagCategoryForm","tagAssignForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","staffDeleteForm","deleteContactForm","deleteEventForm","profileForm","signinForm","activateForm","studentLinkForm","applyForm"].includes(event.target.id))return;
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target));
   if(event.target.id==="contactForm") return saveContact(data);
   if(event.target.id==="profileForm") return saveProfile(event.target,data);
@@ -1784,6 +1794,7 @@ async function onSubmit(event){
   if(event.target.id==="deleteContactForm") return deleteContact(data);
   if(event.target.id==="deleteEventForm") return deleteEvent(data);
   if(event.target.id==="forgotForm") return sendResetEmail(data);
+  if(event.target.id==="staffDeleteForm"){ const s=(state.staffList||[]).find(x=>x.user_id===data.user_id); if(data.confirm_name.trim()!==s?.display_name) return toast("姓名不符，未刪除"); const res=await callStaff("delete",{user_id:data.user_id,confirm_name:data.confirm_name.trim()}); if(res.error) return toast(res.error); closeModal(); audit("刪除工作人員",s.email||s.display_name); persist(); render(); return toast("已刪除工作人員"); }
   if(event.target.id==="staffEditForm"){ const res=await callStaff("update",{user_id:data.user_id,role:data.role,region_id:data.region_id||null,active:data.active==="on",permissions:pickedPerms(event.target)}); if(res.error) return toast(res.error); closeModal(); audit("修改工作人員",data.user_id); persist(); render(); return toast("已更新"); }
   if(event.target.id==="inviteForm"){
     if(data.role==="region_lead"&&!data.region_id) return toast("區負責人必須指定區域");
