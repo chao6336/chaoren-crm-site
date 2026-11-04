@@ -1,4 +1,4 @@
-import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, filterTags, parseTagCsv, matchContactsByKeys } from "./lib.js?v=20261102-1";
+import { ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys } from "./lib.js?v=20261104-1";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -635,6 +635,98 @@ async function untagOne(tagId,contactId){
   else { const c=state.contacts.find(x=>x.id===contactId); if(c){ c.tags=(c.tags||[]).filter(n=>n!==t.name); if(c.tag_expires) delete c.tag_expires[t.name]; } persist(); }
   audit("撕下標籤",t.name); render(); tagMembers(tagId); toast("已撕下");
 }
+
+// ── 會員資料頁的標籤（只有總管理；參考 MAAC 聯絡人檔案）──
+// 直接看到全部標籤、每個標籤旁 ✕ 撕下；「＋ 增加標籤」開選單：搜尋、一次勾最多 10 個，也能當場建立新標籤並勾選。
+let ctag=null; // {contactId, picked:Set(標籤名稱), q}
+function contactTagBox(raw){
+  const tags=raw.tags||[];
+  return `<div class="tag-box contact-tags"><div class="tag-head"><strong>標籤（${tags.length}）</strong><button class="link" data-action="ctag-open" data-id="${raw.id}">＋ 增加標籤</button></div>
+    <div>${tags.length?tags.map(t=>`<span class="pill tag-x">${escapeHtml(t)}<button type="button" data-action="ctag-remove" data-id="${raw.id}" data-name="${escapeHtml(t)}" aria-label="撕下 ${escapeHtml(t)}" title="撕下">✕</button></span>`).join(""):`<span class="muted">還沒有標籤</span>`}</div></div>`;
+}
+// 同名標籤（例如系統自動貼標用的）可能不只一個；貼標優先用手動建立的那個
+const tagsNamed=name=>tagList().filter(t=>t.name===name);
+const tagForName=name=>{ const ts=tagsNamed(name); return ts.find(t=>!t.is_system)||ts[0]; };
+function ctagOpen(contactId,picked=[]){
+  ctag={contactId,picked:new Set(picked),q:""};
+  modal(`<h2>選擇要貼上的標籤</h2>
+    <input id="ctagSearch" class="search" type="search" placeholder="搜尋分類或標籤名稱" autocomplete="off" style="width:100%">
+    <div id="ctagChosen" class="ctag-chosen"></div>
+    <div id="ctagList" class="ctag-list"></div>
+    <p><button class="link" data-action="ctag-new">＋ 新增標籤</button></p>
+    <div class="ctag-foot"><span id="ctagCount" class="muted"></span><div class="actions"><button type="button" class="secondary" data-action="ctag-cancel">取消</button><button type="button" id="ctagApply" data-action="ctag-apply">確認</button></div></div>`);
+  renderCtag(); $("#ctagSearch")?.focus();
+}
+function renderCtag(list=true){
+  if(!ctag||!$("#ctagList")) return;
+  const raw=list?myContacts().find(c=>c.id===ctag.contactId):null, opts=list?tagPickerOptions(tagList(),ctag.q,raw?.tags||[]):[];
+  $("#ctagChosen").innerHTML=[...ctag.picked].map(n=>`<span class="pill tag-x">${escapeHtml(n)}<button type="button" data-action="ctag-unpick" data-name="${escapeHtml(n)}" aria-label="取消勾選 ${escapeHtml(n)}">✕</button></span>`).join("");
+  if(list) $("#ctagList").innerHTML=opts.length?opts.slice(0,300).map(t=>`<label class="ctag-row"><input type="checkbox" data-ctag="${escapeHtml(t.name)}" ${ctag.picked.has(t.name)?"checked":""}><span>${escapeHtml(t.name)}${t.valid_days?` <span class="pill warn">${escapeHtml(tagExpiryLabel(t.valid_days))}</span>`:""}</span><small class="muted">${escapeHtml(t.category||"未分類")}</small></label>`).join("")+(opts.length>300?`<p class="muted">還有 ${opts.length-300} 個，請用搜尋縮小範圍</p>`:"")
+    :`<p class="muted">${ctag.q?"找不到符合的標籤，可以按下方「＋ 新增標籤」建立":"這位會員已經有全部的標籤了"}</p>`;
+  $("#ctagCount").textContent=`已選 ${ctag.picked.size} / ${TAG_PICK_MAX} 個標籤`;
+  $("#ctagApply").disabled=!ctag.picked.size;
+}
+function ctagToggle(box){
+  const n=box.dataset.ctag;
+  if(box.checked){ if(ctag.picked.size>=TAG_PICK_MAX){ box.checked=false; return toast(`一次最多選 ${TAG_PICK_MAX} 個標籤`); } ctag.picked.add(n); }
+  else ctag.picked.delete(n);
+  renderCtag(false); // 只更新上方已選與計數，清單不重畫，捲動位置不跳
+}
+function ctagCreateForm(){
+  const cats=[...new Set(tagList().map(t=>t.category).filter(Boolean))];
+  modal(`<form id="ctagCreateForm"><h2><button type="button" class="link" data-action="ctag-back" aria-label="返回">‹</button> 建立標籤</h2>
+    <div class="field"><label>標籤名稱（一行一個，最多 100 個、每個 40 字內）</label><textarea name="names" id="ctagNames" required placeholder="請輸入標籤名稱，一行一個"></textarea><small class="muted" id="ctagNamesNote"></small></div>
+    <div class="field" style="margin-top:12px"><label>標籤時效（這一批共用）</label><div class="actions"><label><input type="radio" name="expiry" value="permanent" checked> 永久</label><label><input type="radio" name="expiry" value="temporary"> 貼標後 <input name="valid_days" type="number" min="1" max="3650" style="width:90px"> 天內有效</label></div></div>
+    <div class="field" style="margin-top:12px"><label>分類（選填，20 字內）</label><input name="category" maxlength="20" list="ctagCats"><datalist id="ctagCats">${cats.map(c=>`<option value="${escapeHtml(c)}">`).join("")}</datalist></div>
+    <div class="actions" style="margin-top:14px"><button type="button" class="secondary" data-action="ctag-back">返回</button><button id="ctagCreateBtn" disabled>建立並勾選</button></div></form>`);
+  $("#ctagNames")?.focus();
+}
+function updateCtagNames(){
+  const p=parseTagNames($("#ctagNames")?.value||""), room=TAG_PICK_MAX-ctag.picked.size;
+  $("#ctagNamesNote").textContent=p.errors.length?p.errors.join("；"):p.names.length?`共 ${p.names.length} 個${p.names.length>room?`，但只能再勾 ${room} 個（一次最多 ${TAG_PICK_MAX} 個）`:""}`:"";
+  $("#ctagCreateBtn").disabled=!p.names.length||!!p.errors.length||p.names.length>room;
+}
+async function saveCtagCreate(data){
+  if(!ctag) return;
+  const p=parseTagNames(data.names); if(p.errors.length) return toast(p.errors[0]); if(!p.names.length) return toast("請至少輸入一個標籤名稱");
+  if(ctag.picked.size+p.names.length>TAG_PICK_MAX) return toast(`一次最多選 ${TAG_PICK_MAX} 個標籤`);
+  let valid_days=null; if(data.expiry==="temporary"){ const d=parseValidDays(data.valid_days); if(d.error||d.value==null) return toast(d.error||"請填有效天數"); valid_days=d.value; }
+  const category=(data.category||"").trim()||null, exist=new Set(tagList().map(t=>t.name)), fresh=p.names.filter(n=>!exist.has(n));
+  if(fresh.length){
+    if(live){ const {error}=await supabase.from("tags").insert(fresh.map(name=>({name,valid_days,category}))); if(error) return toast("建立失敗："+error.message); await loadLiveData(); }
+    else { state.tagDefs=[...(state.tagDefs||[]),...fresh.map(name=>({name,valid_days,category,created_at:new Date().toISOString()}))]; persist(); }
+    audit("建立標籤",fresh.join("、").slice(0,80));
+  }
+  const owned=new Set(myContacts().find(c=>c.id===ctag.contactId)?.tags||[]), add=p.names.filter(n=>!owned.has(n));
+  ctagOpen(ctag.contactId,[...ctag.picked,...add]);
+  toast(fresh.length?`成功新增 ${fresh.length} 個標籤${fresh.length<p.names.length?`（${p.names.length-fresh.length} 個已存在，直接勾選）`:""}`:"這些標籤都已經存在，已幫你勾選");
+}
+async function applyCtag(){
+  if(!ctag?.picked.size) return;
+  const id=ctag.contactId, raw=myContacts().find(c=>c.id===id); if(!raw) return toast("找不到這位會員");
+  const picks=[...ctag.picked].map(n=>tagForName(n)).filter(Boolean); if(!picks.length) return toast("找不到選取的標籤，請重新整理");
+  const btn=$("#ctagApply"); if(btn){ btn.disabled=true; btn.textContent="貼標中…"; }
+  if(live){
+    const {error}=await supabase.from("contact_tags").upsert(picks.map(t=>({contact_id:id,tag_id:t.id,expires_at:tagExpiresAt(t.valid_days)})),{onConflict:"contact_id,tag_id"});
+    if(error){ if(btn){ btn.disabled=false; btn.textContent="確認"; } return toast("貼標失敗："+error.message); }
+    await loadLiveData();
+  } else {
+    const c=state.contacts.find(x=>x.id===id); c.tag_expires||={};
+    for(const t of picks){ if(!(c.tags||[]).includes(t.name)) c.tags=[...(c.tags||[]),t.name]; const at=tagExpiresAt(t.valid_days); if(at) c.tag_expires[t.name]=at; else delete c.tag_expires[t.name]; }
+    persist();
+  }
+  audit("貼上標籤",`${raw.member_no||""}・${picks.map(t=>t.name).join("、")}`.slice(0,80)); ctag=null; render(); viewContact(id); toast(`已貼上 ${picks.length} 個標籤`);
+}
+async function removeCtag(contactId,name){
+  const raw=myContacts().find(c=>c.id===contactId); if(!raw) return;
+  if(!confirm(`要把「${name}」從 ${raw.name} 身上撕下嗎？`)) return;
+  if(live){
+    const ids=tagsNamed(name).map(t=>t.id); if(!ids.length) return toast("找不到這個標籤，請重新整理");
+    const {error}=await supabase.from("contact_tags").delete().eq("contact_id",contactId).in("tag_id",ids); if(error) return toast("撕下失敗："+error.message);
+    await loadLiveData();
+  } else { const c=state.contacts.find(x=>x.id===contactId); c.tags=(c.tags||[]).filter(n=>n!==name); if(c.tag_expires) delete c.tag_expires[name]; persist(); }
+  audit("撕下標籤",`${raw.member_no||""}・${name}`.slice(0,80)); render(); viewContact(contactId); toast("已撕下");
+}
 function contactRows(rows){ return rows.map(c=>`<tr class="clickable" data-action="view-contact" data-id="${c.id}" data-search="${escapeHtml([c.member_no,c.name,c.display_name,...(c.tags||[])].join(" ").toLowerCase())}"><td class="member-no">${escapeHtml(c.member_no||"")}</td><td><strong>${escapeHtml(c.name)}</strong><br><small>${escapeHtml(c.display_name)}</small></td><td>${escapeHtml(c.gender||"—")}／${c.age??"—"}</td><td>${escapeHtml(c.region_name||regionName(c.region_id))}</td><td>${escapeHtml(showPhone(c.phone))}</td><td>${tagPills(c.tags)}</td><td><span class="pill ${c.line_status!=="active"?"off":""}">${({active:"可聯絡",blocked:"已封鎖"})[c.line_status]||"未綁定"}</span></td></tr>`).join(""); }
 
 function viewContact(id){
@@ -645,7 +737,7 @@ function viewContact(id){
   const nid=c.national_id_masked?`${escapeHtml(c.national_id_masked)}${isAdmin()?` <button class="link" data-action="reveal-nid" data-id="${id}">查看</button>`:""}`:"—";
   modal(`<div class="profile-head"><div class="avatar" aria-hidden="true">${escapeHtml((c.name||"?").slice(0,1))}</div><div><h2>${escapeHtml(c.name)}</h2><p class="muted">${raw.line_user_id||raw.line_status==="active"?`已綁定 LINE${c.display_name?`（${escapeHtml(c.display_name)}）`:""}`:"尚未綁定 LINE"}</p></div></div>
     ${line("會員編號",c.member_no)}${line("性別",c.gender)}${line("出生年月日",c.birth_date?`${c.birth_date}（${age} 歲）`:"")}${line("區域",c.region_name||regionName(c.region_id))}${line("居住縣市",c.residence_city)}${line("手機",showPhone(c.phone))}${line("Email",c.email)}${line("地址",c.address)}
-    <div class="kpi-line"><span>身分證</span><strong id="nidValue">${nid}</strong></div>${isAdmin()?line("LINE UID",raw.line_user_id||"未綁定"):""}${line("備註",c.notes)}${(raw.tags||[]).length?`<details class="tag-box"><summary>標籤與參加紀錄（${raw.tags.length}）</summary><div>${raw.tags.map(t=>`<span class="pill">${escapeHtml(t)}</span>`).join(" ")}</div></details>`:""}
+    <div class="kpi-line"><span>身分證</span><strong id="nidValue">${nid}</strong></div>${isAdmin()?line("LINE UID",raw.line_user_id||"未綁定"):""}${line("備註",c.notes)}${isAdmin()?contactTagBox(raw):(raw.tags||[]).length?`<details class="tag-box"><summary>標籤與參加紀錄（${raw.tags.length}）</summary><div>${raw.tags.map(t=>`<span class="pill">${escapeHtml(t)}</span>`).join(" ")}</div></details>`:""}
     <h3>活動與課程</h3>${history.length?`<ul class="plain">${history.map(h=>`<li>${escapeHtml(h.event?.title||"已刪除的活動")}・${({attended:"已參加",registered:"已報名",cancelled:"已取消",absent:"未出席"})[h.attendance_status]||h.attendance_status}</li>`).join("")}</ul>`:`<p class="muted">尚無紀錄</p>`}
     ${isAdmin()?sponsorBlock(id):""}
     ${isAdmin()?`<div class="actions"><button data-action="edit-contact" data-id="${id}">編輯資料</button><button class="secondary" data-action="student-link" data-id="${id}">學員登入連結</button><button class="danger" data-action="delete-contact" data-id="${id}">刪除會員</button></div>`:""}`);
@@ -1664,6 +1756,13 @@ async function onClick(event){
   if(action==="tag-members") return tagMembers(btn.dataset.id);
   if(action==="tag-untag-one") return untagOne(btn.dataset.id,btn.dataset.contact);
   if(action==="tag-assign") return tagAssignForm();
+  if(action==="ctag-open") return ctagOpen(btn.dataset.id);
+  if(action==="ctag-remove") return removeCtag(btn.dataset.id,btn.dataset.name);
+  if(action==="ctag-unpick"){ ctag?.picked.delete(btn.dataset.name); return renderCtag(); }
+  if(action==="ctag-new") return ctagCreateForm();
+  if(action==="ctag-back") return ctag&&ctagOpen(ctag.contactId,[...ctag.picked]);
+  if(action==="ctag-cancel"){ const id=ctag?.contactId; ctag=null; return id?viewContact(id):closeModal(); }
+  if(action==="ctag-apply") return applyCtag();
   if(action==="tag-assign-go") return applyTagAssign();
   if(action==="export-pick") return exportPicker(btn.dataset.kind);
   if(action==="export-all"||action==="export-none"){ document.querySelectorAll('[data-export-row]:not([hidden]) input[name="export_event"]:not(:disabled)').forEach(x=>x.checked=action==="export-all"); return updateExportCount(); }
@@ -1711,6 +1810,8 @@ document.addEventListener("input",event=>{
   if(event.target.id==="rosterSearch"){ rosterView.q=event.target.value; return filterRoster(); }
   if(event.target.id==="tagSearch"){ tagView.q=event.target.value; return filterTagRows(); }
   if(event.target.id==="tagNames") return updateTagCreateCount();
+  if(event.target.id==="ctagSearch"&&ctag){ ctag.q=event.target.value; return renderCtag(); }
+  if(event.target.id==="ctagNames") return updateCtagNames();
   if(event.target.name==="display_name"&&event.target.form?.id==="inviteForm") return fillInviteEmail(event.target);
   if(event.target.name==="email"&&event.target.form?.id==="inviteForm"){ event.target.dataset.auto=""; return; }
   if(event.target.name==="member_query"){ const c=pickMember(event.target.value), el=$("#memberPicked"); if(el) el.textContent=c?`已選：${contactLabel(c.id)}`:"從下拉清單點選一位"; return; }
@@ -1729,6 +1830,7 @@ document.addEventListener("change",event=>{
   if(event.target.dataset.tagPick){ event.target.checked?tagPick.add(event.target.dataset.tagPick):tagPick.delete(event.target.dataset.tagPick); return updateTagBulk(); }
   if(event.target.id==="tagPickAll"){ document.querySelectorAll("[data-tag-row]:not([hidden]) [data-tag-pick]").forEach(x=>{ x.checked=event.target.checked; event.target.checked?tagPick.add(x.dataset.tagPick):tagPick.delete(x.dataset.tagPick); }); return updateTagBulk(); }
   if(event.target.id==="tagCsvFile") return readTagCsv(event.target.files?.[0]);
+  if(event.target.dataset?.ctag!==undefined&&ctag) return ctagToggle(event.target);
   if(event.target.id==="rosterStatus"||event.target.id==="rosterPay"){ rosterView[event.target.id==="rosterStatus"?"status":"pay"]=event.target.value; return filterRoster(); }
   if(event.target.name==="export_event") return updateExportCount();
   if(event.target.name==="audience"&&event.target.closest("#campaignForm")){ document.querySelectorAll("#campaignForm [data-audience]").forEach(el=>el.hidden=el.dataset.audience!==event.target.value); return updateAudienceCount(); }
@@ -1746,7 +1848,7 @@ document.addEventListener("change",event=>{
 });
 
 async function onSubmit(event){
-  if(!["eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","regPayForm","tagCreateForm","tagEditForm","tagCategoryForm","tagAssignForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","staffDeleteForm","deleteContactForm","deleteEventForm","profileForm","signinForm","activateForm","studentLinkForm","applyForm"].includes(event.target.id))return;
+  if(!["eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","regPayForm","tagCreateForm","tagEditForm","tagCategoryForm","tagAssignForm","ctagCreateForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","staffDeleteForm","deleteContactForm","deleteEventForm","profileForm","signinForm","activateForm","studentLinkForm","applyForm"].includes(event.target.id))return;
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target));
   if(event.target.id==="contactForm") return saveContact(data);
   if(event.target.id==="profileForm") return saveProfile(event.target,data);
@@ -1759,6 +1861,7 @@ async function onSubmit(event){
   if(event.target.id==="markPaidForm") return togglePaid(data.sponsor_id,data);
   if(event.target.id==="regPayForm") return saveRegPay(data);
   if(event.target.id==="tagCreateForm") return saveTagCreate(data);
+  if(event.target.id==="ctagCreateForm") return saveCtagCreate(data);
   if(event.target.id==="tagEditForm") return saveTagEdit(data);
   if(event.target.id==="tagCategoryForm") return saveTagBulkCategory(data);
   if(event.target.id==="tagAssignForm") return previewTagAssign(data);

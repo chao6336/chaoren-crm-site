@@ -525,6 +525,16 @@ export function parseTagNames(text = "") {
   if (names.length > 100) errors.push(`一次最多 100 個，現在有 ${names.length} 個`);
   return { names: names.slice(0, 100), errors };
 }
+// 會員資料頁「增加標籤」：一次最多勾 10 個（照 MAAC），列出這位會員還沒有的標籤，可搜尋名稱或分類，同名只列一次，新建的排前面。
+export const TAG_PICK_MAX = 10;
+export function tagPickerOptions(tags = [], q = "", owned = []) {
+  const have = new Set(owned), seen = new Set(), k = String(q).trim().toLowerCase();
+  return tags.filter(t => {
+    if (!t?.name || have.has(t.name) || seen.has(t.name)) return false;
+    seen.add(t.name);
+    return !k || t.name.toLowerCase().includes(k) || String(t.category || "").toLowerCase().includes(k);
+  }).sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")) || a.name.localeCompare(b.name, "zh-Hant"));
+}
 export function filterTags(tags = [], { q = "", expiry = "", category = "" } = {}) {
   const k = q.trim().toLowerCase();
   return tags.filter(t => (!k || t.name.toLowerCase().includes(k))
