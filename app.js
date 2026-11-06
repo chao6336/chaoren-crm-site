@@ -1444,7 +1444,7 @@ function eventForm(id,newKind){
   const e=id?state.events.find(x=>x.id===id):{capacity:24,fee_note:"免費",status:"published",kind:newKind==="course"?"course":"event"}; if(!e)return;
   const v=key=>escapeHtml(e[key]??""), rows=id?seriesOf(state.events,e):[e], K=KIND_LABELS[kindOf(e)];
   modal(`<h2>${id?"編輯":"建立"}${K}</h2><form id="eventForm"><input type="hidden" name="event_id" value="${id||""}"><input type="hidden" name="removed_sessions" value=""><div class="form-grid">
-    <div class="field full"><label>類型</label><div class="actions">${Object.entries(KIND_LABELS).map(([k,t])=>`<label><input type="radio" name="kind" value="${k}" ${kindOf(e)===k?"checked":""}> ${t}</label>`).join("")}</div></div>
+    <input type="hidden" name="kind" value="${kindOf(e)}"><!-- 類型由所在頁面（活動／課程）決定，不讓使用者改 -->
     <div class="field full"><label>名稱 *</label><input name="title" required maxlength="120" value="${v("title")}"></div>
     <div class="field full"><label>說明</label><textarea name="theme" maxlength="1000">${v("theme")}</textarea></div>
     <div class="field full"><label>場次</label><div id="sessionRows">${rows.map(sessionRow).join("")}</div><div class="actions"><button type="button" class="secondary" data-action="add-session">＋ 新增場次</button></div><small class="muted">只有一場就不用填場次名稱。兩場以上會共用一張報名 QR，學員報名時勾選要參加哪幾場；每場各自計算名額、各自報到。</small></div>
