@@ -717,12 +717,21 @@ async function applyCtag(){
   }
   audit("貼上標籤",`${raw.member_no||""}・${picks.map(t=>t.name).join("、")}`.slice(0,80)); ctag=null; render(); viewContact(id); toast(`已貼上 ${picks.length} 個標籤`);
 }
+// 用 CRM 自己的確認視窗，不用瀏覽器的 confirm()：Chrome 若被勾過「防止這個網頁產生其他對話方塊」，confirm() 會直接當成取消，按 ✕ 就像沒反應。
+function removeCtagConfirm(contactId,name){
+  const raw=myContacts().find(c=>c.id===contactId); if(!raw) return toast("找不到這位會員");
+  modal(`<h2>撕下標籤</h2><p>要把「<strong>${escapeHtml(name)}</strong>」從 ${escapeHtml(raw.name)} 身上撕下嗎？</p><p class="muted">只會拿掉這位會員身上的標籤，標籤本身和其他會員不受影響。</p>
+    <div class="actions"><button class="danger" id="ctagRemoveGo" data-action="ctag-remove-go" data-id="${escapeHtml(contactId)}" data-name="${escapeHtml(name)}">撕下</button><button type="button" class="secondary" data-action="view-contact" data-id="${escapeHtml(contactId)}">取消</button></div>`);
+}
 async function removeCtag(contactId,name){
   const raw=myContacts().find(c=>c.id===contactId); if(!raw) return;
-  if(!confirm(`要把「${name}」從 ${raw.name} 身上撕下嗎？`)) return;
+  const go=$("#ctagRemoveGo"); if(go){ go.disabled=true; go.textContent="撕下中…"; }
   if(live){
-    const ids=tagsNamed(name).map(t=>t.id); if(!ids.length) return toast("找不到這個標籤，請重新整理");
-    const {error}=await supabase.from("contact_tags").delete().eq("contact_id",contactId).in("tag_id",ids); if(error) return toast("撕下失敗："+error.message);
+    const ids=tagsNamed(name).map(t=>t.id); if(!ids.length){ viewContact(contactId); return toast("找不到這個標籤，請重新整理"); }
+    const {data,error}=await supabase.from("contact_tags").delete().eq("contact_id",contactId).in("tag_id",ids).select("tag_id");
+    if(error){ viewContact(contactId); return toast("撕下失敗："+error.message); }
+    // 資料庫沒報錯但一筆都沒刪到（例如權限不足），不要假裝成功
+    if(!data?.length){ viewContact(contactId); return toast("沒有撕下任何標籤，可能沒有權限或資料已變更，請重新整理"); }
     await loadLiveData();
   } else { const c=state.contacts.find(x=>x.id===contactId); c.tags=(c.tags||[]).filter(n=>n!==name); if(c.tag_expires) delete c.tag_expires[name]; persist(); }
   audit("撕下標籤",`${raw.member_no||""}・${name}`.slice(0,80)); render(); viewContact(contactId); toast("已撕下");
@@ -1757,7 +1766,8 @@ async function onClick(event){
   if(action==="tag-untag-one") return untagOne(btn.dataset.id,btn.dataset.contact);
   if(action==="tag-assign") return tagAssignForm();
   if(action==="ctag-open") return ctagOpen(btn.dataset.id);
-  if(action==="ctag-remove") return removeCtag(btn.dataset.id,btn.dataset.name);
+  if(action==="ctag-remove") return removeCtagConfirm(btn.dataset.id,btn.dataset.name);
+  if(action==="ctag-remove-go") return removeCtag(btn.dataset.id,btn.dataset.name);
   if(action==="ctag-unpick"){ ctag?.picked.delete(btn.dataset.name); return renderCtag(); }
   if(action==="ctag-new") return ctagCreateForm();
   if(action==="ctag-back") return ctag&&ctagOpen(ctag.contactId,[...ctag.picked]);
