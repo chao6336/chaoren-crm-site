@@ -40,8 +40,12 @@ export function permsToSave(role, picked) {
 export function canHandlePayments(who) {
   return hasPerm(who, "payments");
 }
+// 贊助紀錄開關（2026-11-11 Rosanna 決定先關閉、不顯示）：三單位財務各自處理，CRM 不放財務功能。
+// 關閉時選單、頁面、會員資料頁的贊助區塊、權限勾選與週報的「贊助」都不出現；資料庫裡既有的贊助資料保留不刪。
+// 要重新開啟：改成 true，並重新建立資料庫的 registrations_fee_sync trigger（見 supabase/migrations/2026-11-11_disable_sponsorships.sql）。
+export const SPONSORSHIPS_ENABLED = false;
 export function canManageMoney(who) {
-  return hasPerm(who, "sponsors");
+  return SPONSORSHIPS_ENABLED && hasPerm(who, "sponsors");
 }
 // 看全部區域的報名名單（報到、登記繳費也要看得到名單）
 export function canSeeAllRosters(who) {
@@ -641,6 +645,10 @@ export function addUtm(url, campaignId) {
 export function weeklyReport({ contacts = [], registrations = [], events = [], campaigns = [], sponsorships = [], clickStats = [] }, start, costPerMessage = 0.15) {
   const from = weekStart(start), to = new Date(from); to.setDate(to.getDate() + 7);
   const prevFrom = new Date(from); prevFrom.setDate(prevFrom.getDate() - 7);
+  // 報名費：規則和資料庫原本的 sync_registration_fee 一樣（有金額、未繳或已繳、取消且未繳不算）
+  const isFeeDue = r => ["pending", "paid"].includes(r.payment_status) && Number(r.amount) > 0 && (!r.cancelled_at || r.payment_status === "paid");
+  const isPaidFee = r => r.payment_status === "paid" && Number(r.amount) > 0;
+  const donations = sponsorships.filter(s => !s.registration_id);
   // paid_at 是日期字串（YYYY-MM-DD），當成當地午夜，不能被當成 UTC
   const at = v => !v ? null : /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00`) : new Date(v);
   const inRange = (v, a, b) => { const t = at(v); return !!t && t >= a && t < b; };
@@ -652,15 +660,16 @@ export function weeklyReport({ contacts = [], registrations = [], events = [], c
     const heldRegs = registrations.filter(r => held.some(e => e.id === r.event_id) && !r.cancelled_at);
     const attended = heldRegs.filter(r => r.attendance_status === "attended").length;
     const sent = campaigns.filter(c => ["sent", "partial"].includes(c.status) && inRange(c.sent_at, a, b));
-    const paid = sponsorships.filter(s => s.paid && inRange(s.paid_at, a, b));
     const sum = list => list.reduce((t, s) => t + (Number(s.amount) || 0), 0);
+    // 報名費直接從報名的繳費欄位算（不再經過贊助紀錄）；贊助只算不是報名費的那幾筆
+    const feePaid = registrations.filter(r => isPaidFee(r) && inRange(r.paid_at, a, b));
+    const donationPaid = donations.filter(s => s.paid && inRange(s.paid_at, a, b));
     // 每則推播的成效：點擊（不重複）、訂單（從推播連結來的報名）、營收（這些報名已收的報名費）、成本、ROAS
     const camps = sent.map(c => {
       const st = clickStats.find(x => x.campaign_id === c.id) || {};
       const regsC = registrations.filter(r => r.utm_campaign === c.id && !r.cancelled_at);
-      const ids = new Set(regsC.map(r => r.id));
       const delivered = c.audience === "broadcast" ? 0 : Number(c.success_count) || 0;
-      const revenue = sum(sponsorships.filter(s => s.paid && ids.has(s.registration_id)));
+      const revenue = sum(regsC.filter(isPaidFee));
       const cost = Math.round(delivered * costPerMessage * 100) / 100;
       return { id: c.id, name: c.name || "（未命名）", broadcast: c.audience === "broadcast", sent_at: c.sent_at, delivered, clicks: Number(st.clicks) || 0, uniqueClicks: Number(st.unique_clicks) || 0,
         ctr: delivered ? Math.round((Number(st.unique_clicks) || 0) / delivered * 10000) / 100 : null, orders: regsC.length, revenue, cost, roas: cost ? Math.round(revenue / cost * 100) / 100 : null };
@@ -683,10 +692,10 @@ export function weeklyReport({ contacts = [], registrations = [], events = [], c
       campaigns: sent.filter(c => c.audience !== "broadcast").length,
       broadcasts: sent.filter(c => c.audience === "broadcast").length,
       pushMessages: sent.filter(c => c.audience !== "broadcast").reduce((t, c) => t + (Number(c.success_count) || 0), 0),
-      revenue: sum(paid),
-      feeRevenue: sum(paid.filter(s => s.registration_id)),
-      donationRevenue: sum(paid.filter(s => !s.registration_id)),
-      newReceivable: sum(sponsorships.filter(s => inRange(s.created_at, a, b))),
+      revenue: sum(feePaid) + sum(donationPaid),
+      feeRevenue: sum(feePaid),
+      donationRevenue: sum(donationPaid),
+      newReceivable: sum(registrations.filter(r => isFeeDue(r) && inRange(r.registered_at, a, b))) + sum(donations.filter(s => inRange(s.created_at, a, b))),
       _regs: regs, _held: held, _sent: sent
     };
   };
@@ -705,7 +714,7 @@ export function weeklyReport({ contacts = [], registrations = [], events = [], c
     activeMembers: active.length,
     tagCoverage: active.length ? Math.round(active.filter(c => (c.tags || []).length).length / active.length * 10000) / 100 : 0,
     lineReachable: active.filter(c => c.line_status === "active" && c.marketing_consent).length,
-    outstanding: sponsorships.filter(s => !s.paid).reduce((t, s) => t + (Number(s.amount) || 0), 0),
+    outstanding: [...registrations.filter(r => isFeeDue(r) && r.payment_status === "pending"), ...donations.filter(s => !s.paid)].reduce((t, s) => t + (Number(s.amount) || 0), 0),
     best: {
       event: topEvent ? { name: evName(topEvent[0]), count: topEvent[1] } : null,
       attendance: bestAttendance,
