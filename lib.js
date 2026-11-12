@@ -67,6 +67,133 @@ export function canCheckin(who) {
   const role = typeof who === "string" ? who : who?.role;
   return role === "region_lead" || hasPerm(who, "checkin");
 }
+
+// ───── 多單位（2026-11-12）─────
+// 規則和資料庫 2026-11-12_multi_org.sql 一致，兩邊要一起改：
+//   平台總管理（staff_profiles.role='admin'）管三個單位；其他人看 org_members（每個單位各一個角色）。
+//   看得到活動 ≠ 看得到名單：活動依共享方式開放，名單只給所屬單位有權限的人與被指派的志工。
+// who：{ admin, memberships:[{org_id, role, permissions, region_id}], assignments:[{event_id, can_view_roster, can_checkin, expires_at}] }
+export const ORGS = [{ id: "chaoren", name: "晁人" }, { id: "weidi", name: "維諦" }, { id: "xinlidao", name: "心理道" }];
+export const DEFAULT_ORG = "chaoren";
+export const ORG_ROLE_LABELS = { org_admin: "單位管理者", event_staff: "活動管理者", accountant: "會計", viewer: "查詢人員", region_lead: "區負責人" };
+export const ORG_PERMS = PERMS.filter(([key]) => key !== "sponsors");
+export const ORG_ROLE_PERMS = {
+  org_admin: ["events", "roster", "payments", "checkin", "members"],
+  event_staff: ["events", "roster", "payments", "checkin"],
+  accountant: ["roster", "payments"],
+  viewer: ["roster"],
+  region_lead: []
+};
+export const VISIBILITY_LABELS = { org: "單位內部", selected: "指定單位", all: "全平台共享" };
+const ORG_PERM_KEYS = ORG_PERMS.map(([key]) => key);
+
+export const eventOrg = event => event?.org_id || DEFAULT_ORG;
+export function membershipOf(who, orgId) {
+  return (who?.memberships || []).find(m => m.org_id === orgId) || null;
+}
+export function orgPermsOf(who, orgId) {
+  if (who?.admin) return ORG_PERM_KEYS;
+  const m = membershipOf(who, orgId);
+  if (!m) return [];
+  return Array.isArray(m.permissions) ? m.permissions.filter(p => ORG_PERM_KEYS.includes(p)) : ORG_ROLE_PERMS[m.role] || [];
+}
+export const hasOrgPerm = (who, orgId, perm) => orgPermsOf(who, orgId).includes(perm);
+export const isOrgMember = (who, orgId) => Boolean(who?.admin || membershipOf(who, orgId));
+export const isOrgAdmin = (who, orgId) => Boolean(who?.admin || membershipOf(who, orgId)?.role === "org_admin");
+// 能指派志工的單位（平台總管理：全部）
+export const assignableOrgs = (who, orgs = ORGS) => orgs.filter(o => isOrgAdmin(who, o.id)).map(o => o.id);
+
+// 未過期的活動指派
+export function assignmentFor(who, eventId, now = new Date()) {
+  return (who?.assignments || []).find(a => a.event_id === eventId && (!a.expires_at || new Date(a.expires_at) > now)) || null;
+}
+// 這場活動有沒有分享給某個單位（不含所屬單位本身）
+export function sharedWith(event, orgId) {
+  if (!event || eventOrg(event) === orgId) return false;
+  return event.visibility === "all" || (event.visibility === "selected" && (event.shared_org_ids || []).includes(orgId));
+}
+export function canViewEvent(who, event, now = new Date()) {
+  if (!event) return false;
+  if (who?.admin || isOrgMember(who, eventOrg(event))) return true;
+  if ((who?.memberships || []).some(m => sharedWith(event, m.org_id))) return true;
+  return Boolean(assignmentFor(who, event.id, now));
+}
+export const canManageEventOf = (who, event) => hasOrgPerm(who, eventOrg(event), "events");
+export function canSeeEventRoster(who, event, now = new Date()) {
+  const org = eventOrg(event);
+  if (["roster", "checkin", "payments", "events"].some(p => hasOrgPerm(who, org, p))) return true;
+  const a = assignmentFor(who, event?.id, now);
+  return Boolean(a && (a.can_view_roster || a.can_checkin));
+}
+// 報到：單位的「現場報到」或被指派可報到；晁人區負責人自己區另外看 isRegionLeadFor
+export function canCheckinEvent(who, event, now = new Date()) {
+  return hasOrgPerm(who, eventOrg(event), "checkin") || Boolean(assignmentFor(who, event?.id, now)?.can_checkin);
+}
+export const canPayEvent = (who, event) => hasOrgPerm(who, eventOrg(event), "payments");
+// 晁人區負責人：晁人活動裡自己區的會員
+export function regionLeadFor(who, event) {
+  if (eventOrg(event) !== "chaoren") return null;
+  const m = membershipOf(who, "chaoren");
+  return m?.role === "region_lead" ? m.region_id : null;
+}
+
+// 某個單位畫面裡要列的活動：自己單位的＋分享給這個單位的（都要看得到）
+export function eventsInOrgView(events = [], who, orgId, now = new Date()) {
+  return events.filter(e => canViewEvent(who, e, now) && (eventOrg(e) === orgId || sharedWith(e, orgId)));
+}
+// 指派給我、但我不是那個單位成員的活動（志工看的清單）
+export function assignedEvents(events = [], who, now = new Date()) {
+  return events.filter(e => assignmentFor(who, e.id, now) && !isOrgMember(who, eventOrg(e)));
+}
+// 我可以切換的單位（平台總管理：全部）
+export function orgsOf(who, orgs = ORGS) {
+  return who?.admin ? orgs.map(o => o.id) : orgs.filter(o => membershipOf(who, o.id)).map(o => o.id);
+}
+
+// 轉成舊版頁面用的身分（role／permissions／region_id），讓既有畫面照單位運作
+export function orgViewer(who, orgId) {
+  if (who?.admin) return { role: "admin", permissions: null, region_id: null };
+  const m = membershipOf(who, orgId);
+  if (!m) return { role: "none", permissions: [], region_id: null };
+  return { role: m.role, permissions: orgPermsOf(who, orgId), region_id: m.region_id || null };
+}
+// 某場活動的身分：所屬單位的權限，再加上指派給我的功能
+export function eventViewer(who, event, now = new Date()) {
+  const base = orgViewer(who, eventOrg(event));
+  if (base.role === "admin") return base;
+  const a = assignmentFor(who, event?.id, now);
+  if (!a) return base;
+  const extra = [a.can_view_roster && "roster", a.can_checkin && "checkin"].filter(Boolean);
+  return { ...base, role: base.role === "none" ? "volunteer" : base.role, permissions: [...new Set([...(base.permissions || []), ...extra])] };
+}
+// 志工指派預設到期：活動結束（沒有結束時間就開始後 4 小時）的隔天 23:59
+export function defaultAssignmentExpiry(event) {
+  const end = event?.ends_at ? new Date(event.ends_at) : new Date(new Date(event?.starts_at || Date.now()).getTime() + 4 * 3600e3);
+  const d = new Date(end); d.setDate(d.getDate() + 1); d.setHours(23, 59, 0, 0);
+  return d;
+}
+// 展示版的報名名單（雲端由 event_roster view 決定）：每場活動各自判斷——
+// 有名單權限或被指派的人看整場；晁人區負責人只看自己區；其他人看不到。欄位和 rosterFor 一樣只帶最少資料。
+export function rosterForEvents(events = [], registrations = [], contacts = [], who, regionName = () => "", now = new Date()) {
+  const byId = new Map(contacts.map(c => [c.id, c]));
+  const rule = new Map(events.map(e => [e.id, canSeeEventRoster(who, e, now) ? "all" : regionLeadFor(who, e)]));
+  // 金額、繳費日期、收據號碼：單位有名單相關權限、被指派「看名單」或區負責人才看得到；只被指派「操作報到」的志工看不到（同資料庫 event_roster）
+  const money = new Map(events.map(e => [e.id, ["roster", "checkin", "payments", "events"].some(p => hasOrgPerm(who, eventOrg(e), p)) || Boolean(assignmentFor(who, e.id, now)?.can_view_roster) || Boolean(regionLeadFor(who, e))]));
+  return registrations.filter(r => {
+    const k = rule.get(r.event_id);
+    return k === "all" || (k && byId.get(r.contact_id)?.region_id === k);
+  }).map(r => {
+    const c = byId.get(r.contact_id) || {};
+    const hide = money.get(r.event_id) ? {} : { amount: null, paid_at: null, receipt_no: null };
+    return { ...r, ...hide, member_no: c.member_no || "", name: c.name || "未知", region_id: c.region_id || null, region_name: c.region_id ? regionName(c.region_id) : "未分區", phone_last3: String(c.phone || "").slice(-3) };
+  });
+}
+// 單位角色勾選：和角色預設一樣就存 null
+export function orgPermsToSave(role, picked = []) {
+  const list = ORG_PERM_KEYS.filter(p => picked.includes(p));
+  const base = ORG_ROLE_PERMS[role] || [];
+  return list.length === base.length && list.every(p => base.includes(p)) ? null : list;
+}
 export const GENDERS = ["男", "女", "其他"];
 
 // 居住縣市：和「所屬區域」（決定由哪位區負責人管）分開，只記住在哪裡、方便統計。順序同內政部縣市排列。
