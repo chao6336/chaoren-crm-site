@@ -960,9 +960,9 @@ function register(){
     return `<article class="card student-card" style="max-width:640px;margin:20px auto"><h1>${wanted?"找不到這場活動":"選擇要報名的活動"}</h1>${IS_ADMIN?"":`<p><a href="#me">已報名過？看我的活動 →</a></p>`}${wanted?`<p class="muted">連結可能已過期，或活動已下架。以下是目前開放報名的活動：</p>`:""}${open.length?`<ul class="student-list">${open.map(e=>{const n=eventSessions(state.events,e).length;return `<li class="student-item"><div><strong>${escapeHtml(e.title)}</strong><small>${hostName(e)?`${escapeHtml(hostName(e))}主辦・`:""}${n>1?`共 ${n} 場・從 ${fmtDate(e.starts_at)} 起`:`${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}`}・${escapeHtml(e.fee_note||"")}</small></div><a class="button" href="#register?event=${e.id}">報名</a></li>`}).join("")}</ul>`:`<p class="muted">目前沒有開放報名的活動。</p>`}</article>`;
   }
   const sessions=eventSessions(state.events,event), multi=sessions.length>1;
-  const info=multi
+  const info=dmBlock(event)+(multi
     ?`<h2>場次</h2>${sessions.map(s=>`<div class="kpi-line"><span>${s.session_name?`<strong>${escapeHtml(s.session_name)}</strong><br>`:""}${fmtDate(s.starts_at)}<br><small class="muted">${escapeHtml(s.location||"")}</small></span><strong>${eventState(s)==="報名中"?`${s.registration_count}/${s.capacity}`:eventState(s)}</strong></div>`).join("")}<div class="kpi-line"><span>費用</span><strong>${escapeHtml(event.fee_note)}</strong></div>`
-    :`<h2>活動資訊</h2>${hostName(event)?`<div class="kpi-line"><span>主辦</span><strong>${escapeHtml(hostName(event))}</strong></div>`:""}<div class="kpi-line"><span>時間</span><strong>${fmtDate(event.starts_at)}</strong></div><div class="kpi-line"><span>地點</span><strong>${escapeHtml(event.location)}</strong></div><div class="kpi-line"><span>費用</span><strong>${escapeHtml(event.fee_note)}</strong></div><div class="kpi-line"><span>名額</span><strong>${event.registration_count}/${event.capacity}</strong></div>`;
+    :`<h2>活動資訊</h2>${hostName(event)?`<div class="kpi-line"><span>主辦</span><strong>${escapeHtml(hostName(event))}</strong></div>`:""}<div class="kpi-line"><span>時間</span><strong>${fmtDate(event.starts_at)}</strong></div><div class="kpi-line"><span>地點</span><strong>${escapeHtml(event.location)}</strong></div><div class="kpi-line"><span>費用</span><strong>${escapeHtml(event.fee_note)}</strong></div><div class="kpi-line"><span>名額</span><strong>${event.registration_count}/${event.capacity}</strong></div>`);
   const tracking=["utm_source","utm_medium","utm_campaign","utm_content"].map(k=>`<input type="hidden" name="${k}" value="${escapeHtml(q.get(k)||"")}">`).join("");
   const outdoorFields=outdoor?`<input type="hidden" name="campaign_type" value="outdoor"><input type="hidden" name="lead_city" value="${escapeHtml(leadCity)}"><input type="hidden" name="source_theme" value="${escapeHtml(sourceTheme)}"><div class="field full"><label>你是從哪裡認識我們？</label><select name="contact_mode"><option ${contactMode==="正式參加者"?"selected":""}>正式參加者</option><option ${contactMode==="現場圍觀者"?"selected":""}>現場圍觀者</option><option ${contactMode==="親友介紹"?"selected":""}>親友介紹</option></select></div><div class="field full"><h3>30 秒自我狀態了解</h3><p class="muted">這不是醫療診斷，只協助你了解最近的狀態。</p></div><div class="field full"><label>最近是否難入睡、睡不飽或醒來仍疲累？</label><select name="sleep_issue" required><option value="">請選擇</option><option>經常</option><option>偶爾</option><option>很少</option></select></div><div class="field full"><label>最近是否容易緊繃、煩躁或腦袋停不下來？</label><select name="stress_issue" required><option value="">請選擇</option><option>經常</option><option>偶爾</option><option>很少</option></select></div><label class="field full"><span><input type="checkbox" name="weekly_practice_interest"> 我願意每週留一小段時間練習放鬆。</span></label><label class="field full"><span><input type="checkbox" name="online_trial_interest" checked> 我想預約免費、限額的新手線上體驗課。</span></label>`:"";
   return `${demoLinePicker()}${pageHead(escapeHtml(multi?event.title:eventLabel(event)),escapeHtml(event.theme||""))}<section class="two-col"><article class="card">${info}<p class="muted">分享報名 QR Code${multi?"（所有場次共用這一張）":""}</p><div id="qr" aria-label="活動報名 QR Code"></div><div class="link-box"><input id="linkText" readonly aria-label="報名網址" value="${escapeHtml(publicUrl())}"><button type="button" class="secondary small" data-action="copy-link">複製</button></div></article><article class="card" id="regAction">${registerAction(event,sessions,`<form id="registrationForm">${multi?"":`<input type="hidden" name="event_id" value="${event.id}">`}${tracking}<div class="form-grid">${multi?sessionPicker(sessions):""}<div class="field"><label>姓名 *</label><input name="name" required maxlength="40"></div>${phoneField("手機","",{required:true,autocomplete:"tel"})}${genderField()}${cityField()}<div class="field full"><label>Email</label><input name="email" type="email"></div><div class="field full"><label>有興趣的主題</label><select name="interest"><option>閱讀</option><option>冥想</option><option>身心放鬆</option><option>節氣生活</option></select></div>${outdoorFields}<label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="${STUDENT_HOME}privacy.html" target="_blank">個資告知</a>，資料僅用於活動與會員服務。</span></label><label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收後續活動與課程訊息，可隨時撤回。</span></label><button class="field full" type="submit">使用 LINE 身分送出報名</button></div></form>`)}</article></section>`;
@@ -1620,6 +1620,7 @@ function eventForm(id,newKind){
     <input type="hidden" name="kind" value="${kindOf(e)}"><!-- 類型由所在頁面（活動／課程）決定，不讓使用者改 -->
     <div class="field full"><label>名稱 *</label><input name="title" required maxlength="120" value="${v("title")}"></div>
     <div class="field full"><label>說明</label><textarea name="theme" maxlength="1000">${v("theme")}</textarea></div>
+    <div class="field full"><label>活動 DM 圖片（選填，JPG／PNG／WebP；會公開顯示在報名頁最上方，請不要放含學員個資的圖片）</label>${safeDmUrl(e.image_url)?`<div class="img-current"><img src="${escapeHtml(e.image_url)}" alt="目前的 DM"><label><input type="checkbox" name="remove_image"> 移除這張圖片</label></div>`:""}<input type="file" id="eventImage" accept="image/jpeg,image/png,image/webp"><img id="eventImagePreview" alt="DM 預覽" hidden></div>
     <div class="field full"><label>場次</label><div id="sessionRows">${rows.map(sessionRow).join("")}</div><div class="actions"><button type="button" class="secondary" data-action="add-session">＋ 新增場次</button></div><small class="muted">只有一場就不用填場次名稱。兩場以上會共用一張報名 QR，學員報名時勾選要參加哪幾場；每場各自計算名額、各自報到。</small></div>
     <div class="field"><label>報名截止 *</label><input name="registration_deadline" type="datetime-local" required value="${toLocalInput(e.registration_deadline)}"></div>
     <div class="field"><label>地點 *</label><input name="location" required value="${v("location")}"></div>
@@ -1682,6 +1683,12 @@ async function saveEvent(data){
   const shared_org_ids=visibility==="selected"?[...document.querySelectorAll("#eventForm [name=shared_org]:checked")].map(x=>x.value).filter(x=>x!==org_id):[];
   if(visibility==="selected"&&!shared_org_ids.length)return toast("請勾選要分享給哪些單位，或把共享改成「單位內部」");
   const shared={org_id,visibility,shared_org_ids,title:data.title.trim(),theme:data.theme||"",registration_deadline:iso(data.registration_deadline),location:data.location,fee_note:data.fee_note||"免費",status:data.status,kind:data.kind==="course"?"course":"event"};
+  // 活動 DM：只有真的換圖／移除時才寫入 image_url，資料庫還沒加欄位前，一般編輯不受影響
+  let image_url=before?.image_url||null;
+  if(data.remove_image) image_url=null;
+  const dmFile=$("#eventImage")?.files?.[0];
+  if(dmFile){ const up=await uploadCampaignImage(dmFile,"event-images"); if(up.error) return toast(up.error); image_url=up.url; }
+  if(image_url!==(before?.image_url||null)) shared.image_url=image_url;
   const K=KIND_LABELS[shared.kind];
   const rows=[...document.querySelectorAll("#sessionRows .session-row")].map(r=>{const val=n=>r.querySelector(`[name=${n}]`).value;return {id:r.dataset.id||null,session_name:val("s_name").trim(),starts_at:iso(val("s_start")),ends_at:iso(val("s_end")),capacity:Number(val("s_capacity"))};});
   for(const [i,r] of rows.entries()){
@@ -1971,6 +1978,7 @@ async function onClick(event){
   if(action==="export-sponsors") return exportSponsors();
   if(action==="show-qr") return showCheckinQr(btn.dataset.event);
   if(action==="renew-qr"){ if(!confirm("重新產生後，已經發出去的舊 QR Code 會立刻不能用。確定嗎？"))return; return showCheckinQr(btn.dataset.event,{renew:true}); }
+  if(action==="zoom-dm"){ const src=btn.querySelector("img")?.getAttribute("src"); if(!safeDmUrl(src)) return; return modal(`<img class="dm-full" src="${escapeHtml(src)}" alt="活動 DM"><div class="actions" style="margin-top:12px"><button type="button" class="secondary" data-action="close-modal">關閉</button></div>`); }
   if(action==="download-qr") return download("報到QRCode.svg",$(".qr-big").innerHTML,"image/svg+xml");
   if(action==="edit-contact") return contactForm(btn.dataset.id);
   if(action==="reveal-nid") return revealNationalId(btn.dataset.id);
@@ -2017,6 +2025,7 @@ document.addEventListener("change",event=>{
   const orgRole=event.target.name?.match(/^org_role_(.+)$/);
   if(orgRole){ const box=event.target.closest("[data-org-box]"); box.querySelector("[data-org-perms]").outerHTML=orgPermBox(orgRole[1],event.target.value,null); const reg=box.querySelector("[name=org_region_chaoren]"); if(reg) reg.hidden=event.target.value!=="region_lead"; return; }
   if(event.target.form?.id==="eventForm"&&["visibility","org_id"].includes(event.target.name)){ const f=event.target.form, box=f.querySelector("[data-shared-box]"); box.hidden=f.elements.visibility.value!=="selected"; box.querySelectorAll("[data-shared-org]").forEach(l=>{ l.hidden=l.dataset.sharedOrg===f.elements.org_id.value; if(l.hidden) l.querySelector("input").checked=false; }); return; }
+  if(event.target.id==="eventImage"){ const f=event.target.files?.[0], img=$("#eventImagePreview"); if(img){ img.hidden=!f; if(f) img.src=URL.createObjectURL(f); } return; }
   if(event.target.id==="campaignImage"){ const f=event.target.files?.[0], img=$("#campaignImagePreview"); if(img){ img.hidden=!f; if(f) img.src=URL.createObjectURL(f); } return; }
   if(event.target.dataset.pick){ event.target.checked?campaignPick.add(event.target.dataset.pick):campaignPick.delete(event.target.dataset.pick); return updateAudienceCount(); }
   if(event.target.id==="pickTag"||event.target.id==="pickRegion") return renderPickList();
@@ -2274,8 +2283,8 @@ async function deleteCampaign(id){
   audit(sent?"刪除已送出的訊息紀錄":"刪除訊息草稿",c.name); persist(); render(); toast(sent?"已刪除訊息紀錄":"已刪除草稿");
 }
 // 推播附圖：先在瀏覽器縮到最長邊 1600px 的 JPG（通常小於 1MB，LINE 預覽圖也能直接用），再上傳到公開的 campaign-images
-async function uploadCampaignImage(file){
-  if(!/^image\/(jpeg|png)$/.test(file.type)) return {error:"圖片請用 JPG 或 PNG"};
+async function uploadCampaignImage(file,bucket="campaign-images"){
+  if(!/^image\/(jpeg|png|webp)$/.test(file.type)) return {error:"圖片請用 JPG、PNG 或 WebP"};
   if(file.size>20*1024*1024) return {error:"圖片太大（超過 20MB），請先縮小"};
   let blob;
   try{
@@ -2286,10 +2295,13 @@ async function uploadCampaignImage(file){
   }catch{ return {error:"讀不到這張圖片，請換一張"}; }
   if(!live) return {url:await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(blob); })};
   const path=`${localToday()}/${crypto.randomUUID()}.jpg`;
-  const {error}=await supabase.storage.from("campaign-images").upload(path,blob,{contentType:"image/jpeg",upsert:false});
+  const {error}=await supabase.storage.from(bucket).upload(path,blob,{contentType:"image/jpeg",upsert:false});
   if(error) return {error:"圖片上傳失敗："+error.message};
-  return {url:supabase.storage.from("campaign-images").getPublicUrl(path).data.publicUrl};
+  return {url:supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl};
 }
+// 活動 DM 網址只接受 https（雲端）或展示版存在瀏覽器裡的 JPG
+function safeDmUrl(u){ return typeof u==="string"&&(/^https:\/\/[^\s"'<>]+$/.test(u)||(!live&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(u))); }
+function dmBlock(event){ return safeDmUrl(event?.image_url)?`<button type="button" class="event-dm" data-action="zoom-dm" aria-label="放大活動 DM"><img src="${escapeHtml(event.image_url)}" alt="${escapeHtml(event.title||"")} 活動 DM"></button>`:""; }
 function pickCandidates(){
   const tag=$("#pickTag")?.value||"", region=$("#pickRegion")?.value||"", q=($("#pickSearch")?.value||"").trim().toLowerCase();
   return state.contacts.filter(campaignEligible).filter(c=>(!tag||(c.tags||[]).includes(tag))&&(!region||(region==="none"?!c.region_id:c.region_id===region))&&(!q||`${c.name} ${c.member_no||""}`.toLowerCase().includes(q)));
