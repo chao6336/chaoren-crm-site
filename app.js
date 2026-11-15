@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, isOrgAdmin, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, regionLeadFor, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor } from "./lib.js?v=20261115-1";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, isOrgAdmin, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, regionLeadFor, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor } from "./lib.js?v=20261115-2";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -350,40 +350,35 @@ function dashboard(){
 // 活動與課程共用同一套（場次、報名、名單、報到、繳費都一樣），只差 kind 與顯示的字
 const KIND_LABELS={event:"活動",course:"課程"};
 const kindOf=e=>e?.kind==="course"?"course":"event";
-// ───── 週報（只有總管理：含營收）─────
+// ───── 週報（只有總管理）：2026-11-15 起不做營收分析，金額改由會計的繳費程式處理 ─────
 const ymd=d=>d.toLocaleDateString("sv-SE");
 // 預設看上一個完整的週（和 MAAC 週報一樣）；本週可以按「本週累計」看
-// 每則 LINE 訊息的成本（算 ROAS 用），預設和 MAAC 一樣 0.15 元，可在週報頁修改（只記在這台電腦）
-function msgCost(){ try{ const v=Number(localStorage.getItem("swii_msg_cost")); return v>0?v:0.15; }catch{ return 0.15; } }
-function weeklyData(){ const w=query().get("w"); const start=weekStart(w?new Date(`${w}T00:00:00`):new Date(Date.now()-7*864e5)); return {start,r:weeklyReport({contacts:state.contacts,registrations:state.registrations,events:state.events,campaigns:state.campaigns,sponsorships:SPONSORSHIPS_ENABLED?state.sponsorships:[],clickStats:clickStats()},start,msgCost())}; }
+function weeklyData(){ const w=query().get("w"); const start=weekStart(w?new Date(`${w}T00:00:00`):new Date(Date.now()-7*864e5)); return {start,r:weeklyReport({contacts:state.contacts,registrations:state.registrations,events:state.events,campaigns:state.campaigns,clickStats:clickStats()},start)}; }
 function weekly(){
   const {start,r}=weeklyData(), c=r.current, d=r.diff;
   const shift=n=>{ const x=new Date(start); x.setDate(x.getDate()+n*7); return `#weekly?w=${ymd(x)}`; };
   const isThisWeek=ymd(start)===ymd(weekStart());
   const sign=n=>n>0?`+${n.toLocaleString()}`:n.toLocaleString();
   const stat=(label,value,delta,unit="")=>`<div class="stat"><span>${label}</span><strong>${value}${unit?`<small class="muted"> ${unit}</small>`:""}</strong>${delta===undefined?"":`<small class="${delta<0?"down":delta>0?"up":"muted"}">與上週相比 ${sign(delta)}</small>`}</div>`;
-  const money=n=>n.toLocaleString();
   const best=(label,b,fmt)=>`<div class="kpi-line"><span>${label}</span><strong>${b?fmt(b):"—"}</strong></div>`;
   return `${pageHead("成效週報",`${ymd(r.from)} ～ ${ymd(r.to)}${isThisWeek?"（本週，還在累計中）":""}`,`<a class="button secondary" href="${shift(-1)}">← 上一週</a>${isThisWeek?"":`<a class="button secondary" href="${shift(1)}">${ymd(new Date(start.getTime()+7*864e5))===ymd(weekStart())?"本週累計 →":"下一週 →"}</a>`}<button class="secondary" data-action="export-weekly">匯出 CSV</button><button data-action="copy-weekly">複製文字摘要</button>`)}
   <h2>本週概覽 👀</h2><section class="stats week-stats">${stat("本週新會員",c.newMembers,d.newMembers)}${stat("累積有效會員",r.activeMembers.toLocaleString())}${stat("標籤覆蓋率",r.tagCoverage,undefined,"%")}${stat("可收 LINE 推播",r.lineReachable,undefined,"位")}</section>
   <h2>活動與課程 📅</h2><section class="stats week-stats">${stat("新報名",c.registrations,d.registrations)}${stat("取消報名",c.cancellations,d.cancellations)}${stat("報到人次",c.checkins,d.checkins)}${stat("舉辦場次",c.sessionsHeld,d.sessionsHeld)}${stat("出席率（本週場次）",c.attendanceRate,d.attendanceRate,"%")}</section>
   <h2>LINE 推播 💬</h2><section class="stats week-stats">${stat("送出推播專案",c.campaigns,d.campaigns)}${stat("推播送達則數",c.pushMessages,d.pushMessages)}${stat("官方帳號群發",c.broadcasts,d.broadcasts,"次")}</section>
-  <h2>推播成效 📈</h2><section class="stats week-stats">${stat("連結點擊",c.clicks,d.clicks,"次")}${stat("點擊率 CTR",c.ctr,d.ctr,"%")}${stat("訂單數（推播帶來的報名）",c.orders,d.orders)}${stat("推播帶來營收",money(c.pushRevenue),d.pushRevenue,"NTD")}${stat("推播成本",money(c.pushCost),undefined,"NTD")}${stat("ROAS",c.roas,d.roas,"倍")}</section>
-  <div class="toolbar"><label class="muted">每則訊息成本 NT$ <input id="weeklyCost" type="number" min="0.01" max="10" step="0.01" value="${msgCost()}" style="width:80px"></label><small class="muted">ROAS＝推播帶來營收 ÷（送達則數 × 每則成本）。群發沒有送達人數，不算點擊率與成本。</small></div>
-  ${r.campaigns.length?`<div class="table-wrap"><table><thead><tr><th>推播</th><th>送達</th><th>點擊（不重複）</th><th>CTR</th><th>訂單</th><th>營收</th><th>成本</th><th>ROAS</th></tr></thead><tbody>${r.campaigns.map(x=>`<tr><td>${escapeHtml(x.name)}${x.broadcast?` <span class="pill off">群發</span>`:""}<br><small class="muted">${x.sent_at?fmtDate(x.sent_at):""}</small></td><td>${x.broadcast?"—":x.delivered}</td><td>${x.clicks}（${x.uniqueClicks}）</td><td>${x.ctr==null?"—":x.ctr+"%"}</td><td>${x.orders}</td><td>NT$${money(x.revenue)}</td><td>${x.broadcast?"—":"NT$"+money(x.cost)}</td><td>${x.roas==null?"—":x.roas}</td></tr>`).join("")}</tbody></table></div>`:`<p class="muted">這週沒有送出推播。</p>`}
-  <h2>本週營收表現 ✨</h2><section class="stats week-stats">${stat("本週已收總額",money(c.revenue),d.revenue,"NTD")}${stat("活動報名費",money(c.feeRevenue),d.feeRevenue,"NTD")}${SPONSORSHIPS_ENABLED?stat("贊助",money(c.donationRevenue),d.donationRevenue,"NTD"):""}${stat("本週新增應收",money(c.newReceivable),d.newReceivable,"NTD")}${stat("目前未收（全部）",money(r.outstanding),undefined,"NTD")}</section>
-  <h2>本週最佳表現 🏆</h2><article class="card">${best("報名最多",r.best.event,b=>`${escapeHtml(b.name)}・${b.count} 人`)}${best("出席率最高的場次",r.best.attendance,b=>`${escapeHtml(b.name)}・${b.rate}%（${b.count} 人報名）`)}${best("送達最多的推播",r.best.campaign,b=>`${escapeHtml(b.name)}・${b.count} 則`)}${best("最佳 ROAS 推播",r.best.roas,b=>`${escapeHtml(b.name)}・${b.roas} 倍`)}${best("最佳訂單數推播",r.best.orders,b=>`${escapeHtml(b.name)}・${b.orders} 筆`)}${best("最佳 CTR 推播",r.best.ctr,b=>`${escapeHtml(b.name)}・${b.ctr}%`)}</article>
-  <p class="muted" style="margin-top:14px">一週從週一 00:00 算到週日 23:59。營收以「已繳費」且繳費日期落在這週的報名費計算${SPONSORSHIPS_ENABLED?"，再加上贊助紀錄":""}；推播成效看這週送出的推播，點擊與訂單會持續累計（訊息裡的網址發送時自動換成追蹤短網址，報名連結會記下是哪則推播帶來的）；標籤覆蓋率、可收推播、未收是目前的數字。</p>`;
+  <h2>推播成效 📈</h2><section class="stats week-stats">${stat("連結點擊",c.clicks,d.clicks,"次")}${stat("點擊率 CTR",c.ctr,d.ctr,"%")}${stat("訂單數（推播帶來的報名）",c.orders,d.orders)}</section>
+  <p class="muted">群發沒有送達人數，不算點擊率。</p>
+  ${r.campaigns.length?`<div class="table-wrap"><table><thead><tr><th>推播</th><th>送達</th><th>點擊（不重複）</th><th>CTR</th><th>訂單</th></tr></thead><tbody>${r.campaigns.map(x=>`<tr><td>${escapeHtml(x.name)}${x.broadcast?` <span class="pill off">群發</span>`:""}<br><small class="muted">${x.sent_at?fmtDate(x.sent_at):""}</small></td><td>${x.broadcast?"—":x.delivered}</td><td>${x.clicks}（${x.uniqueClicks}）</td><td>${x.ctr==null?"—":x.ctr+"%"}</td><td>${x.orders}</td></tr>`).join("")}</tbody></table></div>`:`<p class="muted">這週沒有送出推播。</p>`}
+  <h2>本週最佳表現 🏆</h2><article class="card">${best("報名最多",r.best.event,b=>`${escapeHtml(b.name)}・${b.count} 人`)}${best("出席率最高的場次",r.best.attendance,b=>`${escapeHtml(b.name)}・${b.rate}%（${b.count} 人報名）`)}${best("送達最多的推播",r.best.campaign,b=>`${escapeHtml(b.name)}・${b.count} 則`)}${best("最佳訂單數推播",r.best.orders,b=>`${escapeHtml(b.name)}・${b.orders} 筆`)}${best("最佳 CTR 推播",r.best.ctr,b=>`${escapeHtml(b.name)}・${b.ctr}%`)}</article>
+  <p class="muted" style="margin-top:14px">一週從週一 00:00 算到週日 23:59。推播成效看這週送出的推播，點擊與訂單會持續累計（訊息裡的網址發送時自動換成追蹤短網址，報名連結會記下是哪則推播帶來的）；標籤覆蓋率、可收推播是目前的數字。</p>`;
 }
 function exportWeekly(){
   const {r}=weeklyData(), c=r.current, p=r.previous;
-  const rows=[["概覽","本週新會員","newMembers"],["活動與課程","新報名","registrations"],["活動與課程","取消報名","cancellations"],["活動與課程","報到人次","checkins"],["活動與課程","舉辦場次","sessionsHeld"],["活動與課程","出席率（%）","attendanceRate"],["LINE 推播","送出推播專案","campaigns"],["LINE 推播","推播送達則數","pushMessages"],["LINE 推播","官方帳號群發","broadcasts"],["推播成效","連結點擊","clicks"],["推播成效","點擊率 CTR（%）","ctr"],["推播成效","訂單數","orders"],["推播成效","推播帶來營收","pushRevenue"],["推播成效","推播成本","pushCost"],["推播成效","ROAS","roas"],["營收","本週已收總額","revenue"],["營收","活動報名費","feeRevenue"],...(SPONSORSHIPS_ENABLED?[["營收","贊助","donationRevenue"]]:[]),["營收","本週新增應收","newReceivable"]]
+  const rows=[["概覽","本週新會員","newMembers"],["活動與課程","新報名","registrations"],["活動與課程","取消報名","cancellations"],["活動與課程","報到人次","checkins"],["活動與課程","舉辦場次","sessionsHeld"],["活動與課程","出席率（%）","attendanceRate"],["LINE 推播","送出推播專案","campaigns"],["LINE 推播","推播送達則數","pushMessages"],["LINE 推播","官方帳號群發","broadcasts"],["推播成效","連結點擊","clicks"],["推播成效","點擊率 CTR（%）","ctr"],["推播成效","訂單數","orders"]]
     .map(([g,label,k])=>({group:g,label,cur:c[k],prev:p[k],diff:Math.round((c[k]-p[k])*100)/100}));
   rows.splice(1,0,{group:"概覽",label:"累積有效會員",cur:r.activeMembers},{group:"概覽",label:"標籤覆蓋率（%）",cur:r.tagCoverage},{group:"概覽",label:"可收 LINE 推播",cur:r.lineReachable});
-  rows.push({group:"營收",label:"目前未收（全部）",cur:r.outstanding});
   const summary=rowsToCsv(rows,[["區塊","group"],["項目","label"],["本週","cur"],["上週","prev"],["與上週相比","diff"]]);
-  const detail=rowsToCsv(r.campaigns.map(x=>({...x,type:x.broadcast?"群發":"推播",sent_at:x.sent_at?fmtDate(x.sent_at):"",ctr:x.ctr??"",roas:x.roas??"",delivered:x.broadcast?"":x.delivered,cost:x.broadcast?"":x.cost})),[["推播","name"],["類型","type"],["送出時間","sent_at"],["送達","delivered"],["點擊","clicks"],["不重複點擊","uniqueClicks"],["CTR（%）","ctr"],["訂單","orders"],["營收","revenue"],["成本","cost"],["ROAS","roas"]]);
-  download(`成效週報_${ymd(r.from)}_${ymd(r.to)}.csv`,`成效週報 ${ymd(r.from)} ～ ${ymd(r.to)}（每則訊息成本 NT$${msgCost()}）\r\n${summary}\r\n\r\n推播明細\r\n${detail}`,"text/csv;charset=utf-8");
+  const detail=rowsToCsv(r.campaigns.map(x=>({...x,type:x.broadcast?"群發":"推播",sent_at:x.sent_at?fmtDate(x.sent_at):"",ctr:x.ctr??"",delivered:x.broadcast?"":x.delivered})),[["推播","name"],["類型","type"],["送出時間","sent_at"],["送達","delivered"],["點擊","clicks"],["不重複點擊","uniqueClicks"],["CTR（%）","ctr"],["訂單","orders"]]);
+  download(`成效週報_${ymd(r.from)}_${ymd(r.to)}.csv`,`成效週報 ${ymd(r.from)} ～ ${ymd(r.to)}\r\n${summary}\r\n\r\n推播明細\r\n${detail}`,"text/csv;charset=utf-8");
 }
 function copyWeekly(){
   const {r}=weeklyData(), c=r.current, d=r.diff, s=n=>n>0?`+${n}`:`${n}`;
@@ -391,8 +386,7 @@ function copyWeekly(){
     `【概覽】新會員 ${c.newMembers}（${s(d.newMembers)}）・累積有效會員 ${r.activeMembers}・標籤覆蓋率 ${r.tagCoverage}%`,
     `【活動與課程】新報名 ${c.registrations}（${s(d.registrations)}）・報到 ${c.checkins}（${s(d.checkins)}）・舉辦 ${c.sessionsHeld} 場・出席率 ${c.attendanceRate}%`,
     `【LINE 推播】專案 ${c.campaigns}・送達 ${c.pushMessages} 則・群發 ${c.broadcasts} 次`,
-    `【推播成效】點擊 ${c.clicks}・CTR ${c.ctr}%・訂單 ${c.orders}・ROAS ${c.roas}`,
-    `【營收】已收 NT$${c.revenue.toLocaleString()}（${s(d.revenue)}）：報名費 NT$${c.feeRevenue.toLocaleString()}${SPONSORSHIPS_ENABLED?`、贊助 NT$${c.donationRevenue.toLocaleString()}`:""}・目前未收 NT$${r.outstanding.toLocaleString()}`,
+    `【推播成效】點擊 ${c.clicks}・CTR ${c.ctr}%・訂單 ${c.orders}`,
     ...(r.best.event?[`【報名最多】${r.best.event.name}（${r.best.event.count} 人）`]:[])].join("\n");
   navigator.clipboard.writeText(text).then(()=>toast("已複製，可以貼到 LINE 群組"),()=>{ modal(`<h2>週報摘要</h2><textarea style="width:100%;min-height:200px">${escapeHtml(text)}</textarea>`); });
 }
@@ -428,34 +422,32 @@ function contacts(){
 function tagPills(tags=[],limit=3){ const shown=tags.slice(0,limit).map(t=>`<span class="pill">${escapeHtml(t)}</span>`).join(" "); return tags.length>limit?`${shown} <span class="pill off">＋${tags.length-limit}</span>`:shown; }
 // 活動名單：分「已報到」「已報名、未報到」「已取消」三區；範圍和報到頁一樣（區負責人只看自己區域）
 // 匯出某場活動的報名名單（CSV，Excel 可直接開）：總管理看得到完整手機與 Email，其他人照權限只有末三碼
-// 報名的繳費狀態（payment_status：pending 未繳、paid 已繳、free 免費、refunded 已退款）
-const PAY_LABELS={pending:"未繳費",paid:"已繳費",free:"免費",refunded:"已退款"};
-const payLabel=r=>`<span class="pill${r.payment_status==="paid"||r.payment_status==="free"?"":" warn"}">${PAY_LABELS[r.payment_status]||"未繳費"}</span>`;
-// 名單裡按「繳費」：選已繳／未繳／免費，填繳費日期與收據／發票編號，儲存後回到名單（不提供一鍵切換，避免誤按）
+// 報名的繳費狀態（payment_status：pending 未繳、paid 已繳、installment 分期繳費、free 免費、refunded 已退款）
+// 分期繳費和已繳費同樣算「已繳」（課程已繳費標籤、名單已繳人數），見 lib.js isPaidStatus
+const PAY_LABELS={pending:"未繳費",paid:"已繳費",installment:"分期繳費",free:"免費",refunded:"已退款"};
+const payLabel=r=>`<span class="pill${isPaidStatus(r.payment_status)||r.payment_status==="free"?"":" warn"}">${PAY_LABELS[r.payment_status]||"未繳費"}</span>`;
+// 名單裡按「繳費」：只選繳費狀態（2026-11-15 起不再記錄金額、繳費日期、收據／發票編號），儲存後回到名單（不提供一鍵切換，避免誤按）
 function regPayForm(regId,eventId){
   const r=roster().find(x=>(x.registration_id||x.id)===regId); if(!r||!canPay(state.events.find(e=>e.id===r.event_id))) return;
   const opt=(v,t)=>`<label><input type="radio" name="payment_status" value="${v}" ${(r.payment_status||"pending")===v?"checked":""}> ${t}</label>`;
   modal(`<h2>繳費紀錄</h2><p>${escapeHtml(r.name)} ${escapeHtml(r.member_no||"")}</p><form id="regPayForm"><input type="hidden" name="reg_id" value="${regId}"><input type="hidden" name="event_id" value="${eventId}"><div class="form-grid">
-    <div class="field full"><label>繳費狀態</label><div class="actions">${opt("pending","未繳費")}${opt("paid","已繳費")}${opt("free","免費")}${opt("refunded","已退款")}</div></div>
-    <div class="field"><label>金額（元）</label><input name="amount" type="number" min="0" max="10000000" value="${r.amount??feeAmount(state.events.find(e=>e.id===eventId))??""}"></div>
-    <div class="field"><label>繳費日期</label><input name="paid_at" type="date" value="${escapeHtml(r.paid_at||"")}"></div>
-    <div class="field"><label>收據／發票編號</label><input name="receipt_no" maxlength="40" autocomplete="off" value="${escapeHtml(r.receipt_no||"")}"></div>
-    ${SPONSORSHIPS_ENABLED?`<p class="field full muted">有填金額時，未繳費／已繳費會同步到「贊助紀錄」（項目＝活動名稱），一起算進應收、已收、未收；免費、已退款或金額空白則不列入。</p>`:`<p class="field full muted">有填金額時，未繳費／已繳費會算進週報的應收、已收、未收；免費、已退款或金額空白則不列入。</p>`}
+    <div class="field full"><label>繳費狀態</label><div class="actions">${opt("pending","未繳費")}${opt("paid","已繳費")}${opt("installment","分期繳費")}${opt("free","免費")}${opt("refunded","已退款")}</div></div>
     <button class="field full">儲存</button></div></form>`);
 }
 async function saveRegPay(data){
   const status=PAY_LABELS[data.payment_status]?data.payment_status:"pending";
-  const patch={payment_status:status,paid_at:status==="paid"?(data.paid_at||localToday()):(data.paid_at||null),receipt_no:(data.receipt_no||"").trim()||null,amount:data.amount===""||data.amount==null?null:Number(data.amount)};
-  // 雲端走 set_registration_payment：只改繳費四欄，會計也能用（會計沒有改報名其他欄位的權限）
-  if(live){ const {error}=await supabase.rpc("set_registration_payment",{p_registration_id:data.reg_id,p_status:patch.payment_status,p_amount:patch.amount,p_paid_at:patch.paid_at,p_receipt_no:patch.receipt_no}); if(error) return toast("儲存失敗："+(error.message.includes("FORBIDDEN")?"你沒有登記繳費的權限":error.message)); await loadLiveData(); }
+  // 2026-11-15 起只記繳費狀態：金額、繳費日期、收據傳空值，資料庫的 set_registration_payment 遇到空值會保留原本的舊資料（不清掉）
+  const patch={payment_status:status};
+  // 雲端走 set_registration_payment，會計也能用（會計沒有改報名其他欄位的權限）
+  if(live){ const {error}=await supabase.rpc("set_registration_payment",{p_registration_id:data.reg_id,p_status:patch.payment_status,p_amount:null,p_paid_at:null,p_receipt_no:null}); if(error) return toast("儲存失敗："+(error.message.includes("FORBIDDEN")?"你沒有登記繳費的權限":error.message)); await loadLiveData(); }
   else { const r=state.registrations.find(x=>x.id===data.reg_id); if(r){ Object.assign(r,patch); syncFeeDemo(r); tagPaidCourseDemo(r); } }
   audit("更新報名繳費",PAY_LABELS[status]); persist(); closeModal(); render(); toast("已儲存繳費紀錄");
 }
 // 展示版模擬資料庫觸發器：課程已繳費就貼「課程名稱 已繳費」標籤（正式站由 tag_paid_course 處理）
 function tagPaidCourseDemo(r){
   const e=state.events.find(x=>x.id===r.event_id), c=state.contacts.find(x=>x.id===r.contact_id); if(!e||!c||kindOf(e)!=="course") return;
-  const others=state.registrations.filter(x=>x.contact_id===r.contact_id&&x.id!==r.id&&x.payment_status==="paid"&&!x.cancelled_at).map(x=>state.events.find(ev=>ev.id===x.event_id)).filter(ev=>kindOf(ev)==="course").map(ev=>ev.title);
-  c.tags=courseTagsAfterPayment(c.tags||[],e.title,r.payment_status==="paid"&&!r.cancelled_at,others);
+  const others=state.registrations.filter(x=>x.contact_id===r.contact_id&&x.id!==r.id&&isPaidStatus(x.payment_status)&&!x.cancelled_at).map(x=>state.events.find(ev=>ev.id===x.event_id)).filter(ev=>kindOf(ev)==="course").map(ev=>ev.title);
+  c.tags=courseTagsAfterPayment(c.tags||[],e.title,isPaidStatus(r.payment_status)&&!r.cancelled_at,others);
 }
 // 展示版模擬資料庫觸發器：報名費同步到贊助紀錄（正式站由 sync_registration_fee 處理）
 function syncFeeDemo(r){
@@ -533,7 +525,7 @@ function rosterPage(){
       <td>${canPay(e)&&!r.cancelled_at?`<button class="secondary small" data-action="reg-pay" data-id="${r.registration_id||r.id}" data-event="${id}">繳費</button>`:""}</td>`}</tr>`; };
   return `${pageHead(escapeHtml(eventLabel(e)),`${K}・${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・報名 ${count("attended")+count("waiting")}／${e.capacity}`,actions)}
     ${!canSeeEventRoster(who(),e)&&regionLeadFor(who(),e)?`<p class="muted">只顯示${escapeHtml(regionName(regionLeadFor(who(),e)))}的會員</p>`:""}
-    <p>已報到 <strong>${count("attended")}</strong>・未報到 <strong>${count("waiting")}</strong>・已取消 <strong>${count("cancelled")}</strong>${free?"":`・已繳費 <strong>${regs.filter(r=>!r.cancelled_at&&r.payment_status==="paid").length}</strong>`}</p>
+    <p>已報到 <strong>${count("attended")}</strong>・未報到 <strong>${count("waiting")}</strong>・已取消 <strong>${count("cancelled")}</strong>${free?"":`・已繳費 <strong>${regs.filter(r=>!r.cancelled_at&&isPaidStatus(r.payment_status)).length}</strong>`}</p>
     <div class="toolbar" style="margin-bottom:14px"><input id="rosterSearch" class="search" type="search" placeholder="輸入姓名、會員編號或手機末三碼" value="${escapeHtml(rosterView.q)}" autocomplete="off">
       ${sel("rosterStatus",rosterView.status,[["","全部狀態"],...Object.entries(ROSTER_STATUS)])}${free?"":sel("rosterPay",rosterView.pay,[["","全部繳費狀態"],...Object.entries(PAY_LABELS)])}<span class="muted" id="rosterShown"></span></div>
     <div class="table-wrap"><table><thead><tr><th>姓名</th><th>區域</th><th>手機末三碼</th><th>狀態</th>${free?"":"<th>繳費</th><th></th>"}</tr></thead><tbody>${regs.map(row).join("")||`<tr><td colspan="6" class="empty">還沒有人報名</td></tr>`}</tbody></table></div>`;
@@ -647,7 +639,9 @@ async function saveTagBulkCategory(data){
   audit("設定標籤分類",`${ts.length} 個 → ${category||"未分類"}`); closeModal(); refreshTags("已套用分類");
 }
 function exportTags(){
-  download(`標籤_${new Date().toISOString().slice(0,10)}.csv`,toCsv(filterTags(tagList(),tagView).map(t=>({name:t.name,valid_days:t.valid_days||"",category:t.category||"",member_count:t.member_count}))),"text/csv;charset=utf-8");
+  download(`標籤_${new Date().toISOString().slice(0,10)}.csv`,toCsv(filterTags(tagList(),tagView).map(t=>({name:t.name,valid_days:t.valid_days||"",category:t.category||"",member_count:t.member_count})),
+    // 欄位名稱用中文；「標籤名稱、時效天數、分類」匯入時也認得，匯出的檔案改完可以直接匯回來（貼標人數匯入時會略過）
+    [["標籤名稱","name"],["時效天數","valid_days"],["分類","category"],["貼標人數","member_count"]]),"text/csv;charset=utf-8");
 }
 function tagImportForm(){
   tagImport=null;
@@ -920,7 +914,7 @@ function checkin(){
   const regs=roster().filter(r=>r.event_id===eventId&&!r.cancelled_at);
   const done=regs.filter(r=>r.attendance_status==="attended").length;
   const scope=!event||canCheckinEvent(who(),event)?"全部區域":`只顯示${regionName(regionLeadFor(who(),event))}`;
-  const pay=r=>r.payment_status==="paid"?"已繳":r.payment_status==="free"?"免費":"待確認款項";
+  const pay=r=>r.payment_status==="installment"?"分期繳費":r.payment_status==="paid"?"已繳":r.payment_status==="free"?"免費":"待確認款項";
   const qrBtn=event&&canEvents(event)?`<button data-action="show-qr" data-event="${event.id}">報到 QR Code</button>`:"";
   const picker=`<select id="eventSwitch">${mine.map(e=>`<option value="${e.id}" ${e.id===eventId?"selected":""}>${escapeHtml(eventLabel(e))}</option>`).join("")}</select>`;
   const rows=regs.map(r=>`<div class="checkin-item" data-search="${escapeHtml(`${r.member_no||""} ${r.name} ${r.phone_last3}`.toLowerCase())}"><div><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span><small>${escapeHtml(r.region_name||"未分區")}・手機末三碼 ${escapeHtml(r.phone_last3||"---")}・${r.source==="walk-in"?"現場報名・":""}${pay(r)}</small></div><button data-action="toggle-checkin" data-id="${r.id}" class="${r.attendance_status==="attended"?"secondary":""}">${r.attendance_status==="attended"?"已報到 ✓":"確認報到"}</button></div>`).join("");
@@ -1954,7 +1948,7 @@ async function onClick(event){
   if(action==="tag-pick-clear"){ tagPick.clear(); document.querySelectorAll("[data-tag-pick]").forEach(x=>x.checked=false); const all=$("#tagPickAll"); if(all) all.checked=false; return updateTagBulk(); }
   if(action==="tag-export") return exportTags();
   if(action==="tag-import") return tagImportForm();
-  if(action==="tag-template") return download("標籤匯入範本.csv",toCsv([{name:"區域_桃園市",valid_days:"",category:"區域"},{name:"2026_春節小禮",valid_days:"30",category:"活動"}]),"text/csv;charset=utf-8");
+  if(action==="tag-template") return download("標籤匯入範本.csv",toCsv([{name:"區域_桃園市",valid_days:"",category:"區域"},{name:"2026_春節小禮",valid_days:"30",category:"活動"}],[["name","name"],["valid_days","valid_days"],["category","category"]]),"text/csv;charset=utf-8");
   if(action==="tag-import-go") return runTagImport();
   if(action==="tag-members") return tagMembers(btn.dataset.id);
   if(action==="tag-untag-one") return untagOne(btn.dataset.id,btn.dataset.contact);
@@ -2050,7 +2044,6 @@ document.addEventListener("change",event=>{
   if(event.target.id==="regionFilter")location.hash=event.target.value?`contacts?region=${event.target.value}`:"contacts";
   if(event.target.id==="demoUser")switchDemoUser(event.target.value);
   if(event.target.id==="orgPicker")switchOrg(event.target.value);
-  if(event.target.id==="weeklyCost"){ const v=Number(event.target.value); if(v>0){ try{ localStorage.setItem("swii_msg_cost",String(v)); }catch{} render(); } }
   if(event.target.id==="importFile")readImportFile(event.target.files[0]);
   if(event.target.dataset.mapField){ importState.map[event.target.dataset.mapField]=event.target.value===""?undefined:Number(event.target.value); render(); }
   if(event.target.id==="sponsorItemFilter"||event.target.id==="sponsorPaidFilter"){ const p=new URLSearchParams(); const i=$("#sponsorItemFilter").value, pd=$("#sponsorPaidFilter").value; if(i)p.set("item",i); if(pd)p.set("paid",pd); location.hash="sponsors"+(p.toString()?"?"+p:""); }
