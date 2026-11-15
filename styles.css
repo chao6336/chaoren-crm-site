@@ -51,3 +51,4 @@ dialog #modalBody{max-height:calc(100vh - 32px);overflow:auto}
 .ctag-chosen{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.ctag-chosen:empty{display:none}
 .ctag-list{max-height:45vh;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:10px}.ctag-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #e5ebe3;cursor:pointer}.ctag-row:last-child{border-bottom:0}.ctag-row span{flex:1;min-width:0;word-break:break-all}.ctag-row small{white-space:nowrap}.ctag-row:hover{background:#f6f9f4}.ctag-list>p{padding:12px;margin:0}
 .ctag-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px}
+.manual-frame{display:block;width:100%;height:calc(100vh - 200px);min-height:520px;border:1px solid var(--line);border-radius:14px;background:#fff}

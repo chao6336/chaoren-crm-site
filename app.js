@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, isOrgAdmin, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, regionLeadFor, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor } from "./lib.js?v=20261115-3";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, isOrgAdmin, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, regionLeadFor, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor } from "./lib.js?v=20261115-4";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -203,6 +203,11 @@ function readPhone(data){
 const localToday=()=>new Date().toLocaleDateString("sv-SE");
 const showPhone=v=>!v?"":String(v).includes("*")?v:displayPhone(v);
 
+// 操作手冊：檔案放在網站根目錄 /manual/（正式站與展示版一樣）；更新手冊時改這兩個檔名
+const MANUAL_HTML=encodeURI("/manual/2026-11-15_SW-II活動CRM操作手冊.html"), MANUAL_PDF=encodeURI("/manual/2026-11-15_SW-II活動CRM操作手冊.pdf");
+function manualPage(){
+  return `${pageHead("操作手冊","後台每一頁怎麼用、六種身分各能做什麼。每章開頭標有「適用身分」。",`<a class="button secondary" href="${MANUAL_HTML}" target="_blank" rel="noopener">另開視窗／列印</a><a class="button" href="${MANUAL_PDF}" download="SW-II活動CRM操作手冊.pdf">匯出 PDF</a>`)}<iframe class="manual-frame" src="${MANUAL_HTML}" title="SW-II 活動 CRM 操作手冊"></iframe>`;
+}
 function pageHead(title,subtitle,actions=""){ return `<section class="page-head"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="actions">${actions}</div></section>`; }
 
 async function boot(){
@@ -312,7 +317,7 @@ function render(){
   if($("#homeBtn")) $("#homeBtn").hidden=name==="register"&&!query().get("event");
   // 工作人員已有完整活動資料，不能被公開活動資料蓋掉
   if(live&&name==="register"&&!state.eventsLoaded&&!STAFF_ROLES.includes(state.role)){ $("#app").innerHTML="<div class='empty'>載入活動中…</div>"; loadPublicEvent().then(render); return; }
-  const views={dashboard,events,courses,roster:rosterPage,contacts,tags:tagsPage,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors,weekly,"set-password":setPassword,signin,activate,apply,applications};
+  const views={dashboard,events,courses,roster:rosterPage,contacts,tags:tagsPage,checkin,messages,governance,users,register,login,me,scan,import:importPage,sponsors,weekly,"set-password":setPassword,signin,activate,apply,applications,manual:manualPage};
   $("#app").innerHTML=(views[name]||dashboard)();
   if(name==="me")loadMe();
   if(name==="roster"){ filterRoster(); const k=kindOf(state.events.find(e=>e.id===query().get("event"))); document.querySelector(`.sidebar a[data-route="${KIND_ROUTES[k]}"]`)?.classList.add("active"); }
@@ -1579,7 +1584,7 @@ async function assignStaffModal(eventId){
     ${free.length?`<form id="assignForm"><input type="hidden" name="event_id" value="${e.id}"><div class="form-grid">
       <div class="field"><label>工作人員</label><select name="user_id" required><option value="">請選擇</option>${free.map(p=>`<option value="${p.user_id}">${escapeHtml(p.display_name)}</option>`).join("")}</select></div>
       <div class="field"><label>到期時間（預設：活動結束隔天 23:59）</label><input name="expires_at" type="datetime-local" value="${toLocalInput(defaultAssignmentExpiry(e).toISOString())}"></div>
-      <div class="field full"><label><input type="checkbox" name="can_view_roster" checked> 看名單（名單頁、匯出、繳費金額）</label><label><input type="checkbox" name="can_checkin" checked> 操作報到（報到頁看得到姓名、區域、手機後三碼、是否已繳）</label></div>
+      <div class="field full"><label><input type="checkbox" name="can_view_roster" checked> 看名單（名單頁、匯出、繳費狀態）</label><label><input type="checkbox" name="can_checkin" checked> 操作報到（報到頁看得到姓名、區域、手機後三碼、是否已繳）</label></div>
       <button class="field full">指派</button></div></form>`:`<p class="muted">沒有可以再指派的工作人員。要指派新的人，請總管理先邀請帳號。</p>`}`);
 }
 async function saveAssignment(data){

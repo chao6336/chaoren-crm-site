@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>SW-II 活動 CRM 操作手冊</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+  :root { --green:#00694a; --light:#72af2d; --ink:#1d2a24; --muted:#5c6b63; --line:#d9e3dc; --soft:#f1f6f2; --warn:#a85a00; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif; color:var(--ink); font-size:10.5pt; line-height:1.7; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  h1 { font-size:20pt; color:var(--green); margin:0 0 6pt; padding-bottom:6pt; border-bottom:2.5pt solid var(--light); }
+  h2 { font-size:13pt; color:var(--green); margin:16pt 0 6pt; }
+  h3 { font-size:11pt; margin:12pt 0 4pt; }
+  p { margin:4pt 0 6pt; }
+  ol, ul { margin:4pt 0 8pt; padding-left:18pt; }
+  li { margin:2pt 0; }
+  .chapter { page-break-before:always; }
+  .avoid { break-inside:avoid; page-break-inside:avoid; }
+  table { width:100%; border-collapse:collapse; margin:6pt 0 10pt; font-size:9.5pt; }
+  th, td { border:0.6pt solid var(--line); padding:4pt 6pt; text-align:left; vertical-align:top; }
+  th { background:var(--soft); color:var(--green); }
+  td.c, th.c { text-align:center; }
+  .who { display:inline-block; font-size:9pt; background:var(--soft); color:var(--green); border:0.6pt solid #b9d3c2; border-radius:10pt; padding:0 7pt; margin:0 3pt 3pt 0; }
+  .whobar { margin:-2pt 0 8pt; }
+  .whobar b { font-size:9pt; color:var(--muted); font-weight:normal; margin-right:4pt; }
+  figure { margin:8pt 0 12pt; text-align:center; }
+  figure img { width:100%; max-width:165mm; border:0.6pt solid var(--line); border-radius:4pt; }
+  figure.half img { max-width:120mm; }
+  figcaption { font-size:9pt; color:var(--muted); margin-top:3pt; }
+  .tip, .note { border-radius:5pt; padding:6pt 10pt; margin:8pt 0; font-size:9.8pt; }
+  .tip { background:var(--soft); border-left:3pt solid var(--green); }
+  .note { background:#fff6e8; border-left:3pt solid var(--warn); }
+  .tip b, .note b { color:var(--green); }
+  .note b { color:var(--warn); }
+  pre.flow { font-family:Consolas,"Microsoft JhengHei",monospace; font-size:9pt; background:#fafcfa; border:0.6pt solid var(--line); border-radius:4pt; padding:7pt 10pt; white-space:pre; line-height:1.55; margin:6pt 0 10pt; }
+  .cover { height:250mm; display:flex; flex-direction:column; justify-content:center; }
+  .cover .brand { color:var(--green); font-size:13pt; letter-spacing:2pt; }
+  .cover h1 { font-size:30pt; border:none; margin:8pt 0 4pt; padding:0; }
+  .cover .sub { font-size:14pt; color:var(--muted); }
+  .cover .bar { width:60mm; height:4pt; background:var(--light); margin:16pt 0; }
+  .cover table { width:auto; margin-top:24pt; font-size:10.5pt; }
+  .cover td { border:none; padding:2pt 14pt 2pt 0; }
+  .toc { columns:2; column-gap:12mm; }
+  .toc li { break-inside:avoid; }
+  .key { display:inline-block; border:0.6pt solid #9fb8a8; border-radius:3pt; padding:0 5pt; font-size:9pt; background:#fff; }
+</style>
+</head>
+<body>
+
+<!-- ========== 封面 ========== -->
+<section class="cover">
+  <div class="brand">SW-II ｜ 晁人文鼎協會</div>
+  <h1>活動 CRM 操作手冊</h1>
+  <div class="sub">工作人員後台・六種身分適用</div>
+  <div class="bar"></div>
+  <p>這本手冊說明後台每一頁怎麼用，以及每種身分能做哪些事。<br>每個章節開頭都有「適用身分」標籤，只要看自己身分的部分就好。</p>
+  <table>
+    <tr><td>後台網址</td><td><b>https://crm.sw-ii.com/admin/</b></td></tr>
+    <tr><td>學員報名網址</td><td>https://crm.sw-ii.com</td></tr>
+    <tr><td>手冊對應版本</td><td>v20261115-3</td></tr>
+    <tr><td>製作日期</td><td>2026 年 11 月 15 日</td></tr>
+  </table>
+  <p style="margin-top:20pt;font-size:9pt;color:#5c6b63">※ 手冊裡的畫面都來自「展示版」，人名與電話都是假資料。展示版右上角會多一個「展示模式」與身分切換選單，正式站沒有。</p>
+</section>
+
+<!-- ========== 目錄 ========== -->
+<section class="chapter">
+  <h1>目錄</h1>
+  <ol class="toc">
+    <li>登入與畫面介紹</li>
+    <li>六種身分能做什麼</li>
+    <li>總覽</li>
+    <li>建立與編輯活動／課程</li>
+    <li>分享報名連結（QR Code、LINE）</li>
+    <li>報名名單與繳費登記</li>
+    <li>現場報到</li>
+    <li>指派志工</li>
+    <li>會員資料</li>
+    <li>總管理專用功能（標籤、LINE 訊息、週報、使用者…）</li>
+    <li>常見問題</li>
+  </ol>
+
+  <h2>一張圖看懂：一場活動從開始到結束</h2>
+<pre class="flow">建立活動 ──▶ 分享報名連結 ──▶ 學員用 LINE 報名 ──▶ 名單（登記繳費）──▶ 現場報到 ──▶ 活動結束
+（第 4 章）    （第 5 章）         （學員自己操作）        （第 6 章）           （第 7 章）
+                                                                              │
+                                    人手不夠？指派志工幫忙看名單、報到（第 8 章）─┘</pre>
+
+  <h2>名詞小辭典</h2>
+  <table>
+    <tr><th style="width:26%">名詞</th><th>意思</th></tr>
+    <tr><td>單位</td><td>晁人、維諦、心理道三個單位。每場活動屬於一個「主辦單位」，權限是依單位分開算的。</td></tr>
+    <tr><td>場次</td><td>同一個活動可以有好幾個時段（例如上午場、下午場），共用一張報名 QR Code，學員可以複選。</td></tr>
+    <tr><td>個資遮罩</td><td>手機只顯示末三碼、地址與身分證部分隱藏，保護會員隱私。</td></tr>
+    <tr><td>標籤</td><td>貼在會員身上的分類，例如「冥想」「萬聖心派對」。報到、課程繳費時系統會自動貼。</td></tr>
+  </table>
+</section>
+
+<!-- ========== 1 登入 ========== -->
+<section class="chapter">
+  <h1>1. 登入與畫面介紹</h1>
+  <div class="whobar"><b>適用身分</b><span class="who">全部</span></div>
+
+  <h2>怎麼登入</h2>
+  <ol>
+    <li>打開 <b>https://crm.sw-ii.com/admin/</b>。</li>
+    <li>輸入總管理寄給你的 Email 和密碼。第一次登入要先點邀請信裡的連結設定密碼。</li>
+    <li>忘記密碼：請總管理在「使用者」頁按「重設密碼連結」，再傳給你。</li>
+  </ol>
+
+  <h2>畫面分成三塊</h2>
+  <figure>
+    <img src="img/01_dashboard.jpg" alt="後台總覽畫面">
+    <figcaption>圖 1　後台畫面（總管理看到的樣子）</figcaption>
+  </figure>
+  <table>
+    <tr><th style="width:22%">位置</th><th>用途</th></tr>
+    <tr><td>左側選單</td><td>切換功能頁。<b>每種身分看到的選單不一樣</b>，看不到的就是沒有權限（見第 2 章）。</td></tr>
+    <tr><td>右上角單位選單</td><td>顯示「晁人」的那個下拉選單。你在好幾個單位都有角色時，用它切換現在要管哪個單位。</td></tr>
+    <tr><td>右上角姓名與登出</td><td>顯示你的名字和角色；用完公用電腦記得按「登出」。</td></tr>
+  </table>
+  <div class="tip"><b>小提醒：</b>同一個人在不同單位可以有不同角色。例如在晁人是「活動管理者」、在維諦是「會計」，切換單位後能做的事會跟著變。</div>
+</section>
+
+<!-- ========== 2 身分 ========== -->
+<section class="chapter">
+  <h1>2. 六種身分能做什麼</h1>
+  <div class="whobar"><b>適用身分</b><span class="who">全部</span></div>
+  <p>下表是系統的預設權限（✓＝可以，—＝不行）。總管理在「使用者」頁設定角色時，還可以替個別人員多勾或少勾幾項。</p>
+  <table class="avoid">
+    <tr><th style="width:30%">功能</th><th class="c">總管理</th><th class="c">單位<br>管理者</th><th class="c">活動<br>管理者</th><th class="c">會計</th><th class="c">查詢<br>人員</th><th class="c">區負責人</th></tr>
+    <tr><td>活動／課程：建立、編輯、刪除、產報到 QR</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
+    <tr><td>看報名名單</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">只看自己區</td></tr>
+    <tr><td>登記繳費、匯出名單</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td></tr>
+    <tr><td>現場報到</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">只限自己區</td></tr>
+    <tr><td>會員資料頁（個資遮罩）</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">只看自己區</td></tr>
+    <tr><td>指派志工</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
+    <tr><td>標籤、LINE 訊息、週報、匯入名冊、待開通、資料治理、使用者</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
+    <tr><td>看完整手機、Email、地址</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
+  </table>
+
+  <h2>每種身分的左側選單</h2>
+  <table class="avoid">
+    <tr><th style="width:18%">身分</th><th style="width:40%">左側選單</th><th>一句話說明</th></tr>
+    <tr><td>總管理</td><td>總覽、活動、課程、會員資料、標籤、現場報到、週報、匯入名冊、LINE 訊息、資料治理、待開通、使用者</td><td>全部功能、三個單位都能管。</td></tr>
+    <tr><td>單位管理者</td><td>總覽、活動、課程、會員資料、現場報到</td><td>管自己單位的活動、名單、報到、會員，也能指派志工。</td></tr>
+    <tr><td>活動管理者</td><td>總覽、活動、課程、現場報到</td><td>辦活動的主力：建活動、看名單、登記繳費、報到。</td></tr>
+    <tr><td>會計</td><td>總覽、活動、課程</td><td>從活動列表點「名單」，登記繳費狀態、匯出名單。</td></tr>
+    <tr><td>查詢人員</td><td>總覽、活動、課程</td><td>只能看名單，不能修改。</td></tr>
+    <tr><td>區負責人</td><td>總覽、活動、課程、會員資料、現場報到</td><td>只看得到自己區的會員與報到（只有晁人有這個角色）。</td></tr>
+  </table>
+  <div class="note"><b>注意：</b>別的單位「共享」給你的活動，你只看得到活動資訊，看不到報名名單。</div>
+</section>
+
+<!-- ========== 3 總覽 ========== -->
+<section class="chapter">
+  <h1>3. 總覽</h1>
+  <div class="whobar"><b>適用身分</b><span class="who">全部</span></div>
+  <p>登入後第一個畫面（見圖 1）。上方是目前單位的活動數、有效報名、出席率、取消率、會員數。</p>
+  <ul>
+    <li><b>下一場活動</b>：最近一場活動的報名人數，可以直接按「開啟報到」或「查看報名頁」。</li>
+    <li><b>需要注意</b>：待繳費人數、待開通學員、待確認訊息、尚未分區的會員、無法用 LINE 聯絡的人數。數字不是 0 時，記得去處理。</li>
+  </ul>
+
+  <!-- ========== 4 活動 ========== -->
+  <h1 style="margin-top:22pt">4. 建立與編輯活動／課程</h1>
+  <div class="whobar"><b>適用身分</b><span class="who">總管理</span><span class="who">單位管理者</span><span class="who">活動管理者</span></div>
+  <p>「活動」和「課程」是兩個分開的頁面，操作方式一樣：在「活動」頁建的就是活動，在「課程」頁建的就是課程。</p>
+  <figure>
+    <img src="img/02_events.jpg" alt="活動管理列表">
+    <figcaption>圖 2　活動管理列表：點活動名稱可打開報名頁；右側是名單、報到、志工、編輯、刪除</figcaption>
+  </figure>
+</section>
+
+<section class="chapter">
+  <h2>建立一場活動</h2>
+  <ol>
+    <li>左側選「活動」（或「課程」），按右上角「＋ 建立活動」。</li>
+    <li>填寫名稱、說明、地點、費用說明、報名截止時間。</li>
+    <li><b>場次</b>：填開始時間、結束時間、名額。要加第二個時段就按「＋ 新增場次」，所有場次共用一張報名 QR Code。</li>
+    <li><b>活動 DM 圖片</b>（選填）：上傳 JPG／PNG／WebP，會顯示在報名頁最上方，也會出現在 LINE 分享卡片上。<b>請不要放有學員個資的圖片。</b></li>
+    <li>選「主辦單位」與「共享給其他單位」（單位內部／指定單位／全平台共享）。</li>
+    <li>「狀態」選「公開報名」後學員才看得到；還在準備就選「草稿（不公開）」。按「儲存」完成。</li>
+  </ol>
+  <figure class="half">
+    <img src="img/03_event_edit.jpg" alt="編輯活動表單">
+    <figcaption>圖 3　編輯活動表單（名稱、說明、DM 圖片、場次）</figcaption>
+  </figure>
+  <div class="tip"><b>費用說明怎麼寫：</b>收費的寫金額就好，例如「體驗活動 NT$300」；免費的寫「免費」或留空。免費活動的名單不會出現繳費欄位。</div>
+  <div class="note"><b>刪除活動：</b>按列表的「刪除」會要求確認，刪除後無法復原。已經有人報名的活動，建議改成取消，不要直接刪除。</div>
+
+  <h2>匯出多場活動名單</h2>
+  <p>活動列表右上角的「匯出」可以依狀態、關鍵字篩選，一次勾選好幾場，合併成一個 CSV 檔，可以直接用 Excel 開。</p>
+</section>
+
+<!-- ========== 5 分享 ========== -->
+<section class="chapter">
+  <h1>5. 分享報名連結（QR Code、LINE）</h1>
+  <div class="whobar"><b>適用身分</b><span class="who">總管理</span><span class="who">單位管理者</span><span class="who">活動管理者</span></div>
+  <p>在活動列表點活動名稱，就會打開這場活動的報名頁。左邊「活動資訊」下方有報名 QR Code 和報名網址。</p>
+  <figure>
+    <img src="img/04_register.jpg" alt="報名頁的 QR Code 與複製按鈕">
+    <figcaption>圖 4　報名頁：QR Code 可以印在海報上；按「複製」取得要貼到 LINE 的連結</figcaption>
+  </figure>
+  <h2>貼到 LINE 群組的步驟</h2>
+  <ol>
+    <li>按網址旁邊的「<span class="key">複製</span>」。</li>
+    <li>到 LINE 貼上。對話框會出現一張預覽卡片，顯示<b>活動名稱、日期、地點和 DM 圖</b>。</li>
+  </ol>
+<pre class="flow">正式站複製到的網址長這樣：https://crm.sw-ii.com/e/活動代碼/
+  ├─ LINE 的預覽卡片 → 顯示活動名稱、日期、DM
+  └─ 學員點開       → 自動跳到報名頁</pre>
+  <div class="note"><b>剛建好的活動要等 10～20 分鐘：</b>系統每 10 分鐘更新一次分享卡片。太早複製的話，畫面會提醒「分享卡片還在產生」。這時連結一樣能報名，只是 LINE 卡片暫時只顯示通用標題，等一下再貼就好。改過活動名稱或 DM 也一樣要等一下。</div>
+  <div class="tip"><b>展示版不一樣：</b>展示版（圖 4）複製到的是一般報名網址，沒有分享卡片，這是正常的。</div>
+</section>
+
+<!-- ========== 6 名單 ========== -->
+<section class="chapter">
+  <h1>6. 報名名單與繳費登記</h1>
+  <div class="whobar"><b>適用身分</b><span class="who">總管理</span><span class="who">單位管理者</span><span class="who">活動管理者</span><span class="who">會計</span><span class="who">查詢人員（只能看）</span><span class="who">區負責人（自己區）</span></div>
+  <p>在活動列表按「名單」打開。上方顯示已報到、未報到、已取消、已繳費人數。</p>
+  <figure>
+    <img src="img/05_roster.jpg" alt="報名名單">
+    <figcaption>圖 5　報名名單：可用姓名、會員編號或手機末三碼搜尋，並依報到狀態、繳費狀態篩選</figcaption>
+  </figure>
+  <h2>登記繳費狀態</h2>
+  <div class="whobar"><b>可以登記</b><span class="who">總管理</span><span class="who">單位管理者</span><span class="who">活動管理者</span><span class="who">會計</span></div>
+  <ol>
+    <li>在那位學員那一列按「<span class="key">繳費</span>」。</li>
+    <li>選擇繳費狀態，按「儲存」。</li>
+  </ol>
+  <figure class="half">
+    <img src="img/06_payment.jpg" alt="繳費紀錄視窗">
+    <figcaption>圖 6　繳費紀錄視窗：只需要選狀態</figcaption>
+  </figure>
+</section>
+
+<section class="chapter">
+  <table class="avoid">
+    <tr><th style="width:18%">狀態</th><th>什麼時候選</th><th style="width:34%">系統會怎麼算</th></tr>
+    <tr><td>未繳費</td><td>報名了還沒付款（預設值）</td><td>總覽「待繳費」會算進去</td></tr>
+    <tr><td>已繳費</td><td>全額付清</td><td>算「已繳費」；課程會自動貼「課程名稱 已繳費」標籤</td></tr>
+    <tr><td>分期繳費</td><td>學員用分期付款</td><td>和「已繳費」一樣算已繳，也會貼標籤</td></tr>
+    <tr><td>免費</td><td>這位學員不用付費（例如工作人員、貴賓）</td><td>不算待繳</td></tr>
+    <tr><td>已退款</td><td>付過款後退費</td><td>不算已繳；課程的已繳費標籤會拿掉</td></tr>
+  </table>
+  <div class="note"><b>CRM 只記狀態，不記金額：</b>從 2026-11-15 起，CRM 不再記錄金額、繳費日期和收據號碼，也不做營收統計。金額與收據請用會計的繳費程式處理。以前登記過的舊資料還保留在系統裡，只是畫面上不再顯示。</div>
+
+  <h2>匯出名單 CSV</h2>
+  <div class="whobar"><b>可以匯出</b><span class="who">總管理</span><span class="who">單位管理者</span><span class="who">活動管理者</span><span class="who">會計</span></div>
+  <p>名單頁右上角按「匯出 CSV」，下載後用 Excel 打開。欄位有：</p>
+<pre class="flow">會員編號、姓名、性別、區域、居住縣市、手機、（Email）、狀態、繳費、報名時間、報到時間</pre>
+  <ul>
+    <li>手機：總管理看得到完整號碼，其他身分只有末三碼。Email 只有總管理的檔案會有。</li>
+    <li>免費活動沒有「繳費」這一欄。</li>
+  </ul>
+  <div class="note"><b>個資保護：</b>匯出的檔案含有會員個資，用完請刪除，不要轉寄到私人信箱或公開群組。</div>
+</section>
+
+<!-- ========== 7 報到 ========== -->
+<section class="chapter">
+  <h1>7. 現場報到</h1>
+  <div class="whobar"><b>適用身分</b><span class="who">總管理</span><span class="who">單位管理者</span><span class="who">活動管理者</span><span class="who">區負責人（自己區）</span><span class="who">被指派的志工</span></div>
+  <p>活動當天有兩種報到方式，可以同時使用：</p>
+  <h2>方式一：學員掃 QR Code 自己報到</h2>
+  <ol>
+    <li>在「現場報到」頁按右上角「<span class="key">報到 QR Code</span>」，把畫面投影出來或印出來。</li>
+    <li>學員用手機掃描，用 LINE 身分確認後就完成報到。</li>
+  </ol>
+  <h2>方式二：工作人員幫忙按報到</h2>
+  <ol>
+    <li>左側選「現場報到」，右上角選擇活動。</li>
+    <li>用姓名或手機末三碼搜尋，按「<span class="key">確認報到</span>」。按過的會變成「已報到 ✓」。</li>
+  </ol>
+  <figure>
+    <img src="img/07_checkin.jpg" alt="現場報到">
+    <figcaption>圖 7　現場報到：每一列顯示區域、手機末三碼與繳費狀況（已繳／待確認款項）</figcaption>
+  </figure>
+  <div class="tip"><b>報到後自動貼標籤：</b>完成報到的學員會自動貼上活動名稱的標籤，之後可以用來篩選 LINE 推播對象。</div>
+</section>
+
+<!-- ========== 8 志工 ========== -->
+<section class="chapter">
+  <h1>8. 指派志工</h1>
+  <div class="whobar"><b>適用身分</b><span class="who">總管理</span><span class="who">單位管理者</span></div>
+  <p>活動當天需要別人幫忙時，可以把「某一場活動」暫時開放給一位工作人員。對方只看得到這一場，時間到了權限會自動收回。</p>
+  <ol>
+    <li>活動列表按那場活動的「<span class="key">志工</span>」。</li>
+    <li>選擇工作人員（對方要先有帳號，見第 10 章「使用者」）。</li>
+    <li>設定到期時間，預設是活動結束隔天 23:59。</li>
+    <li>勾選要給的權限：<b>看名單</b>（名單頁、匯出）或<b>操作報到</b>（報到頁），按「指派」。</li>
+    <li>不需要了可以按「收回」，馬上停止權限。</li>
+  </ol>
+  <figure class="half">
+    <img src="img/08_volunteer.jpg" alt="指派志工">
+    <figcaption>圖 8　指派志工視窗</figcaption>
+  </figure>
+</section>
+
+<!-- ========== 9 會員 ========== -->
+<section class="chapter">
+  <h1>9. 會員資料</h1>
+  <div class="whobar"><b>適用身分</b><span class="who">總管理（完整資料）</span><span class="who">單位管理者（遮罩）</span><span class="who">區負責人（自己區、遮罩）</span></div>
+  <figure>
+    <img src="img/09_contacts.jpg" alt="會員資料列表">
+    <figcaption>圖 9　會員資料列表（總管理畫面，可新增會員、匯入 Excel、匯出 CSV）</figcaption>
+  </figure>
+  <ul>
+    <li><b>搜尋</b>：輸入會員編號、姓名、LINE 名稱或標籤，也可以依區域篩選。</li>
+    <li><b>點會員姓名</b>：打開會員資料頁，看報名紀錄、參加紀錄、標籤。</li>
+    <li><b>個資遮罩</b>：除了總管理，其他人看到的手機只有末三碼，地址與身分證會部分隱藏。總管理要看身分證，也要另外按「查看」，系統會留下紀錄。</li>
+    <li><b>貼標／撕標</b>（只有總管理）：會員資料頁裡按「＋ 增加標籤」，一次最多勾 10 個；按標籤旁的 ✕ 可以撕掉。</li>
+    <li><b>LINE 欄位</b>：「可聯絡」才收得到 LINE 推播；「已封鎖」「未綁定」的人收不到。</li>
+  </ul>
+</section>
+
+<!-- ========== 10 總管理 ========== -->
+<section class="chapter">
+  <h1>10. 總管理專用功能</h1>
+  <div class="whobar"><b>適用身分</b><span class="who">總管理</span></div>
+
+  <h2>10-1 標籤</h2>
+  <figure>
+    <img src="img/10_tags.jpg" alt="標籤管理">
+    <figcaption>圖 10　標籤管理：建立、編輯、刪除、批次貼標／撕標、匯入與匯出 CSV</figcaption>
+  </figure>
+  <ul>
+    <li><b>建立標籤</b>：一行輸入一個，可以一次建很多個，並設定分類與時效（空白＝永久；填天數＝貼上後幾天自動失效）。</li>
+    <li><b>批次貼標／撕標</b>：貼上一整欄會員編號、手機或姓名，系統會先檢查，確認後才執行。</li>
+    <li><b>點「貼標人數」</b>：看有哪些人，也可以在那裡撕標。</li>
+    <li><b>匯出 CSV</b>：欄位是標籤名稱、時效天數、分類、貼標人數。改完可以直接用「匯入 CSV」匯回來。</li>
+    <li>報到、課程繳費自動貼的是「系統標籤」，請不要手動改名或刪除。</li>
+  </ul>
+</section>
+
+<section class="chapter">
+  <h2>10-2 LINE 訊息</h2>
+  <figure>
+    <img src="img/11_messages.jpg" alt="LINE 訊息">
+    <figcaption>圖 11　LINE 訊息：先建草稿，檢查對象與內容後才送出</figcaption>
+  </figure>
+  <ol>
+    <li>按「＋ 新增專案」，輸入主旨、內容，可以附一張圖片。</li>
+    <li>選發送對象：某場活動的報名者、全員、指定學員（可依標籤、區域、姓名篩選），或官方帳號全部好友（群發）。</li>
+    <li>按「<span class="key">檢查並送出</span>」，系統會再顯示一次實際對象與全文，確認後才發送。</li>
+  </ol>
+  <div class="note"><b>送出後無法收回：</b>「刪除」只會刪掉 CRM 裡的紀錄，學員已經收到的訊息不會消失。訊息裡的網址會自動換成追蹤短網址，用來統計點擊。</div>
+
+  <h2 style="page-break-before:always">10-3 週報</h2>
+  <figure>
+    <img src="img/12_weekly.jpg" alt="成效週報">
+    <figcaption>圖 12　成效週報：預設看上一個完整的週，可以切換上一週、本週累計</figcaption>
+  </figure>
+  <ul>
+    <li>內容：新會員、累積有效會員、標籤覆蓋率、新報名、取消、報到、出席率、LINE 推播的送達、點擊、點擊率、推播帶來的報名。</li>
+    <li>「匯出 CSV」下載完整數字；「複製文字摘要」可以直接貼到 LINE 群組。</li>
+    <li>週報<b>不包含營收</b>，營收請看會計的繳費程式。</li>
+  </ul>
+</section>
+
+<section class="chapter">
+  <h2>10-4 使用者（邀請工作人員、設定角色）</h2>
+  <figure>
+    <img src="img/13_users.jpg" alt="使用者管理">
+    <figcaption>圖 13　使用者管理：每個人在各單位的角色一目了然</figcaption>
+  </figure>
+  <ol>
+    <li>按「＋ 邀請工作人員」，輸入姓名與 Email。系統會寄出邀請信，對方點連結設定密碼。</li>
+    <li>設定帳號類型與<b>每個單位的角色</b>（單位管理者、活動管理者、會計、查詢人員、區負責人），需要時再個別勾選功能。</li>
+    <li>修改：按那個人的「修改」。忘記密碼：按「重設密碼連結」。</li>
+    <li>刪除工作人員：在修改視窗按「刪除這位工作人員」，要輸入姓名確認。有操作紀錄的帳號會改成停用，紀錄會保留。</li>
+  </ol>
+  <figure class="half">
+    <img src="img/14_staff_view.jpg" alt="活動管理者看到的畫面">
+    <figcaption>圖 14　同一個活動列表，「活動管理者」看到的樣子：選單比較少；別的單位共享的活動沒有操作按鈕</figcaption>
+  </figure>
+
+  <h2>10-5 其他</h2>
+  <table>
+    <tr><th style="width:20%">頁面</th><th>用途</th></tr>
+    <tr><td>匯入名冊</td><td>上傳 Excel 或 CSV，大量新增會員。手機格式看不懂時會留空並提醒，不會整筆擋下。</td></tr>
+    <tr><td>待開通</td><td>沒有 LINE 的學員自己申請帳號後，在這裡開通或拒絕。</td></tr>
+    <tr><td>資料治理</td><td>匯出資料備份、查看最近操作紀錄、把閒置滿兩年的會員匿名化（無法復原，請先預覽名單）。</td></tr>
+  </table>
+</section>
+
+<!-- ========== 11 FAQ ========== -->
+<section class="chapter">
+  <h1>11. 常見問題</h1>
+  <table>
+    <tr><th style="width:36%">問題</th><th>怎麼辦</th></tr>
+    <tr><td>左側選單少了某個功能</td><td>你的身分沒有這個權限（見第 2 章）。如果工作需要，請總管理在「使用者」頁調整。</td></tr>
+    <tr><td>看不到某場活動的名單</td><td>先確認右上角選的單位對不對。別的單位共享過來的活動只看得到資訊，看不到名單。</td></tr>
+    <tr><td>LINE 分享卡片沒有顯示活動名稱</td><td>新建或剛改過的活動，等 10～20 分鐘再複製、再貼。已經貼過的舊訊息，LINE 可能會一直顯示舊卡片，重新貼一次新的就好。</td></tr>
+    <tr><td>分期繳費要記每期金額嗎？</td><td>CRM 只要選「分期繳費」。每期金額與收據請記在會計的繳費程式。</td></tr>
+    <tr><td>學員說報名沒成功</td><td>請學員打開「我的活動」確認；名單頁也可以搜尋他的姓名或手機末三碼。</td></tr>
+    <tr><td>報到時找不到學員</td><td>用手機末三碼搜尋；區負責人只看得到自己區的學員，找不到的請活動管理者協助。</td></tr>
+    <tr><td>按了沒反應、畫面怪怪的</td><td>先重新整理頁面。還是不行，截圖並寫下你按了哪個按鈕，傳給總管理。</td></tr>
+  </table>
+  <div class="tip" style="margin-top:14pt"><b>需要協助：</b>帳號、權限、資料錯誤，請聯絡總管理。</div>
+</section>
+
+</body>
+</html>
