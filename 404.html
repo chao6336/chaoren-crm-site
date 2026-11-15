@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>SW-II 活動報名</title>
+  <style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#eef3ec;color:#16231e;font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;text-align:center;padding:24px}a{color:#00694a;font-weight:700}</style>
+  <script>
+    // 新活動的分享頁 /e/<活動 id>/ 還沒產生（每 10 分鐘左右更新一次）時，先直接帶到報名頁，連結不會壞。
+    (function(){ var m=location.pathname.match(/^\/e\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i);
+      if(m) location.replace("/#register?event="+m[1].toLowerCase()); })();
+  </script>
+</head>
+<body>
+  <main><h1>找不到這個頁面</h1><p><a href="/">回到 SW-II 活動報名</a></p></main>
+</body>
+</html>

@@ -1,0 +1,34 @@
+# 放在發布站 chaoren-crm-site 的 .github/workflows/share-pages.yml
+# 每 10 分鐘讀一次已發布的活動，產生／更新 e/<活動 id>/index.html（LINE／FB 連結預覽卡片），有變更才 commit。
+name: 更新活動分享頁
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [lib.js, config.js, tools/**, .github/workflows/share-pages.yml]
+permissions:
+  contents: write
+concurrency:
+  group: share-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node tools/build-share-pages.mjs
+      - name: 有變更才提交
+        run: |
+          git add -A e
+          if git diff --cached --quiet; then echo "分享頁沒有變更"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update event share pages"
+          git pull --rebase
+          git push

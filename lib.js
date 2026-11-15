@@ -851,3 +851,77 @@ export function weeklyReport({ contacts = [], registrations = [], events = [], c
     campaigns: camps
   };
 }
+
+// ── 活動分享頁（LINE／FB 連結預覽卡片）────────────────────────────
+// LINE、FB 的爬蟲不執行 JavaScript，也看不到網址 # 後面的內容，所以 `/#register?event=…` 永遠只顯示首頁的通用標題。
+// 每場活動另外產生一個靜態網址 `/e/<活動 id>/`，頁面裡寫好 og 標籤（活動名稱、日期、DM），真人打開後再用 JavaScript 轉到報名頁。
+// 頁面由 tools/build-share-pages.mjs 依 public_events 產生（發布站的 GitHub Actions 定時執行）。
+const EVENT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isEventId = id => EVENT_ID_RE.test(String(id || ""));
+export const shareUrl = (siteUrl, eventId) => `${String(siteUrl || "").replace(/\/+$/, "")}/e/${eventId}/`;
+
+const htmlText = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+const oneLine = (value, max) => { const s = String(value || "").replace(/\s+/g, " ").trim(); return s.length > max ? `${s.slice(0, max - 1)}…` : s; };
+
+// 台灣時間「2026/12/19（六）14:00」
+export function shareDate(value, { time = true } = {}) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const t = new Date(d.getTime() + 8 * 3600e3); // Asia/Taipei 固定 UTC+8，沒有日光節約
+  const p = n => String(n).padStart(2, "0");
+  const day = `${t.getUTCFullYear()}/${p(t.getUTCMonth() + 1)}/${p(t.getUTCDate())}（${"日一二三四五六"[t.getUTCDay()]}）`;
+  return time ? `${day}${p(t.getUTCHours())}:${p(t.getUTCMinutes())}` : day;
+}
+
+// 分享卡片的標題、說明、圖片。sessions＝同一張報名 QR 的所有場次（eventSessions 的結果）。
+// imageBase：只接受這個開頭的 DM 網址（Supabase 公開 bucket event-images），其他一律用預設圖。
+export function shareCard(event, sessions = [event], { siteUrl = "", imageBase = "" } = {}) {
+  const list = sessions.length ? sessions : [event];
+  const multi = list.length > 1;
+  const title = oneLine(multi ? event.title : eventLabel(event), 80) || "SW-II 活動報名";
+  const when = multi ? `共 ${list.length} 場・${shareDate(list[0].starts_at, { time: false })}起` : shareDate(event.starts_at);
+  const facts = [when, oneLine(event.location, 40), event.org_name ? `${oneLine(event.org_name, 20)}主辦` : ""].filter(Boolean).join("｜");
+  const theme = oneLine(event.theme, 80);
+  const description = [facts, theme].filter(Boolean).join("　") || "晁人文鼎協會活動報名";
+  const img = String(event.image_url || "");
+  const okImage = imageBase && img.startsWith(imageBase) && /^https:\/\/[^\s"'<>]+$/.test(img);
+  const image = okImage ? img : `${String(siteUrl).replace(/\/+$/, "")}/assets/sw-ii-icon.png`;
+  return { title, description, image, hasDm: okImage };
+}
+
+// 產生 /e/<id>/index.html。沒有 meta refresh（有些爬蟲會跟著跳走、讀到首頁的通用標題），只用 JavaScript 轉址。
+// 連結上的 utm_* 參數一起帶到報名頁，報名來源追蹤照常運作。
+export function sharePageHtml(event, sessions = [event], { siteUrl = "", imageBase = "" } = {}) {
+  if (!isEventId(event?.id)) throw new Error(`不是有效的活動 id：${event?.id}`);
+  const site = String(siteUrl).replace(/\/+$/, "");
+  const card = shareCard(event, sessions, { siteUrl: site, imageBase });
+  const url = shareUrl(site, event.id);
+  const target = `${site}/#register?event=${event.id}`;
+  const e = htmlText;
+  return `<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${e(card.title)}｜SW-II 活動報名</title>
+<meta name="description" content="${e(card.description)}">
+<link rel="canonical" href="${e(url)}">
+<link rel="icon" href="${e(site)}/assets/sw-ii-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="SW-II 活動報名">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:url" content="${e(url)}">
+<meta property="og:title" content="${e(card.title)}">
+<meta property="og:description" content="${e(card.description)}">
+<meta property="og:image" content="${e(card.image)}">
+<meta name="twitter:card" content="${card.hasDm ? "summary_large_image" : "summary"}">
+<meta name="robots" content="noindex">
+<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#eef3ec;color:#16231e;font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;text-align:center;padding:24px}a{color:#00694a;font-weight:700}</style>
+<script>(function(){var q=new URLSearchParams(location.search),k=["utm_source","utm_medium","utm_campaign","utm_content"],x="";k.forEach(function(n){var v=q.get(n);if(v)x+="&"+n+"="+encodeURIComponent(v)});location.replace(${JSON.stringify(target).replace(/</g, "\\u003c")}+x);})();</script>
+</head>
+<body>
+<main><h1>${e(card.title)}</h1><p>${e(card.description)}</p><p><a href="${e(target)}">前往報名頁 →</a></p></main>
+</body>
+</html>
+`;
+}
