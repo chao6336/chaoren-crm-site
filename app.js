@@ -271,7 +271,7 @@ async function loadPublicEvent(){
 
 async function loadLiveData(){
   const { data:{ session } } = await supabase.auth.getSession();
-  if(!session){ location.hash="login"; return; }
+  if(!session){ if(IS_ADMIN&&route()==="messages") try{ sessionStorage.setItem("afterLogin","messages"); }catch{} location.hash="login"; return; }
   // 範圍限制由資料庫負責（contacts_safe 與 RLS），前端的過濾只是第二道保險。
   const [profile,regions,events,contacts,registrations,rosterRows,campaigns,audit,orgs,myOrgs,myAssign] = await Promise.all([
     // 用 * 讀：資料庫還沒加 permissions 欄位時也不會壞
@@ -315,7 +315,7 @@ function render(){
   // 雲端模式未登入（或帳號未開通）：只能看登入頁與學員頁，後台選單整個藏起來。
   // 未登入、設定密碼中、或是學員（public）：都不顯示工作人員選單；學員前台永遠不顯示
   const signedOut=!IS_ADMIN||live&&["none","setting-password","link-pending","public"].includes(state.role);
-  if(signedOut&&!["login","register","set-password",...STUDENT_ROUTES].includes(name)){ location.hash="login"; return; }
+  if(signedOut&&!["login","register","set-password",...STUDENT_ROUTES].includes(name)){ if(IS_ADMIN&&name==="messages") try{ sessionStorage.setItem("afterLogin","messages"); }catch{} location.hash="login"; return; }
   document.body.classList.toggle("signed-out",signedOut);
   renderOrgPicker();
   document.body.classList.toggle("student-view",STUDENT_ROUTES.includes(name));
@@ -2143,6 +2143,7 @@ async function onSubmit(event){
     if(live){
       const q=data.campaign_id?supabase.from("message_campaigns").update({...draft,status:intent,eligible_count:count}).eq("id",data.campaign_id).in("status",["draft","rejected"]).select("id"):supabase.from("message_campaigns").insert({...draft,status:intent,eligible_count:count}).select("id");
       const {data:saved,error}=await q; if(error)return toast(error.message); if(!saved?.length) return toast("這份草稿已經送出，不能再修改");
+      if(intent==="pending") notifyReview(saved[0].id,"submitted");
       await loadLiveData();
     } else if(data.campaign_id){ const c=state.campaigns.find(x=>x.id===data.campaign_id); if(!canEditCampaign(who(),c,myUserId())) return toast("這份草稿已經送出，不能再修改"); Object.assign(c,draft,{status:intent,eligible_count:count,...(intent==="pending"?{submitted_at:new Date().toISOString()}:{})}); }
     else state.campaigns.push({id:crypto.randomUUID(),...draft,status:intent,created_by:myUserId(),eligible_count:count,success_count:0,failed_count:0,...(intent==="pending"?{submitted_at:new Date().toISOString()}:{})});
@@ -2153,7 +2154,8 @@ async function onSubmit(event){
   if(event.target.id==="loginForm"){
     const {error}=await supabase.auth.signInWithPassword(data); if(error)return toast("登入失敗，請確認帳號與密碼"); setStudentMode(false); await loadLiveData();
     if(state.role==="none"){ await supabase.auth.signOut(); return toast("這個帳號尚未開通工作人員權限，請洽總管理"); }
-    location.hash="dashboard";
+    let back=""; try{ back=sessionStorage.getItem("afterLogin")||""; sessionStorage.removeItem("afterLogin"); }catch{}
+    location.hash=back==="messages"?"messages":"dashboard";  // 從 LINE 待審通知點進來的，登入後直接到 LINE 訊息頁
   }
   if(event.target.id==="anonymizeForm") return executeAnonymize(data.confirmText);
   if(event.target.id==="setPasswordForm") return savePassword(data);
@@ -2402,12 +2404,18 @@ async function trackCampaignLinks(c){
   else (state.campaign_links||(state.campaign_links=[])).push(...rows);
   c.body=body;
 }
+// LINE 審核通知：送審 → 總管理＋核准人員；退回 → 作者。伺服器會自己確認身分與狀態，同一次只發一次。
+// 不等結果、失敗也不提示：通知只是提醒，送審／退回本身已經成功。
+function notifyReview(campaignId,event){
+  if(!live) return;
+  supabase.functions.invoke("campaign-notify",{body:{campaignId,event}}).catch(()=>{});
+}
 // 送審／撤回：寫草稿的人自己的訊息
 async function setCampaignStatus(id,status){
   const c=state.campaigns.find(x=>x.id===id), me=myUserId();
   const ok=status==="pending"?canEditCampaign(who(),c,me):Boolean(c&&c.created_by===me&&c.status==="pending");
   if(!ok) return toast("這則訊息目前不能這樣操作");
-  if(live){ const {data,error}=await supabase.from("message_campaigns").update({status}).eq("id",id).in("status",status==="pending"?["draft","rejected"]:["pending"]).select("id"); if(error) return toast(error.message); if(!data?.length) return toast("這則訊息剛被處理過，請重新整理"); await loadLiveData(); }
+  if(live){ const {data,error}=await supabase.from("message_campaigns").update({status}).eq("id",id).in("status",status==="pending"?["draft","rejected"]:["pending"]).select("id"); if(error) return toast(error.message); if(!data?.length) return toast("這則訊息剛被處理過，請重新整理"); if(status==="pending") notifyReview(id,"submitted"); await loadLiveData(); }
   else Object.assign(c,{status,...(status==="pending"?{submitted_at:new Date().toISOString()}:{})});
   audit(status==="pending"?"送審 LINE 訊息":"撤回 LINE 訊息",c.name); persist(); render(); toast(status==="pending"?"已送審，等總管理或核准人員送出":"已撤回，可以修改後再送審");
 }
@@ -2418,7 +2426,7 @@ function rejectCampaignForm(id){
 async function rejectCampaign(data){
   const c=state.campaigns.find(x=>x.id===data.campaign_id), note=String(data.note||"").trim();
   if(!canRejectCampaign(who(),c,myUserId())) return toast("你不能退回這則訊息"); if(!note) return toast("請寫退回原因");
-  if(live){ const {error}=await supabase.rpc("reject_campaign",{p_campaign:c.id,p_note:note}); if(error) return toast(error.message); await loadLiveData(); }
+  if(live){ const {error}=await supabase.rpc("reject_campaign",{p_campaign:c.id,p_note:note}); if(error) return toast(error.message); notifyReview(c.id,"rejected"); await loadLiveData(); }
   else Object.assign(c,{status:"rejected",review_note:note.slice(0,300),reviewed_by:myUserId(),reviewed_at:new Date().toISOString()});
   audit("退回 LINE 訊息",c.name); persist(); closeModal(); render(); toast("已退回，作者會看到原因");
 }// 每則推播的點擊數：正式站讀 campaign_click_stats；展示版用本機紀錄
