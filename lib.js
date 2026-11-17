@@ -76,9 +76,15 @@ export function canCheckin(who) {
 export const ORGS = [{ id: "chaoren", name: "晁人" }, { id: "weidi", name: "維諦" }, { id: "xinlidao", name: "心理道" }];
 export const DEFAULT_ORG = "chaoren";
 export const ORG_ROLE_LABELS = { org_admin: "單位管理者", event_staff: "活動管理者", accountant: "會計", viewer: "查詢人員", region_lead: "區負責人" };
-export const ORG_PERMS = PERMS.filter(([key]) => key !== "sponsors");
+// 2026-11-17：每個單位多兩項可勾選——指派志工（原本綁在單位管理者角色上）、LINE 訊息寫草稿。
+// 資料庫 org_role_default_perms() 與 org_members.permissions 的允許清單要一起改（2026-11-17_permission_options.sql）。
+export const ORG_PERMS = [
+  ...PERMS.filter(([key]) => key !== "sponsors"),
+  ["assign", "指派志工（看名單／報到，可設到期）"],
+  ["messages", "LINE 訊息：寫草稿（本單位活動的報名者，送審後才發）"]
+];
 export const ORG_ROLE_PERMS = {
-  org_admin: ["events", "roster", "payments", "checkin", "members"],
+  org_admin: ["events", "roster", "payments", "checkin", "members", "assign"],
   event_staff: ["events", "roster", "payments", "checkin"],
   accountant: ["roster", "payments"],
   viewer: ["roster"],
@@ -100,8 +106,55 @@ export function orgPermsOf(who, orgId) {
 export const hasOrgPerm = (who, orgId, perm) => orgPermsOf(who, orgId).includes(perm);
 export const isOrgMember = (who, orgId) => Boolean(who?.admin || membershipOf(who, orgId));
 export const isOrgAdmin = (who, orgId) => Boolean(who?.admin || membershipOf(who, orgId)?.role === "org_admin");
+// 能不能在這個單位指派志工（2026-11-17 起看「指派志工」勾選；單位管理者預設有）
+export const canAssignIn = (who, orgId) => hasOrgPerm(who, orgId, "assign");
 // 能指派志工的單位（平台總管理：全部）
-export const assignableOrgs = (who, orgs = ORGS) => orgs.filter(o => isOrgAdmin(who, o.id)).map(o => o.id);
+export const assignableOrgs = (who, orgs = ORGS) => orgs.filter(o => canAssignIn(who, o.id)).map(o => o.id);
+
+// ───── 全平台權限（2026-11-17）─────
+// 不分單位、設定在人身上（staff_profiles.platform_permissions）；預設全部沒有，總管理永遠全部都有。
+// 資料庫 has_platform_perm() 用同一組代號（2026-11-17_permission_options.sql），兩邊要一起改。
+// 使用者管理、資料治理、待開通不在清單裡：只有總管理能用，不開放勾選。
+export const PLATFORM_PERMS = [
+  ["weekly", "週報（看到的是三個單位合計的數字）"],
+  ["import", "匯入名冊（從 Excel／CSV 大量新增會員）"],
+  ["full_pii", "看完整手機、Email、地址（高風險，只開給極少數人）"],
+  ["msg_advanced", "LINE 訊息：進階對象（全員、指定學員、官方帳號群發）"],
+  ["msg_approve", "LINE 訊息：核准送出（不能核准自己寫的）"]
+];
+const PLATFORM_KEYS = PLATFORM_PERMS.map(([k]) => k);
+export const cleanPlatformPerms = (list = []) => PLATFORM_KEYS.filter(k => (list || []).includes(k));
+export const platformPermsOf = who => who?.admin ? PLATFORM_KEYS : cleanPlatformPerms(who?.platform_permissions);
+export const hasPlatformPerm = (who, perm) => platformPermsOf(who).includes(perm);
+
+// ───── LINE 訊息（2026-11-17）：寫草稿 → 送審 → 總管理或核准人員送出 ─────
+// 資料庫 guard_campaign_write()、send-campaign 函式用同一組規則。
+export const CAMPAIGN_STATUS_LABELS = { draft: "草稿", pending: "待審核", rejected: "已退回", sending: "發送中", sent: "已送出", partial: "部分失敗", failed: "失敗" };
+// 能替哪些單位寫 LINE 草稿
+export const messageOrgs = (who, orgs = ORGS) => orgs.filter(o => hasOrgPerm(who, o.id, "messages")).map(o => o.id);
+export const canWriteCampaign = (who, orgs = ORGS) => Boolean(who?.admin || hasPlatformPerm(who, "msg_advanced") || messageOrgs(who, orgs).length);
+export const canUseMessages = (who, orgs = ORGS) => canWriteCampaign(who, orgs) || hasPlatformPerm(who, "msg_approve");
+// 可以選的發送對象：一般只有「某場活動的報名者」；進階對象再加全員、指定學員、群發
+export function campaignAudiences(who, orgs = ORGS) {
+  if (who?.admin || hasPlatformPerm(who, "msg_advanced")) return ["event", "all", "selected", "broadcast"];
+  return messageOrgs(who, orgs).length ? ["event"] : [];
+}
+// 能不能替這場活動寫訊息：總管理、進階對象全部活動；其他人只能選自己有「寫草稿」的單位的活動
+export const canDraftForEvent = (who, event) => Boolean(event && (who?.admin || hasPlatformPerm(who, "msg_advanced") || hasOrgPerm(who, eventOrg(event), "messages")));
+// 能不能修改草稿：總管理改草稿；其他人只能改自己寫的草稿或被退回的
+export function canEditCampaign(who, c, userId) {
+  if (!c) return false;
+  if (who?.admin) return ["draft", "rejected"].includes(c.status);
+  return Boolean(userId && c.created_by === userId && ["draft", "rejected"].includes(c.status) && canWriteCampaign(who));
+}
+// 能不能送出：總管理可送草稿、待審、失敗重送；核准人員只能送「別人寫的待審」
+export function canSendCampaign(who, c, userId) {
+  if (!c) return false;
+  if (who?.admin) return ["draft", "pending", "partial", "failed"].includes(c.status);
+  return Boolean(hasPlatformPerm(who, "msg_approve") && c.status === "pending" && c.created_by && c.created_by !== userId);
+}
+// 能不能退回：同送出的規則，但只有待審的可以退
+export const canRejectCampaign = (who, c, userId) => c?.status === "pending" && canSendCampaign(who, c, userId);
 
 // 未過期的活動指派
 export function assignmentFor(who, eventId, now = new Date()) {

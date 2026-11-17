@@ -58,8 +58,8 @@
   <table>
     <tr><td>後台網址</td><td><b>https://crm.sw-ii.com/admin/</b></td></tr>
     <tr><td>學員報名網址</td><td>https://crm.sw-ii.com</td></tr>
-    <tr><td>手冊對應版本</td><td>v20261115-4</td></tr>
-    <tr><td>製作日期</td><td>2026 年 11 月 15 日</td></tr>
+    <tr><td>手冊對應版本</td><td>v20261117-1</td></tr>
+    <tr><td>製作日期</td><td>2026 年 11 月 15 日（11 月 17 日更新權限與 LINE 送審）</td></tr>
   </table>
   <p style="margin-top:20pt;font-size:9pt;color:#5c6b63">※ 手冊裡的畫面都來自「展示版」，人名與電話都是假資料。展示版右上角會多一個「展示模式」與身分切換選單，正式站沒有。</p>
 </section>
@@ -77,7 +77,7 @@
     <li>現場報到</li>
     <li>指派志工</li>
     <li>會員資料</li>
-    <li>總管理專用功能（標籤、LINE 訊息、週報、使用者…）</li>
+    <li>總管理功能與可個別開放的功能（標籤、LINE 訊息、週報、使用者…）</li>
     <li>常見問題</li>
   </ol>
 
@@ -127,7 +127,7 @@
 <section class="chapter">
   <h1>2. 六種身分能做什麼</h1>
   <div class="whobar"><b>適用身分</b><span class="who">全部</span></div>
-  <p>下表是系統的預設權限（✓＝可以，—＝不行）。總管理在「使用者」頁設定角色時，還可以替個別人員多勾或少勾幾項。</p>
+  <p>下表是系統的預設權限（✓＝可以，—＝不行，可個別開＝預設沒有，總管理可以替個別人員打開）。總管理在「使用者」頁設定角色時，還可以替個別人員多勾或少勾幾項。</p>
   <table class="avoid">
     <tr><th style="width:30%">功能</th><th class="c">總管理</th><th class="c">單位<br>管理者</th><th class="c">活動<br>管理者</th><th class="c">會計</th><th class="c">查詢<br>人員</th><th class="c">區負責人</th></tr>
     <tr><td>活動／課程：建立、編輯、刪除、產報到 QR</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
@@ -136,11 +136,18 @@
     <tr><td>現場報到</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">只限自己區</td></tr>
     <tr><td>會員資料頁（個資遮罩）</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">只看自己區</td></tr>
     <tr><td>指派志工</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
-    <tr><td>標籤、LINE 訊息、週報、匯入名冊、待開通、資料治理、使用者</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
-    <tr><td>看完整手機、Email、地址</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
+    <tr><td>LINE 訊息：寫草稿（本單位活動的報名者，送審後才發）</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
+    <tr><td>週報（三個單位合計的數字）</td><td class="c">✓</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td></tr>
+    <tr><td>匯入名冊</td><td class="c">✓</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td></tr>
+    <tr><td>看完整手機、Email、地址（高風險）</td><td class="c">✓</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td></tr>
+    <tr><td>LINE 訊息：進階對象（全員、指定學員、群發）</td><td class="c">✓</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td></tr>
+    <tr><td>LINE 訊息：核准送出</td><td class="c">✓</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td><td class="c">可個別開</td></tr>
+    <tr><td>標籤、使用者、資料治理、待開通</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
   </table>
 
-  <h2>每種身分的左側選單</h2>
+  <div class="tip"><b>兩種勾選：</b>「指派志工」「LINE 訊息：寫草稿」是<b>每個單位各自勾</b>；週報、匯入名冊、完整個資、LINE 進階對象、LINE 核准送出是<b>全平台權限</b>，勾了就不分單位。被勾到的功能會出現在左側選單。</div>
+
+  <h2 style="page-break-before:always">每種身分的左側選單</h2>
   <table class="avoid">
     <tr><th style="width:18%">身分</th><th style="width:40%">左側選單</th><th>一句話說明</th></tr>
     <tr><td>總管理</td><td>總覽、活動、課程、會員資料、標籤、現場報到、週報、匯入名冊、LINE 訊息、資料治理、待開通、使用者</td><td>全部功能、三個單位都能管。</td></tr>
@@ -252,7 +259,7 @@
   <p>名單頁右上角按「匯出 CSV」，下載後用 Excel 打開。欄位有：</p>
 <pre class="flow">會員編號、姓名、性別、區域、居住縣市、手機、（Email）、狀態、繳費、報名時間、報到時間</pre>
   <ul>
-    <li>手機：總管理看得到完整號碼，其他身分只有末三碼。Email 只有總管理的檔案會有。</li>
+    <li>手機：總管理或有「看完整手機、Email、地址」權限的人看得到完整號碼，其他身分只有末三碼。Email 也一樣。</li>
     <li>免費活動沒有「繳費」這一欄。</li>
   </ul>
   <div class="note"><b>個資保護：</b>匯出的檔案含有會員個資，用完請刪除，不要轉寄到私人信箱或公開群組。</div>
@@ -283,7 +290,7 @@
 <!-- ========== 8 志工 ========== -->
 <section class="chapter">
   <h1>8. 指派志工</h1>
-  <div class="whobar"><b>適用身分</b><span class="who">總管理</span><span class="who">單位管理者</span></div>
+  <div class="whobar"><b>適用身分</b><span class="who">總管理</span><span class="who">單位管理者</span><span class="who">被勾「指派志工」的人</span></div>
   <p>活動當天需要別人幫忙時，可以把「某一場活動」暫時開放給一位工作人員。對方只看得到這一場，時間到了權限會自動收回。</p>
   <ol>
     <li>活動列表按那場活動的「<span class="key">志工</span>」。</li>
@@ -317,8 +324,9 @@
 
 <!-- ========== 10 總管理 ========== -->
 <section class="chapter">
-  <h1>10. 總管理專用功能</h1>
-  <div class="whobar"><b>適用身分</b><span class="who">總管理</span></div>
+  <h1>10. 總管理功能（部分可個別開放）</h1>
+  <div class="whobar"><b>適用身分</b><span class="who">總管理</span><span class="who">被個別開放的人</span></div>
+  <p>標籤、使用者、資料治理、待開通只有總管理能用。LINE 訊息、週報、匯入名冊可以由總管理在「使用者」頁個別開給工作人員（見第 2 章）。</p>
 
   <h2>10-1 標籤</h2>
   <figure>
@@ -336,16 +344,32 @@
 
 <section class="chapter">
   <h2>10-2 LINE 訊息</h2>
-  <figure>
-    <img src="img/11_messages.jpg" alt="LINE 訊息">
-    <figcaption>圖 11　LINE 訊息：先建草稿，檢查對象與內容後才送出</figcaption>
+  <figure class="half">
+    <img src="img/11_messages.jpg" alt="LINE 訊息" style="max-width:90mm">
+    <figcaption>圖 11　LINE 訊息：工作人員寫草稿送審，總管理或核准人員檢查後送出或退回</figcaption>
   </figure>
+<pre class="flow">① 寫草稿 → ② 送審 → ③ 總管理或核准人員檢查對象與全文
+③ 之後二選一：核准並送出（發出去）
+               退回並寫原因 → 作者修改後再送審（回到 ②）</pre>
+  <div class="note"><b>送出後無法收回：</b>「刪除」只會刪掉 CRM 裡的紀錄，學員已經收到的訊息不會消失。訊息裡的網址會自動換成追蹤短網址，用來統計點擊。</div>
+  <h3>總管理</h3>
   <ol>
     <li>按「＋ 新增專案」，輸入主旨、內容，可以附一張圖片。</li>
     <li>選發送對象：某場活動的報名者、全員、指定學員（可依標籤、區域、姓名篩選），或官方帳號全部好友（群發）。</li>
     <li>按「<span class="key">檢查並送出</span>」，系統會再顯示一次實際對象與全文，確認後才發送。</li>
+    <li>別人送審的訊息會出現在總覽「待審核 LINE 訊息」：按「<span class="key">核准並送出</span>」或「<span class="key">退回</span>」（退回一定要寫原因）。</li>
   </ol>
-  <div class="note"><b>送出後無法收回：</b>「刪除」只會刪掉 CRM 裡的紀錄，學員已經收到的訊息不會消失。訊息裡的網址會自動換成追蹤短網址，用來統計點擊。</div>
+  <h3>有「寫草稿」權限的工作人員</h3>
+  <ol>
+    <li>按「＋ 新增專案」，只能選<b>自己單位的活動或課程</b>，發給報名的人（例如行前提醒）。有「進階對象」權限才能選全員、指定學員、群發。</li>
+    <li>寫好按「<span class="key">儲存並送審</span>」；還沒寫完可以「先存成草稿」，之後按「送審」。</li>
+    <li>送審後不能改。要改就按「<span class="key">撤回修改</span>」，改完再送審。</li>
+    <li>被退回時卡片會顯示「退回原因」，照著改再送審。</li>
+  </ol>
+  <h3>有「核准送出」權限的工作人員</h3>
+  <ul>
+    <li>看得到所有待審訊息，可以「核准並送出」或「退回」；但<b>不能核准自己寫的</b>，要由總管理或另一位核准人員處理。</li>
+  </ul>
 
   <h2 style="page-break-before:always">10-3 週報</h2>
   <figure>
@@ -356,6 +380,7 @@
     <li>內容：新會員、累積有效會員、標籤覆蓋率、新報名、取消、報到、出席率、LINE 推播的送達、點擊、點擊率、推播帶來的報名。</li>
     <li>「匯出 CSV」下載完整數字；「複製文字摘要」可以直接貼到 LINE 群組。</li>
     <li>週報<b>不包含營收</b>，營收請看會計的繳費程式。</li>
+    <li>總管理可以把週報開給工作人員看；看到的是<b>三個單位合計</b>的數字，沒有個人名單。</li>
   </ul>
 </section>
 
@@ -367,7 +392,8 @@
   </figure>
   <ol>
     <li>按「＋ 邀請工作人員」，輸入姓名與 Email。系統會寄出邀請信，對方點連結設定密碼。</li>
-    <li>設定帳號類型與<b>每個單位的角色</b>（單位管理者、活動管理者、會計、查詢人員、區負責人），需要時再個別勾選功能。</li>
+    <li>設定帳號類型與<b>每個單位的角色</b>（單位管理者、活動管理者、會計、查詢人員、區負責人），需要時再個別勾選功能（含「指派志工」「LINE 訊息：寫草稿」）。</li>
+    <li>視窗最下面的「<b>全平台權限</b>」預設都不勾：週報、匯入名冊、看完整手機／Email／地址（高風險，只開給極少數人）、LINE 進階對象、LINE 核准送出。</li>
     <li>修改：按那個人的「修改」。忘記密碼：按「重設密碼連結」。</li>
     <li>刪除工作人員：在修改視窗按「刪除這位工作人員」，要輸入姓名確認。有操作紀錄的帳號會改成停用，紀錄會保留。</li>
   </ol>

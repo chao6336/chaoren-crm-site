@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, isOrgAdmin, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, regionLeadFor, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor } from "./lib.js?v=20261115-4";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, isOrgAdmin, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, regionLeadFor, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign } from "./lib.js?v=20261117-1";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -103,10 +103,14 @@ function nextMemberNo(){ const max=Math.max(0,...state.contacts.map(c=>Number(St
 // state.role 只用來分「總管理／一般工作人員／未登入／學員」；在各單位能做什麼看 who()（單位角色＋志工指派），
 // 規則在 lib.js，和資料庫 RLS（2026-11-12_multi_org.sql）一致。前端只是讓畫面對得上，真正把關在資料庫。
 function who(){
-  if(live) return {admin:state.role==="admin",memberships:state.memberships||[],assignments:state.assignments||[]};
+  if(live) return {admin:state.role==="admin",memberships:state.memberships||[],assignments:state.assignments||[],platform_permissions:state.platform_permissions||[]};
   const s=state.staff.find(x=>x.id===state.as)||{};
-  return {admin:s.role==="admin",memberships:s.memberships||[],assignments:(state.event_staff||[]).filter(a=>a.user_id===s.id)};
+  return {admin:s.role==="admin",memberships:s.memberships||[],assignments:(state.event_staff||[]).filter(a=>a.user_id===s.id),platform_permissions:s.platform_permissions||[]};
 }
+// 目前登入者的帳號 id（LINE 訊息判斷「是不是自己寫的」用）
+function myUserId(){ return live?state.user_id:state.as; }
+// 看完整手機、Email、地址：總管理或有「完整個資」權限（雲端由 contacts_safe 決定給不給，這裡只決定畫面要不要再遮）
+const fullPii=()=>isAdmin()||hasPlatformPerm(who(),"full_pii");
 // 資料庫已升級成多單位（有 organizations 資料表）。展示版一律算已升級。
 const multiOrgReady=()=>!live||(state.orgs||[]).length>0;
 const NOT_READY_MSG="資料庫還沒升級成多單位，請先在 Supabase 執行 2026-11-12_multi_org.sql，再使用這個功能";
@@ -132,18 +136,22 @@ const canRosterOf=e=>canSeeEventRoster(who(),e)||Boolean(regionLeadFor(who(),e))
 // 名單頁（含繳費狀態）：只被指派「操作報到」、沒勾「看名單」的志工不開名單頁，只用報到頁
 const canRosterPageOf=e=>["roster","checkin","payments","events"].some(p=>hasOrgPerm(who(),eventOrg(e),p))||Boolean(regionLeadFor(who(),e))||Boolean(assignmentFor(who(),e.id)?.can_view_roster);
 const canCheckinOf=e=>canCheckinEvent(who(),e)||Boolean(regionLeadFor(who(),e));
-const canAssignOf=e=>isOrgAdmin(who(),eventOrg(e));
+const canAssignOf=e=>canAssignIn(who(),eventOrg(e));
 // 報名名單：雲端由 event_roster view 決定範圍；展示版用同一規則（lib.rosterForEvents）。只留這個畫面列的活動。
 function roster(){
   const evs=visibleEvents(), ids=new Set(evs.map(e=>e.id));
   if(live) return (state.roster||[]).filter(r=>ids.has(r.event_id)).map(r=>({...r,id:r.registration_id}));
   return rosterForEvents(evs,state.registrations,state.contacts,who(),regionName);
 }
-const ADMIN_ONLY_ROUTES=["tags","messages","governance","users","import","applications","weekly"];
+// 2026-11-17：LINE 訊息、週報、匯入名冊改成可以個別開放；標籤、資料治理、使用者、待開通仍只有總管理
+const ADMIN_ONLY_ROUTES=["tags","governance","users","applications"];
 // 這個身分能不能進這一頁（側邊選單也照這個藏起來）
 function canOpen(route){
   if(ADMIN_ONLY_ROUTES.includes(route)) return isAdmin();
   if(route==="sponsors") return canManageMoney(viewer());
+  if(route==="weekly") return isAdmin()||hasPlatformPerm(who(),"weekly");
+  if(route==="import") return isAdmin()||hasPlatformPerm(who(),"import");
+  if(route==="messages") return canUseMessages(who(),orgList());
   if(route==="contacts") return canBrowseMembers(viewer());
   if(route==="checkin") return canCheckin(viewer())||visibleEvents().some(canCheckinOf);
   return true;
@@ -285,8 +293,11 @@ async function loadLiveData(){
   const clickStats = profile.data?.role === "admin" ? await supabase.from("campaign_click_stats").select("*") : {data:[]};
   const tags = profile.data?.role === "admin" ? await supabase.from("tag_stats").select("*") : {data:[]};
   const applications = profile.data?.role === "admin" ? await supabase.from("student_applications").select("*").eq("status","pending").order("created_at") : {data:[]};
+  // 全平台權限（2026-11-17）：資料庫還沒加欄位時是 undefined，當作沒有
+  const pp=Array.isArray(profile.data?.platform_permissions)?profile.data.platform_permissions:[];
+  const weeklySrc=profile.data?.role!=="admin"&&pp.includes("weekly")?await supabase.rpc("weekly_report_source"):{data:null};
   let savedOrg=null; try{ savedOrg=localStorage.getItem("chaoren-crm-org"); }catch{}
-  state={role:profile.data?.role||"none",org:savedOrg,orgs:orgs.error?[]:orgs.data||[],memberships:myOrgs.error?legacyMembership(profile.data):myOrgs.data||[],assignments:myAssign.error?[]:myAssign.data||[],eventsLoaded:true,region_id:profile.data?.region_id||null,permissions:profile.data?.permissions??null,display_name:profile.data?.display_name||session.user.email,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],clickStats:clickStats.data||[],applications:applications.data||[],tags:tags.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:auditActor(x.actor_id,staff.data),action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
+  state={user_id:session.user.id,platform_permissions:pp,weeklySource:weeklySrc.data||null,role:profile.data?.role||"none",org:savedOrg,orgs:orgs.error?[]:orgs.data||[],memberships:myOrgs.error?legacyMembership(profile.data):myOrgs.data||[],assignments:myAssign.error?[]:myAssign.data||[],eventsLoaded:true,region_id:profile.data?.region_id||null,permissions:profile.data?.permissions??null,display_name:profile.data?.display_name||session.user.email,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],clickStats:clickStats.data||[],applications:applications.data||[],tags:tags.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:auditActor(x.actor_id,staff.data),action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
   showUser(profile.data?.display_name||session.user.email);
   $("#logoutBtn").hidden=state.role==="none";
 }
@@ -336,9 +347,9 @@ function dashboard(){
   const next=visibleEvents().filter(e=>new Date(e.starts_at)>new Date()).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at))[0];
   const v=viewer(), unit=curOrg()?`【${escapeHtml(orgName(curOrg()))}】`:"";
   const scopeNote=isAdmin()?`${unit}把活動、參加者與後續關懷放在同一個地方。右上角可以切換單位。`
-    :v.role==="org_admin"?`${unit}單位管理者：管理本單位活動、報名、報到與志工指派；名單只顯示姓名、區域與手機後三碼。`
-    :v.role==="event_staff"?`${unit}活動管理者：負責本單位活動建立、報名與報到；報名名單只顯示姓名、區域與手機後三碼。`
-    :v.role==="accountant"?`${unit}會計：登記本單位活動／課程繳費；報名名單只顯示姓名、區域與手機後三碼。`
+    :v.role==="org_admin"?`${unit}單位管理者：管理本單位活動、報名、報到與志工指派；名單只顯示姓名、區域與手機後三碼${fullPii()?"（你有完整個資權限，會看到完整手機）":""}。`
+    :v.role==="event_staff"?`${unit}活動管理者：負責本單位活動建立、報名與報到；報名名單只顯示姓名、區域與手機後三碼${fullPii()?"（你有完整個資權限，會看到完整手機）":""}。`
+    :v.role==="accountant"?`${unit}會計：登記本單位活動／課程繳費；報名名單只顯示姓名、區域與手機後三碼${fullPii()?"（你有完整個資權限，會看到完整手機）":""}。`
     :v.role==="viewer"?`${unit}查詢人員：可以查看本單位的活動與報名名單，不能修改。`
     :v.role==="region_lead"?`${unit}以下數字只計算${regionName(v.region_id)}的會員。`
     :"你被指派協助下列活動（指派到期後自動收回）。";
@@ -349,7 +360,7 @@ function dashboard(){
     <div class="stat"><span>出席率</span><strong>${s.attendanceRate}%</strong></div><div class="stat"><span>取消率</span><strong>${s.cancellationRate}%</strong></div>${canBrowseMembers(viewer())?`<div class="stat"><span>會員</span><strong>${s.contacts}</strong></div>`:""}
   </section>
   <section class="grid"><article class="card"><h2>下一場活動</h2>${next?`<h3>${escapeHtml(eventLabel(next))}</h3><p>${fmtDate(next.starts_at)}・${escapeHtml(next.location)}</p><div class="kpi-line"><span>報名</span><strong>${next.registration_count}/${next.capacity}</strong></div><div class="actions">${canOpen("checkin")?`<a class="button" href="#checkin?event=${next.id}">開啟報到</a>`:""}<a class="button secondary" href="#register?event=${next.id}">查看報名頁</a></div>`:"<p class='muted'>目前沒有未來活動。</p>"}</article>
-  <article class="card"><h2>需要注意</h2><div class="kpi-line"><span>待繳費</span><strong>${regs.filter(r=>r.payment_status==="pending"&&!r.cancelled_at).length}</strong></div>${isAdmin()?`<div class="kpi-line"><span><a href="#applications">待開通學員</a></span><strong>${(state.applications||[]).length}</strong></div><div class="kpi-line"><span>待確認訊息</span><strong>${state.campaigns.filter(c=>c.status==="draft").length}</strong></div><div class="kpi-line"><span>尚未分區的會員</span><strong>${unassigned}</strong></div>`:""}${canBrowseMembers(viewer())?`<div class="kpi-line"><span>無法 LINE 聯絡</span><strong>${myContacts().filter(c=>!campaignEligible(c)).length}</strong></div>`:""}</article></section>`;
+  <article class="card"><h2>需要注意</h2><div class="kpi-line"><span>待繳費</span><strong>${regs.filter(r=>r.payment_status==="pending"&&!r.cancelled_at).length}</strong></div>${isAdmin()?`<div class="kpi-line"><span><a href="#applications">待開通學員</a></span><strong>${(state.applications||[]).length}</strong></div><div class="kpi-line"><span>訊息草稿</span><strong>${state.campaigns.filter(c=>c.status==="draft").length}</strong></div><div class="kpi-line"><span>尚未分區的會員</span><strong>${unassigned}</strong></div>`:""}${pendingCampaigns().length||isAdmin()||hasPlatformPerm(who(),"msg_approve")?`<div class="kpi-line"><span><a href="#messages">待審核 LINE 訊息</a></span><strong>${pendingCampaigns().length}</strong></div>`:""}${canBrowseMembers(viewer())?`<div class="kpi-line"><span>無法 LINE 聯絡</span><strong>${myContacts().filter(c=>!campaignEligible(c)).length}</strong></div>`:""}</article></section>`;
 }
 
 // 活動與課程共用同一套（場次、報名、名單、報到、繳費都一樣），只差 kind 與顯示的字
@@ -358,7 +369,13 @@ const kindOf=e=>e?.kind==="course"?"course":"event";
 // ───── 週報（只有總管理）：2026-11-15 起不做營收分析，金額改由會計的繳費程式處理 ─────
 const ymd=d=>d.toLocaleDateString("sv-SE");
 // 預設看上一個完整的週（和 MAAC 週報一樣）；本週可以按「本週累計」看
-function weeklyData(){ const w=query().get("w"); const start=weekStart(w?new Date(`${w}T00:00:00`):new Date(Date.now()-7*864e5)); return {start,r:weeklyReport({contacts:state.contacts,registrations:state.registrations,events:state.events,campaigns:state.campaigns,clickStats:clickStats()},start)}; }
+// 非總管理的週報權限：雲端讀 weekly_report_source（三個單位合計、只有統計欄位）
+function weeklySource(){
+  const s=live&&!isAdmin()?state.weeklySource:null;
+  if(!s) return {contacts:state.contacts,registrations:state.registrations,events:state.events,campaigns:state.campaigns,clickStats:clickStats()};
+  return {contacts:(s.contacts||[]).map(c=>({...c,tags:Array(Number(c.tag_count)||0).fill("")})),registrations:s.registrations||[],events:s.events||[],campaigns:s.campaigns||[],clickStats:s.clickStats||[]};
+}
+function weeklyData(){ const w=query().get("w"); const start=weekStart(w?new Date(`${w}T00:00:00`):new Date(Date.now()-7*864e5)); return {start,r:weeklyReport(weeklySource(),start)}; }
 function weekly(){
   const {start,r}=weeklyData(), c=r.current, d=r.diff;
   const shift=n=>{ const x=new Date(start); x.setDate(x.getDate()+n*7); return `#weekly?w=${ymd(x)}`; };
@@ -417,7 +434,7 @@ function regionOptions(selected,{withAll=false,withNone=false}={}){
 function contacts(){
   const filter=isAdmin()?query().get("region")||"":viewer().role==="region_lead"?viewer().region_id:"";
   const base=myContacts().filter(c=>!c.anonymized_at&&(!filter||(filter==="none"?!c.region_id:c.region_id===filter)));
-  const rows=base.map(c=>({...visibleContact(c,viewer().role),age:c.age??ageFrom(c.birth_date)}));
+  const rows=base.map(c=>({...visibleContact(c,fullPii()?"admin":viewer().role),age:c.age??ageFrom(c.birth_date)}));
   const actions=isAdmin()?`<button data-action="edit-contact">＋ 新增會員</button><a class="button secondary" href="#import">匯入 Excel</a><button class="secondary" data-action="export-contacts">匯出 CSV</button>`:"";
   const subtitle=isAdmin()?"總管理看得到全部會員；身分證只顯示遮罩，需要時另按「查看」。":viewer().role==="region_lead"?`你是${regionName(viewer().region_id)}負責人，只看得到本區會員；手機、地址與身分證會遮罩。`:"三個單位共用同一份會員名冊；手機、地址與身分證會遮罩。";
   const regionFilter=isAdmin()?`<select id="regionFilter" aria-label="依區域篩選"><option value="">全部區域</option>${(state.regions||[]).map(r=>`<option value="${r.id}" ${r.id===filter?"selected":""}>${escapeHtml(r.name)}</option>`).join("")}<option value="none" ${filter==="none"?"selected":""}>未分區</option></select>`:"";
@@ -498,11 +515,11 @@ function exportRoster(ids){
   const status={attended:"已報到",registered:"已報名",cancelled:"已取消",absent:"未出席"};
   const rows=list.flatMap(e=>roster().filter(r=>r.event_id===e.id).sort((a,b)=>String(a.registered_at||"").localeCompare(String(b.registered_at||""))).map(r=>{ const c=state.contacts.find(x=>x.id===r.contact_id)||{}, free=isFreeEvent(e);
     return {event:eventLabel(e),event_date:e.starts_at?fmtDate(e.starts_at):"",member_no:r.member_no||c.member_no||"",name:r.name||c.name||"",gender:c.gender||"",region:r.region_name||regionName(c.region_id),city:c.residence_city||"",
-      phone:isAdmin()&&c.phone?displayPhone(c.phone):(r.phone_last3?`***${r.phone_last3}`:""),email:isAdmin()?(c.email||""):"",
+      phone:fullPii()&&c.phone?displayPhone(c.phone):(r.phone_last3?`***${r.phone_last3}`:""),email:fullPii()?(c.email||""):"",
       status:r.cancelled_at?"已取消":status[r.attendance_status]||r.attendance_status||"",pay:free?"免費":PAY_LABELS[r.payment_status]||"未繳費",registered_at:r.registered_at?fmtDate(r.registered_at):"",checked_in_at:r.checked_in_at?fmtDate(r.checked_in_at):""}; }));
   if(!rows.length) return toast(multi?"勾選的場次都還沒有人報名":"這場活動還沒有人報名");
   // 2026-11-15 起只看繳費狀態，不匯出金額、繳費日期、收據
-  const cols=[...(multi?[["活動／課程","event"],["活動日期","event_date"]]:[]),["會員編號","member_no"],["姓名","name"],["性別","gender"],["區域","region"],["居住縣市","city"],["手機","phone"],...(isAdmin()?[["Email","email"]]:[]),["狀態","status"],...(list.every(isFreeEvent)?[]:[["繳費","pay"]]),["報名時間","registered_at"],["報到時間","checked_in_at"]];
+  const cols=[...(multi?[["活動／課程","event"],["活動日期","event_date"]]:[]),["會員編號","member_no"],["姓名","name"],["性別","gender"],["區域","region"],["居住縣市","city"],["手機","phone"],...(fullPii()?[["Email","email"]]:[]),["狀態","status"],...(list.every(isFreeEvent)?[]:[["繳費","pay"]]),["報名時間","registered_at"],["報到時間","checked_in_at"]];
   const name=multi?`報名名單_${list.length}場_${localToday()}.csv`:`報名名單_${eventLabel(list[0]).replace(/[\/:*?"<>|]/g,"_")}_${String(list[0].starts_at||"").slice(0,10)}.csv`;
   download(name,rowsToCsv(rows,cols),"text/csv;charset=utf-8"); toast(`已匯出 ${rows.length} 筆`);
 }
@@ -523,9 +540,11 @@ function rosterPage(){
   const when=r=>r.cancelled_at?`取消 ${fmtDate(r.cancelled_at)}`:r.checked_in_at?`報到 ${fmtDate(r.checked_in_at)}`:r.registered_at?`報名 ${fmtDate(r.registered_at)}`:"";
   const sel=(id,value,opts)=>`<select id="${id}">${opts.map(([v,t])=>`<option value="${v}" ${v===value?"selected":""}>${t}</option>`).join("")}</select>`;
   const actions=`<a class="button secondary" href="#${home}">回${K}管理</a>${canCheckinOf(e)?`<a class="button secondary" href="#checkin?event=${e.id}">到報到頁</a>`:""}<button class="secondary" data-action="export-one" data-id="${e.id}">匯出 CSV</button>`;
+  // 有「完整個資」權限的人看完整手機，其他人只看後三碼
+  const rosterPhone=r=>{ const p=fullPii()?state.contacts.find(x=>x.id===r.contact_id)?.phone:""; return p?displayPhone(p):(r.phone_last3||"---"); };
   const row=r=>{ const st=rosterStatusOf(r);
     return `<tr data-roster-row data-status="${st}" data-pay="${escapeHtml(r.payment_status||"pending")}" data-search="${escapeHtml([r.name,r.member_no,r.phone_last3,r.region_name].join(" ").toLowerCase())}">
-      <td><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span></td><td>${escapeHtml(r.region_name||"未分區")}</td><td>${escapeHtml(r.phone_last3||"---")}</td>
+      <td><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span></td><td>${escapeHtml(r.region_name||"未分區")}</td><td>${escapeHtml(rosterPhone(r))}</td>
       <td><span class="pill${st==="cancelled"?" off":""}">${ROSTER_STATUS[st]}</span>${r.source==="walk-in"?` <small class="muted">現場報名</small>`:""}<br><small class="muted">${when(r)}</small></td>
       ${free?"":`<td>${payLabel(r)}</td>
       <td>${canPay(e)&&!r.cancelled_at?`<button class="secondary small" data-action="reg-pay" data-id="${r.registration_id||r.id}" data-event="${id}">繳費</button>`:""}</td>`}</tr>`; };
@@ -824,7 +843,7 @@ function contactRows(rows){ return rows.map(c=>`<tr class="clickable" data-actio
 
 function viewContact(id){
   const raw=myContacts().find(c=>c.id===id); if(!raw)return toast("找不到這位會員，或你沒有權限查看");
-  const c=visibleContact(raw,viewer().role); const age=raw.age??ageFrom(raw.birth_date);
+  const c=visibleContact(raw,fullPii()?"admin":viewer().role); const age=raw.age??ageFrom(raw.birth_date);
   const history=myRegistrations().filter(r=>r.contact_id===id).map(r=>({...r,event:state.events.find(e=>e.id===r.event_id)}));
   const line=(label,value)=>`<div class="kpi-line"><span>${label}</span><strong>${escapeHtml(value||"—")}</strong></div>`;
   const nid=c.national_id_masked?`${escapeHtml(c.national_id_masked)}${isAdmin()?` <button class="link" data-action="reveal-nid" data-id="${id}">查看</button>`:""}`:"—";
@@ -927,10 +946,25 @@ function checkin(){
   return `${pageHead("現場報到",event?`${escapeHtml(eventLabel(event))}・${fmtDate(event.starts_at)}`:"請先建立活動",qrBtn+picker)}<p class="muted">${scope}・已報到 ${done}／${regs.length}</p><input class="search" id="checkinSearch" placeholder="搜尋姓名或手機末三碼"><div class="checkin-list" style="margin-top:15px">${rows||"<div class='empty'>目前沒有報名者</div>"}</div>`;
 }
 
+// 2026-11-17：非總管理寫草稿 → 送審 → 總管理或核准人員送出／退回（規則在 lib.js，資料庫與 send-campaign 再檢查一次）
+function pendingCampaigns(){ const w=who(), me=myUserId(); return (state.campaigns||[]).filter(c=>c.status==="pending"&&canSendCampaign(w,c,me)); }
 function messages(){
-  return `${pageHead("LINE 訊息","訊息必須由幹部檢查對象與內容後，才能送出。",!isAdmin()?"":`<button data-action="new-campaign">＋ 新增專案</button>`)}<div class="notice">系統不會自動發送。按下「檢查並送出」後，還會再次顯示實際對象與訊息全文。</div><div class="grid">${state.campaigns.map(c=>`<article class="card"><span class="pill ${c.status!=="draft"?"off":""}">${({draft:"草稿",partial:"部分失敗",failed:"失敗",sent:"已送出",sending:"發送中"})[c.status]||c.status}</span><h3>${escapeHtml(c.name)}</h3><p class="muted">發送對象：${escapeHtml(audienceLabel(c))}</p>${c.image_url?`<img class="camp-img" src="${escapeHtml(c.image_url)}" alt="附加圖片">`:""}<p>${escapeHtml(c.body)}</p><div class="kpi-line"><span>符合條件</span><strong>${c.audience==="broadcast"?"全部好友":c.eligible_count}</strong></div><div class="kpi-line"><span>成功／失敗</span><strong>${c.success_count}/${c.failed_count}</strong></div><div class="actions" style="margin-top:10px">${c.status!=="draft"?`<button class="secondary" data-action="campaign-deliveries" data-id="${c.id}">發送明細</button>`:""}${["draft","partial","failed"].includes(c.status)&&isAdmin()?`<button data-action="review-campaign" data-id="${c.id}">${c.status==="draft"?"檢查並送出":"重送失敗對象"}</button>`:""}${c.status==="draft"&&isAdmin()?`<button class="secondary" data-action="edit-campaign" data-id="${c.id}">修改</button>`:""}${c.status!=="sending"&&isAdmin()?`<button class="danger" data-action="delete-campaign" data-id="${c.id}">刪除</button>`:""}</div></article>`).join("")}</div>`;
+  const w=who(), me=myUserId(), canNew=canWriteCampaign(w,orgList()), approver=isAdmin()||hasPlatformPerm(w,"msg_approve");
+  const mine=c=>Boolean(c.created_by&&c.created_by===me);
+  // 總管理、核准人員看全部；只會寫草稿的人只看自己寫的
+  const list=(state.campaigns||[]).filter(c=>approver||mine(c)).map((c,i)=>[c,i]).sort((a,b)=>(a[0].status==="pending"?0:1)-(b[0].status==="pending"?0:1)||a[1]-b[1]).map(([c])=>c); // 待審核排最前面
+  const pill=c=>c.status==="pending"||c.status==="rejected"?"warn":c.status==="draft"?"":"off";
+  const actions=c=>[
+    isAdmin()&&["sending","sent","partial","failed"].includes(c.status)?`<button class="secondary" data-action="campaign-deliveries" data-id="${c.id}">發送明細</button>`:"",
+    canSendCampaign(w,c,me)?`<button data-action="review-campaign" data-id="${c.id}">${["partial","failed"].includes(c.status)?"重送失敗對象":c.status==="pending"?"核准並送出":"檢查並送出"}</button>`:"",
+    canRejectCampaign(w,c,me)?`<button class="secondary" data-action="reject-campaign" data-id="${c.id}">退回</button>`:"",
+    !isAdmin()&&canEditCampaign(w,c,me)?`<button data-action="submit-campaign" data-id="${c.id}">送審</button>`:"",
+    !isAdmin()&&mine(c)&&c.status==="pending"?`<button class="secondary" data-action="withdraw-campaign" data-id="${c.id}">撤回修改</button>`:"",
+    canEditCampaign(w,c,me)?`<button class="secondary" data-action="edit-campaign" data-id="${c.id}">修改</button>`:"",
+    (isAdmin()&&c.status!=="sending")||(mine(c)&&canNew&&["draft","rejected"].includes(c.status))?`<button class="danger" data-action="delete-campaign" data-id="${c.id}">刪除</button>`:""].join("");
+  const sub=isAdmin()?"訊息必須由幹部檢查對象與內容後，才能送出。":approver&&!canNew?"檢查別人送審的訊息：核准後送出，或寫原因退回。":"寫好草稿後按「送審」，由總管理或核准人員檢查後送出。";
+  return `${pageHead("LINE 訊息",sub,canNew?`<button data-action="new-campaign">＋ 新增專案</button>`:"")}<div class="notice">系統不會自動發送。送出前一定會再顯示一次實際對象與訊息全文；寫草稿的人不能自己送出，核准人員也不能核准自己寫的。</div>${list.length?"":`<div class="empty">${approver?"目前沒有訊息。":"你還沒有寫過訊息。"}</div>`}<div class="grid">${list.map(c=>`<article class="card"><span class="pill ${pill(c)}">${CAMPAIGN_STATUS_LABELS[c.status]||escapeHtml(c.status)}</span><h3>${escapeHtml(c.name)}</h3><p class="muted">發送對象：${escapeHtml(audienceLabel(c))}${c.status==="pending"&&c.submitted_at?`・${fmtDate(c.submitted_at)} 送審`:""}</p>${c.status==="rejected"&&c.review_note?`<div class="notice">退回原因：${escapeHtml(c.review_note)}</div>`:""}${c.image_url?`<img class="camp-img" src="${escapeHtml(c.image_url)}" alt="附加圖片">`:""}<p>${escapeHtml(c.body)}</p><div class="kpi-line"><span>符合條件</span><strong>${c.audience==="broadcast"?"全部好友":c.eligible_count}</strong></div><div class="kpi-line"><span>成功／失敗</span><strong>${c.success_count}/${c.failed_count}</strong></div><div class="actions" style="margin-top:10px">${actions(c)}</div></article>`).join("")}</div>`;
 }
-
 function governance(){
   const old=state.contacts.filter(c=>!c.anonymized_at&&new Date(c.last_interaction_at)<new Date(Date.now()-730*864e5));
   return `${pageHead("資料治理","備份、操作紀錄與兩年閒置資料匿名化。")}<section class="two-col"><article class="card"><h2>資料保存</h2><p>目前符合「閒置滿兩年」的聯絡人：<strong>${old.length}</strong> 位。</p><button data-action="preview-anonymize" ${!isAdmin()?"disabled":""}>預覽匿名化名單</button><p class="muted">匿名化只保留活動統計，姓名、手機、Email 與 LINE 識別碼將不可還原。</p></article><article class="card"><h2>備份</h2><p>管理者可匯出不含系統秘密的 JSON 備份。</p><button class="secondary" data-action="backup" ${!isAdmin()?"disabled":""}>匯出資料備份</button></article></section><h2>最近操作</h2><div class="table-wrap"><table><thead><tr><th>時間</th><th>人員</th><th>動作</th><th>對象</th></tr></thead><tbody>${state.audit.map(a=>`<tr><td>${escapeHtml(a.at)}</td><td>${escapeHtml(a.actor)}</td><td>${escapeHtml(a.action)}</td><td>${escapeHtml(a.target)}</td></tr>`).join("")}</tbody></table></div>`;
@@ -942,7 +976,7 @@ function users(){
   const y="✓", n="—", roles=Object.keys(ORG_ROLE_LABELS);
   const own={roster:"只看自己區",checkin:"只限自己區",members:"只看自己區"};
   const perms=[...ORG_PERMS.map(([k,label])=>[shortPermLabel(label),y,...roles.map(r=>ORG_ROLE_PERMS[r].includes(k)?y:r==="region_lead"&&own[k]||n)]),
-    ["指派志工（看名單／報到，可設到期）",y,...roles.map(r=>r==="org_admin"?y:n)],...ADMIN_ONLY_PERMS.map(f=>[f,y,...roles.map(()=>n)])];
+    ...PLATFORM_PERMS.map(([,label])=>[label,y,...roles.map(()=>"可個別開")]),...ADMIN_ONLY_PERMS.map(f=>[f,y,...roles.map(()=>n)])];
   return `${pageHead("使用者管理","邀請工作人員，並設定他在每個單位的角色；同一個人在不同單位可以有不同角色。",`<button data-action="invite-user">＋ 邀請工作人員</button>`)}<div id="staffArea"><div class="empty">載入中…</div></div>
     <h2 style="margin-top:22px">單位角色的預設權限</h2><p class="muted">每個單位各自計算；例如在晁人是活動管理者，只能管理晁人的活動。區負責人只有晁人有。設定時可以再個別勾選。</p>
     <div class="table-wrap"><table><thead><tr><th>功能</th><th>總管理</th>${roles.map(k=>`<th>${ORG_ROLE_LABELS[k]}</th>`).join("")}</tr></thead><tbody>${perms.map(([f,...v])=>`<tr><td>${f}</td>${v.map(x=>`<td>${x}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
@@ -1504,12 +1538,26 @@ function demoStudentLink(action,payload){
 
 // 權限勾選：角色是起點，可以多勾或取消；總管理全部都有、不能取消。只有總管理的功能列出來但不能勾。
 const PERM_SHORT={events:"活動管理",roster:"報名名單",payments:"繳費匯出",checkin:"報到",members:"會員資料",sponsors:"贊助"};
-const ADMIN_ONLY_PERMS=[...(SPONSORSHIPS_ENABLED?["贊助紀錄：刪除"]:[]),"LINE 訊息、週報、匯入、資料治理、使用者","完整手機、Email、地址"];
+// 2026-11-17：LINE 訊息、週報、匯入、完整個資改成「全平台權限」可個別開；剩下這些只有總管理
+const ADMIN_ONLY_PERMS=[...(SPONSORSHIPS_ENABLED?["贊助紀錄：刪除"]:[]),"標籤、使用者、資料治理、待開通"];
+// 全平台權限：雲端存在 staff_profiles.platform_permissions（總管理載入的 state.staff 有），展示版存在 staff 上
+function platformOf(userId){ const s=(state.staff||[]).find(x=>(live?x.user_id:x.id)===userId); return cleanPlatformPerms(s?.platform_permissions); }
+function platformPermBox(list=[]){
+  return `<fieldset class="perm-box"><legend>全平台權限（不分單位；預設都不勾）</legend>${PLATFORM_PERMS.map(([k,label])=>`<label style="display:block"><input type="checkbox" name="platform_perm" value="${k}" ${list.includes(k)?"checked":""}> ${label}</label>`).join("")}<small class="muted">標籤、使用者、資料治理、待開通只有總管理能用。</small></fieldset>`;
+}
+async function savePlatformPerms(userId,list){
+  const pp=cleanPlatformPerms(list);
+  if(!live){ const s=state.staff.find(x=>x.id===userId); if(s) s.platform_permissions=pp; return null; }
+  const {data,error}=await supabase.from("staff_profiles").update({platform_permissions:pp}).eq("user_id",userId).select("user_id");
+  if(error) return "全平台權限更新失敗："+error.message; if(!data?.length) return "全平台權限沒有更新（資料庫可能還沒升級）";
+  const s=(state.staff||[]).find(x=>x.user_id===userId); if(s) s.platform_permissions=pp; return null;
+}
 // ───── 多單位：每個單位各一個角色（org_members）。只有總管理能設定；單位管理者只能指派志工 ─────
 function membershipsOf(userId){ return live?(state.orgMembers||[]).filter(m=>m.user_id===userId):(state.staff.find(s=>s.id===userId)?.memberships||[]); }
 function orgRolesLabel(userId){
   const list=membershipsOf(userId);
-  return list.length?list.map(m=>`${escapeHtml(orgName(m.org_id))}：${ORG_ROLE_LABELS[m.role]||escapeHtml(m.role)}${m.role==="region_lead"?`（${escapeHtml(regionName(m.region_id))}）`:""}${Array.isArray(m.permissions)?"・自訂":""}`).join("<br>"):`<span class="muted">還沒有單位（只能當志工）</span>`;
+  const pp=platformOf(userId), extra=pp.length?`<br><small class="muted">全平台：${pp.map(k=>escapeHtml(PLATFORM_PERMS.find(([x])=>x===k)[1].split("（")[0])).join("、")}</small>`:"";
+  return (list.length?list.map(m=>`${escapeHtml(orgName(m.org_id))}：${ORG_ROLE_LABELS[m.role]||escapeHtml(m.role)}${m.role==="region_lead"?`（${escapeHtml(regionName(m.region_id))}）`:""}${Array.isArray(m.permissions)?"・自訂":""}`).join("<br>"):`<span class="muted">還沒有單位（只能當志工）</span>`)+extra;
 }
 async function loadOrgMembers(){
   if(!live) return;
@@ -1546,7 +1594,7 @@ async function staffEditForm(userId){
   const s=(state.staffList||[]).find(x=>x.user_id===userId); if(!s) return;
   modal(`<h2>修改：${escapeHtml(s.display_name)}</h2><form id="staffEditForm"><input type="hidden" name="user_id" value="${s.user_id}"><div class="form-grid">
     ${accountTypeSelect(s.role)}<input type="hidden" name="old_type" value="${s.role==="admin"?"admin":"event_staff"}">
-    <div class="field full" data-org-roles ${s.role==="admin"?"hidden":""}>${orgRoleFields(membershipsOf(s.user_id))}</div>
+    <div class="field full" data-org-roles ${s.role==="admin"?"hidden":""}>${orgRoleFields(membershipsOf(s.user_id))}${platformPermBox(platformOf(s.user_id))}</div>
     <label class="field full"><span><input type="checkbox" name="active" ${s.active?"checked":""}> 帳號啟用中（取消勾選＝停用，對方將無法登入後台）</span></label>
     <button class="field full">儲存</button></div></form>
     <div class="actions" style="margin-top:18px;justify-content:flex-end"><button type="button" class="danger" data-action="staff-delete" data-id="${s.user_id}">刪除這位工作人員</button></div>`);
@@ -1753,7 +1801,7 @@ function preparedRows(){
   return importState.rows.map((raw,i)=>({line:i+2,...prepareImportRow(raw,importState.map,{regions:state.regions,existing:state.contacts,seen})}));
 }
 function importPage(){
-  if(!isAdmin())return `${pageHead("匯入名冊","只有總管理可以匯入。")}`;
+  if(!canOpen("import"))return `${pageHead("匯入名冊","你沒有匯入名冊的權限。")}`;
   const head=pageHead("匯入會員名冊","從 Excel 或 CSV 一次建立舊會員；姓名＋手機與現有會員相同的會自動略過。",`<button class="secondary" data-action="import-template">下載範本</button>`);
   if(!importState) return `${head}<article class="card"><h2>1. 選擇檔案</h2><p class="muted">第一列要是欄位名稱，例如：姓名、手機、性別、出生年月日、區域、地址、Email、身分證、備註。欄位順序不拘，系統會自動辨認。</p><input type="file" id="importFile" accept=".xlsx,.xls,.csv"><p class="muted">資料只在你的瀏覽器裡整理，按下「確認匯入」之前不會寫入系統。</p></article>`;
   if(importState.result){ const r=importState.result; return `${head}<article class="card result-card ok"><div class="result-icon" aria-hidden="true">✓</div><h1>匯入完成</h1><p>新增 <strong>${r.created}</strong> 位・補資料 <strong>${r.updated||0}</strong> 位・略過 <strong>${r.skipped}</strong> 位（已存在或重複）・失敗 <strong>${r.errors.length}</strong> 列</p><div class="actions" style="justify-content:center">${r.errors.length?`<button class="secondary" data-action="import-errors">下載失敗清單</button>`:""}<a class="button" href="#contacts">看會員資料</a><button class="secondary" data-action="import-reset">再匯入一個檔案</button></div></article>`; }
@@ -1769,7 +1817,7 @@ function importPage(){
     <div class="actions" style="margin-top:14px"><button data-action="import-run" ${!(count("new")+count("update"))||importState.map.name===undefined?"disabled":""}>確認匯入（新增 ${count("new")}、補資料 ${count("update")}）</button><button class="secondary" data-action="import-reset">換一個檔案</button></div></article>`;
 }
 async function runImport(){
-  if(!isAdmin()||!importState)return;
+  if(!canOpen("import")||!importState)return;
   const prepared=preparedRows(); const todo=prepared.filter(p=>p.status==="new"||p.status==="update");
   const btn=$("[data-action='import-run']"); if(btn){btn.disabled=true;btn.textContent="匯入中…";}
   const result={created:0,updated:0,skipped:prepared.filter(p=>p.status==="duplicate").length,errors:prepared.filter(p=>p.status==="error").map(p=>({row:p.line,error:p.errors.join("；"),name:p.row.name}))};
@@ -1939,7 +1987,7 @@ async function onClick(event){
   if(action==="unassign-staff") return removeAssignment(btn.dataset.event,btn.dataset.id);
   if(action==="staff-delete") return staffDeleteForm(btn.dataset.id);
   if(action==="staff-reset"){ const s=(state.staffList||[]).find(x=>x.user_id===btn.dataset.id); const res=s?.invited_pending?await callStaff("invite",{email:s.email,display_name:s.display_name,role:s.role,region_id:s.region_id,permissions:s.permissions??null}):await callStaff("reset",{user_id:btn.dataset.id}); if(res.error&&s?.invited_pending){ const again=await callStaff("reset",{user_id:btn.dataset.id}); if(again.error) return toast(again.error); return showLinkModal("邀請連結（重新產生）",again.email,again.link); } if(res.error) return toast(res.error); return showLinkModal(s?.invited_pending?"邀請連結（重新產生）":"重設密碼連結",res.email,res.link); }
-  if(action==="invite-user") return modal(`<h2>邀請工作人員</h2><p class="muted">建立後會產生一條邀請連結，請用 LINE 傳給對方；對方點開自己設定密碼。</p><form id="inviteForm"><div class="field"><label>顯示名稱（輸入會員姓名會自動帶入 Email）</label><input name="display_name" list="inviteMembers" autocomplete="off" required>${inviteMemberDatalist()}<small class="muted" id="invitePicked"></small></div><div class="field"><label>Email</label><input name="email" type="email" required></div>${accountTypeSelect("event_staff")}<div data-org-roles>${orgRoleFields([])}</div><button style="margin-top:12px">建立並產生邀請連結</button></form>`);
+  if(action==="invite-user") return modal(`<h2>邀請工作人員</h2><p class="muted">建立後會產生一條邀請連結，請用 LINE 傳給對方；對方點開自己設定密碼。</p><form id="inviteForm"><div class="field"><label>顯示名稱（輸入會員姓名會自動帶入 Email）</label><input name="display_name" list="inviteMembers" autocomplete="off" required>${inviteMemberDatalist()}<small class="muted" id="invitePicked"></small></div><div class="field"><label>Email</label><input name="email" type="email" required></div>${accountTypeSelect("event_staff")}<div data-org-roles>${orgRoleFields([])}${platformPermBox([])}</div><button style="margin-top:12px">建立並產生邀請連結</button></form>`);
   if(action==="view-contact") return viewContact(btn.dataset.id);
   if(action==="delete-contact") return deleteContactForm(btn.dataset.id);
   if(action==="delete-event"){ event.preventDefault(); return deleteEventForm(btn.dataset.id); }
@@ -2002,6 +2050,9 @@ async function onClick(event){
   if(action==="pick-all"){ pickCandidates().forEach(c=>campaignPick.add(c.id)); return renderPickList(); }
   if(action==="pick-none"){ pickCandidates().forEach(c=>campaignPick.delete(c.id)); return renderPickList(); }
   if(action==="review-campaign") return reviewCampaign(btn.dataset.id);
+  if(action==="submit-campaign") return setCampaignStatus(btn.dataset.id,"pending");
+  if(action==="withdraw-campaign") return setCampaignStatus(btn.dataset.id,"draft");
+  if(action==="reject-campaign") return rejectCampaignForm(btn.dataset.id);
   if(action==="cancel-registration") return cancelRegistration(btn.dataset.event);
   if(action==="quick-register") return quickRegister(btn);
   if(action==="back-to-event"){ event.preventDefault(); if(location.hash===btn.getAttribute("href")) return render(); location.hash=btn.getAttribute("href"); return; }
@@ -2057,7 +2108,7 @@ document.addEventListener("change",event=>{
 });
 
 async function onSubmit(event){
-  if(!["assignForm","eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","regPayForm","tagCreateForm","tagEditForm","tagCategoryForm","tagAssignForm","ctagCreateForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","staffDeleteForm","deleteContactForm","deleteEventForm","profileForm","signinForm","activateForm","studentLinkForm","applyForm"].includes(event.target.id))return;
+  if(!["assignForm","rejectCampaignForm","eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","regPayForm","tagCreateForm","tagEditForm","tagCategoryForm","tagAssignForm","ctagCreateForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","staffDeleteForm","deleteContactForm","deleteEventForm","profileForm","signinForm","activateForm","studentLinkForm","applyForm"].includes(event.target.id))return;
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target));
   if(event.target.id==="contactForm") return saveContact(data);
   if(event.target.id==="profileForm") return saveProfile(event.target,data);
@@ -2078,6 +2129,9 @@ async function onSubmit(event){
   if(event.target.id==="eventForm") return saveEvent(data);
   if(event.target.id==="campaignForm"){
     const audience=["all","selected","broadcast"].includes(data.audience)?data.audience:"event";
+    if(!campaignAudiences(who(),orgList()).includes(audience)) return toast("你沒有權限選這種發送對象");
+    if(audience==="event"&&!canDraftForEvent(who(),state.events.find(e=>e.id===data.event_id))) return toast("你只能替自己單位的活動寫訊息");
+    const intent=!isAdmin()&&event.submitter?.value==="pending"?"pending":"draft";
     if(audience==="selected"&&!campaignPick.size) return toast("請至少勾選一位學員");
     if(audience==="event"&&!data.event_id) return toast("請選擇活動");
     let image_url=data.campaign_id?(state.campaigns.find(x=>x.id===data.campaign_id)?.image_url||null):null;
@@ -2087,12 +2141,12 @@ async function onSubmit(event){
     const draft={name:data.name,body:data.body,audience,event_id:audience==="event"?data.event_id:null,contact_ids:audience==="selected"?[...campaignPick]:null,image_url};
     const count=campaignRecipients(draft).length;
     if(live){
-      const q=data.campaign_id?supabase.from("message_campaigns").update({...draft,eligible_count:count}).eq("id",data.campaign_id).eq("status","draft").select("id"):supabase.from("message_campaigns").insert({...draft,status:"draft",eligible_count:count}).select("id");
+      const q=data.campaign_id?supabase.from("message_campaigns").update({...draft,status:intent,eligible_count:count}).eq("id",data.campaign_id).in("status",["draft","rejected"]).select("id"):supabase.from("message_campaigns").insert({...draft,status:intent,eligible_count:count}).select("id");
       const {data:saved,error}=await q; if(error)return toast(error.message); if(!saved?.length) return toast("這份草稿已經送出，不能再修改");
       await loadLiveData();
-    } else if(data.campaign_id){ const c=state.campaigns.find(x=>x.id===data.campaign_id&&x.status==="draft"); if(!c) return toast("這份草稿已經送出，不能再修改"); Object.assign(c,draft,{eligible_count:count}); }
-    else state.campaigns.push({id:crypto.randomUUID(),...draft,status:"draft",eligible_count:count,success_count:0,failed_count:0});
-    audit(data.campaign_id?"修改訊息草稿":"建立訊息草稿",data.name);persist();closeModal();render();toast("已儲存，尚未發送");
+    } else if(data.campaign_id){ const c=state.campaigns.find(x=>x.id===data.campaign_id); if(!canEditCampaign(who(),c,myUserId())) return toast("這份草稿已經送出，不能再修改"); Object.assign(c,draft,{status:intent,eligible_count:count,...(intent==="pending"?{submitted_at:new Date().toISOString()}:{})}); }
+    else state.campaigns.push({id:crypto.randomUUID(),...draft,status:intent,created_by:myUserId(),eligible_count:count,success_count:0,failed_count:0,...(intent==="pending"?{submitted_at:new Date().toISOString()}:{})});
+    audit(intent==="pending"?"送審 LINE 訊息":data.campaign_id?"修改訊息草稿":"建立訊息草稿",data.name);persist();closeModal();render();toast(intent==="pending"?"已送審，等總管理或核准人員送出":"已儲存，尚未發送");
   }
   if(event.target.id==="registrationForm") return submitRegistration(data,sessionIds(event.target));
   if(event.target.id==="quickRegisterForm") return quickRegisterMany(event.target,sessionIds(event.target));
@@ -2107,6 +2161,7 @@ async function onSubmit(event){
   if(event.target.id==="deleteEventForm") return deleteEvent(data);
   if(event.target.id==="forgotForm") return sendResetEmail(data);
   if(event.target.id==="assignForm") return saveAssignment(data);
+  if(event.target.id==="rejectCampaignForm") return rejectCampaign(data);
   if(event.target.id==="staffDeleteForm"){ const s=(state.staffList||[]).find(x=>x.user_id===data.user_id); if(data.confirm_name.trim()!==s?.display_name) return toast("姓名不符，未刪除"); const res=await callStaff("delete",{user_id:data.user_id,confirm_name:data.confirm_name.trim()}); if(res.error) return toast(res.error); closeModal(); audit("刪除工作人員",s.email||s.display_name); persist(); render(); return toast("已刪除工作人員"); }
   if(["staffEditForm","inviteForm","assignForm"].includes(event.target.id)&&!multiOrgReady()) return toast(NOT_READY_MSG);
   if(event.target.id==="staffEditForm"){
@@ -2115,6 +2170,7 @@ async function onSubmit(event){
     if(list&&list.some(m=>m.role==="region_lead"&&!m.region_id)) return toast("晁人的區負責人必須指定區域");
     const res=await callStaff("update",{user_id:data.user_id,active:data.active==="on",...(changed?{role:data.account_type==="admin"?"admin":"event_staff",region_id:null,permissions:null}:{})}); if(res.error) return toast(res.error);
     if(list){ const err=await saveMemberships(data.user_id,list); if(err) return toast(err); }
+    { const err=await savePlatformPerms(data.user_id,list?[...event.target.querySelectorAll("[name=platform_perm]:checked")].map(x=>x.value):[]); if(err) return toast(err); }
     closeModal(); audit("修改工作人員",data.user_id); persist(); render(); return toast("已更新"); }
   if(event.target.id==="inviteForm"){
     const list=data.account_type==="admin"?null:readOrgRoles(event.target);
@@ -2122,9 +2178,10 @@ async function onSubmit(event){
     const res=await callStaff("invite",{email:data.email,display_name:data.display_name,role:data.account_type==="admin"?"admin":"event_staff",region_id:null,permissions:null});
     if(res.error) return toast(res.error);
     // 邀請完再找出新帳號，寫入各單位角色（manage-staff 不用改）
-    if(list?.length){ const all=await callStaff("list"); const u=(all.staff||[]).find(x=>String(x.email||"").toLowerCase()===String(data.email).trim().toLowerCase());
-      if(live) await loadOrgMembers();
-      const err=u?await saveMemberships(u.user_id,list):"找不到剛建立的帳號"; if(err) toast(`帳號已建立，但${err}；請到「修改」再設定一次`); }
+    const pp=list?[...event.target.querySelectorAll("[name=platform_perm]:checked")].map(x=>x.value):[];
+    if(list?.length||pp.length){ const all=await callStaff("list"); const u=(all.staff||[]).find(x=>String(x.email||"").toLowerCase()===String(data.email).trim().toLowerCase());
+      if(live){ await loadOrgMembers(); const st=await supabase.from("staff_profiles").select("*"); state.staff=st.data||state.staff; }
+      const err=!u?"找不到剛建立的帳號":(list?.length?await saveMemberships(u.user_id,list):null)||(pp.length?await savePlatformPerms(u.user_id,pp):null); if(err) toast(`帳號已建立，但${err}；請到「修改」再設定一次`); }
     audit("邀請工作人員",data.email); persist(); render(); showLinkModal("邀請連結",res.email,res.link);
   }
 }
@@ -2246,13 +2303,16 @@ function audienceLabel(c){
   const e=state.events.find(x=>x.id===c.event_id); return `活動報名者：${e?eventLabel(e):"（活動已刪除）"}`;
 }
 function campaignDraftForm(id){
-  const c=id?state.campaigns.find(x=>x.id===id&&x.status==="draft"):null; if(id&&!c) return toast("只有還沒送出的草稿可以修改");
+  const c=id?state.campaigns.find(x=>x.id===id):null; if(id&&!canEditCampaign(who(),c,myUserId())) return toast("只有自己還沒送出的草稿（或被退回的）可以修改");
+  if(!canWriteCampaign(who(),orgList())) return toast("你沒有寫 LINE 訊息的權限");
   campaignPick=new Set(c?.audience==="selected"?c.contact_ids||[]:[]);
-  const aud=c?.audience||"event";
+  const auds=campaignAudiences(who(),orgList()), aud=auds.includes(c?.audience)?c.audience:auds[0];
+  const audLabels={event:"某場活動的報名者",all:"全員",selected:"指定學員",broadcast:"官方帳號全部好友（群發）"};
+  const evs=state.events.filter(e=>canDraftForEvent(who(),e));
   const tags=[...new Set(state.contacts.flatMap(c=>c.tags||[]))].sort((a,b)=>a.localeCompare(b,"zh-Hant"));
   modal(`<h2>${c?"修改":"新增"} LINE 推播專案</h2><form id="campaignForm">${c?`<input type="hidden" name="campaign_id" value="${c.id}">`:""}<div class="field"><label>主旨</label><input name="name" required maxlength="80" autocomplete="off" value="${escapeHtml(c?.name||"")}"></div>
-    <div class="field"><label>發送對象</label><div class="actions"><label><input type="radio" name="audience" value="event" ${aud==="event"?"checked":""}> 某場活動的報名者</label><label><input type="radio" name="audience" value="all" ${aud==="all"?"checked":""}> 全員</label><label><input type="radio" name="audience" value="selected" ${aud==="selected"?"checked":""}> 指定學員</label><label><input type="radio" name="audience" value="broadcast" ${aud==="broadcast"?"checked":""}> 官方帳號全部好友（群發）</label></div></div>
-    <div class="field" data-audience="event" ${aud==="event"?"":"hidden"}><label>活動</label><select name="event_id">${state.events.map(e=>`<option value="${e.id}" ${c?.event_id===e.id?"selected":""}>${escapeHtml(eventLabel(e))}・${fmtDate(e.starts_at)}</option>`).join("")}</select></div>
+    <div class="field"><label>發送對象</label><div class="actions">${auds.map(a=>`<label><input type="radio" name="audience" value="${a}" ${aud===a?"checked":""}> ${audLabels[a]}</label>`).join("")}</div>${auds.length===1?`<small class="muted">你可以發給自己單位活動或課程的報名者。要發給全員或指定學員，請總管理開「進階對象」權限。</small>`:""}</div>
+    <div class="field" data-audience="event" ${aud==="event"?"":"hidden"}><label>活動</label><select name="event_id">${evs.map(e=>`<option value="${e.id}" ${c?.event_id===e.id?"selected":""}>${escapeHtml(eventLabel(e))}・${fmtDate(e.starts_at)}</option>`).join("")}</select></div>
     <div data-audience="selected" ${aud==="selected"?"":"hidden"}>
       <div class="form-grid"><div class="field"><label>標籤</label><select id="pickTag"><option value="">全部標籤</option>${tags.map(t=>`<option>${escapeHtml(t)}</option>`).join("")}</select></div>
         <div class="field"><label>區域</label><select id="pickRegion"><option value="">全部區域</option>${state.regions.map(r=>`<option value="${r.id}">${escapeHtml(r.name)}</option>`).join("")}<option value="none">尚未分區</option></select></div>
@@ -2261,7 +2321,7 @@ function campaignDraftForm(id){
       <div id="pickList" class="pick-list"></div></div>
     <div class="notice" style="margin-top:10px" id="audienceNote"></div>
     <div class="field"><label>附加圖片（選填，JPG／PNG；學員會先看到圖片、再看到文字。不要放含個資的圖片）</label>${c?.image_url?`<div class="img-current"><img src="${escapeHtml(c.image_url)}" alt="目前的圖片"><label><input type="checkbox" name="remove_image"> 移除這張圖片</label></div>`:""}<input type="file" id="campaignImage" accept="image/jpeg,image/png"><img id="campaignImagePreview" alt="圖片預覽" hidden></div>
-    <div class="field"><label>訊息內容（500 字以內）</label><textarea name="body" required maxlength="500">${escapeHtml(c?.body||"")}</textarea></div><button>儲存檔案</button></form>`);
+    <div class="field"><label>訊息內容（500 字以內）</label><textarea name="body" required maxlength="500">${escapeHtml(c?.body||"")}</textarea></div>${isAdmin()?`<button>儲存檔案</button>`:`<div class="actions"><button name="intent" value="pending">儲存並送審</button><button name="intent" value="draft" class="secondary">先存成草稿</button></div>`}</form>`);
   renderPickList();
 }
 // 已送出的訊息：列出實際送給誰、成功或失敗（群發沒有個別名單）
@@ -2278,8 +2338,9 @@ async function campaignDeliveries(id){
 }
 // 刪除草稿或已送出的訊息；已送出的只是刪掉 CRM 裡的紀錄（含發送明細），學員手機上的訊息不會收回。發送中的不能刪。
 async function deleteCampaign(id){
-  const c=state.campaigns.find(x=>x.id===id); if(!c||c.status==="sending"||!isAdmin()) return toast("發送中的訊息不能刪除");
-  const sent=c.status!=="draft";
+  const c=state.campaigns.find(x=>x.id===id), mineOk=c&&c.created_by===myUserId()&&["draft","rejected"].includes(c.status)&&canWriteCampaign(who(),orgList());
+  if(!c||c.status==="sending"||!(isAdmin()||mineOk)) return toast("不能刪除這則訊息");
+  const sent=!["draft","pending","rejected"].includes(c.status);
   if(!confirm(sent?`刪除已送出的訊息「${c.name}」？
 只會刪掉 CRM 裡的紀錄和發送明細，學員已經收到的 LINE 訊息不會收回。刪除後無法復原。`:`刪除草稿「${c.name}」？刪除後無法復原。`)) return;
   if(live){ const {data,error}=await supabase.from("message_campaigns").delete().eq("id",id).neq("status","sending").select("id"); if(error) return toast(error.message); if(!data?.length) return toast("這則訊息正在發送，不能刪除"); await loadLiveData(); }
@@ -2324,7 +2385,12 @@ function updateAudienceCount(){
   el.innerHTML=`預計發送 <strong id="audienceCount">${n}</strong> 位。沒綁 LINE、沒同意接收活動訊息或已封鎖的人不會收到，也不會出現在清單。`;
 }
 function eligibleForEvent(eventId){ const ids=new Set(state.registrations.filter(r=>r.event_id===eventId&&!r.cancelled_at).map(r=>r.contact_id)); return state.contacts.filter(c=>ids.has(c.id)&&campaignEligible(c)); }
-function reviewCampaign(id){ const c=state.campaigns.find(x=>x.id===id); const people=campaignRecipients(c); modal(`<h2>最後確認</h2>${c.audience==="broadcast"?`<div class="notice">即將<strong>群發給官方帳號的全部好友</strong>（包含還沒加入 CRM 的好友），會用掉官方帳號每月的訊息額度；送出後無法收回。</div>`:`<div class="notice">即將發送給 <strong>${people.length}</strong> 位已同意且可聯絡的 LINE 好友（${escapeHtml(audienceLabel(c))}）。</div><details class="tag-box"><summary>收件人名單（${people.length}）</summary><p>${people.map(x=>escapeHtml(x.name)).join("、")||"（沒有人）"}</p></details>`}<p><strong>${escapeHtml(c.name)}</strong></p>${c.image_url?`<img class="camp-img" src="${escapeHtml(c.image_url)}" alt="附加圖片">`:""}<p>${escapeHtml(c.body)}</p><form id="sendCampaignForm"><button type="button" data-send-id="${c.id}" id="confirmSend">確認送出</button> <button class="secondary" value="cancel">返回修改</button></form>`); $("#confirmSend").onclick=()=>sendCampaign(c,people); }
+function reviewCampaign(id){
+  const c=state.campaigns.find(x=>x.id===id); if(!canSendCampaign(who(),c,myUserId())) return toast("你不能送出這則訊息");
+  const people=campaignRecipients(c), names=isAdmin()||!live, n=names?people.length:Number(c.eligible_count)||0;
+  modal(`<h2>${c.status==="pending"?"核准並送出":"最後確認"}</h2>${c.audience==="broadcast"?`<div class="notice">即將<strong>群發給官方帳號的全部好友</strong>（包含還沒加入 CRM 的好友），會用掉官方帳號每月的訊息額度；送出後無法收回。</div>`:`<div class="notice">即將發送給 <strong>${n}</strong> 位已同意且可聯絡的 LINE 好友（${escapeHtml(audienceLabel(c))}）。送出後無法收回。</div>${names?`<details class="tag-box"><summary>收件人名單（${people.length}）</summary><p>${people.map(x=>escapeHtml(x.name)).join("、")||"（沒有人）"}</p></details>`:""}`}<p><strong>${escapeHtml(c.name)}</strong></p>${c.image_url?`<img class="camp-img" src="${escapeHtml(c.image_url)}" alt="附加圖片">`:""}<p>${escapeHtml(c.body)}</p><form id="sendCampaignForm"><button type="button" data-send-id="${c.id}" id="confirmSend">確認送出</button> <button class="secondary" value="cancel">返回</button></form>`);
+  $("#confirmSend").onclick=()=>sendCampaign(c,people);
+}
 // 發送前把訊息裡的網址換成追蹤短網址（/go/?k=…，已換過的跳過），週報用來算點擊率與訂單數；換不成就照原文發送
 const shortCode=()=>{ const abc="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"; return [...crypto.getRandomValues(new Uint8Array(8))].map(n=>abc[n%abc.length]).join(""); };
 async function trackCampaignLinks(c){
@@ -2336,7 +2402,26 @@ async function trackCampaignLinks(c){
   else (state.campaign_links||(state.campaign_links=[])).push(...rows);
   c.body=body;
 }
-// 每則推播的點擊數：正式站讀 campaign_click_stats；展示版用本機紀錄
+// 送審／撤回：寫草稿的人自己的訊息
+async function setCampaignStatus(id,status){
+  const c=state.campaigns.find(x=>x.id===id), me=myUserId();
+  const ok=status==="pending"?canEditCampaign(who(),c,me):Boolean(c&&c.created_by===me&&c.status==="pending");
+  if(!ok) return toast("這則訊息目前不能這樣操作");
+  if(live){ const {data,error}=await supabase.from("message_campaigns").update({status}).eq("id",id).in("status",status==="pending"?["draft","rejected"]:["pending"]).select("id"); if(error) return toast(error.message); if(!data?.length) return toast("這則訊息剛被處理過，請重新整理"); await loadLiveData(); }
+  else Object.assign(c,{status,...(status==="pending"?{submitted_at:new Date().toISOString()}:{})});
+  audit(status==="pending"?"送審 LINE 訊息":"撤回 LINE 訊息",c.name); persist(); render(); toast(status==="pending"?"已送審，等總管理或核准人員送出":"已撤回，可以修改後再送審");
+}
+function rejectCampaignForm(id){
+  const c=state.campaigns.find(x=>x.id===id); if(!canRejectCampaign(who(),c,myUserId())) return toast("你不能退回這則訊息");
+  modal(`<h2>退回訊息</h2><p><strong>${escapeHtml(c.name)}</strong></p><form id="rejectCampaignForm"><input type="hidden" name="campaign_id" value="${c.id}"><div class="field"><label>退回原因（作者會看到，300 字以內）</label><textarea name="note" required maxlength="300"></textarea></div><button>確認退回</button></form>`);
+}
+async function rejectCampaign(data){
+  const c=state.campaigns.find(x=>x.id===data.campaign_id), note=String(data.note||"").trim();
+  if(!canRejectCampaign(who(),c,myUserId())) return toast("你不能退回這則訊息"); if(!note) return toast("請寫退回原因");
+  if(live){ const {error}=await supabase.rpc("reject_campaign",{p_campaign:c.id,p_note:note}); if(error) return toast(error.message); await loadLiveData(); }
+  else Object.assign(c,{status:"rejected",review_note:note.slice(0,300),reviewed_by:myUserId(),reviewed_at:new Date().toISOString()});
+  audit("退回 LINE 訊息",c.name); persist(); closeModal(); render(); toast("已退回，作者會看到原因");
+}// 每則推播的點擊數：正式站讀 campaign_click_stats；展示版用本機紀錄
 function clickStats(){
   if(live)return state.clickStats||[];
   const links=state.campaign_links||[], clicks=state.link_clicks||[], by={};
