@@ -97,11 +97,18 @@ export const eventOrg = event => event?.org_id || DEFAULT_ORG;
 export function membershipOf(who, orgId) {
   return (who?.memberships || []).find(m => m.org_id === orgId) || null;
 }
+// 單位層級（全部區域）的功能。區負責人一律沒有：他的功能都只限自己區（2026-11-18，資料庫 has_org_perm 同步）
 export function orgPermsOf(who, orgId) {
   if (who?.admin) return ORG_PERM_KEYS;
   const m = membershipOf(who, orgId);
-  if (!m) return [];
+  if (!m || m.role === "region_lead") return [];
   return Array.isArray(m.permissions) ? m.permissions.filter(p => ORG_PERM_KEYS.includes(p)) : ORG_ROLE_PERMS[m.role] || [];
+}
+// 區負責人可以另外勾的功能（只限自己區）。名單、報到、會員資料是角色本身就有的（自己區），不用勾。
+export const REGION_LEAD_EXTRA = ["payments"];
+export function regionLeadExtras(who) {
+  const m = membershipOf(who, "chaoren");
+  return m?.role === "region_lead" && Array.isArray(m.permissions) ? m.permissions.filter(p => REGION_LEAD_EXTRA.includes(p)) : [];
 }
 export const hasOrgPerm = (who, orgId, perm) => orgPermsOf(who, orgId).includes(perm);
 export const isOrgMember = (who, orgId) => Boolean(who?.admin || membershipOf(who, orgId));
@@ -183,6 +190,12 @@ export function canCheckinEvent(who, event, now = new Date()) {
   return hasOrgPerm(who, eventOrg(event), "checkin") || Boolean(assignmentFor(who, event?.id, now)?.can_checkin);
 }
 export const canPayEvent = (who, event) => hasOrgPerm(who, eventOrg(event), "payments");
+// 某一筆報名能不能登記繳費：單位的「登記繳費」，或晁人區負責人勾了繳費、且這位會員在他的區（同資料庫 region_lead_pays）
+export function canPayRegistration(who, event, regionId) {
+  if (canPayEvent(who, event)) return true;
+  const lead = regionLeadFor(who, event);
+  return Boolean(lead && regionId === lead && regionLeadExtras(who).includes("payments"));
+}
 // 晁人區負責人：晁人活動裡自己區的會員
 export function regionLeadFor(who, event) {
   if (eventOrg(event) !== "chaoren") return null;
@@ -243,6 +256,7 @@ export function rosterForEvents(events = [], registrations = [], contacts = [], 
 }
 // 單位角色勾選：和角色預設一樣就存 null
 export function orgPermsToSave(role, picked = []) {
+  if (role === "region_lead") { const extra = REGION_LEAD_EXTRA.filter(p => picked.includes(p)); return extra.length ? extra : null; }
   const list = ORG_PERM_KEYS.filter(p => picked.includes(p));
   const base = ORG_ROLE_PERMS[role] || [];
   return list.length === base.length && list.every(p => base.includes(p)) ? null : list;
@@ -264,6 +278,7 @@ export function normalizeCity(value) {
   const text = String(value ?? "").trim().replace(/台/g, "臺").replace(/^\d{3,6}\s*/, "");
   if (!text) return "";
   if (["國外", "海外", "外國"].includes(text)) return "海外";
+  if (/^(新竹縣[\/／、]?市|新竹縣市|嘉義縣[\/／、]?市|嘉義縣市|離島(地區)?|外島(地區)?)$/.test(text)) return "";
   const old = Object.keys(OLD_COUNTIES).find(k => text.startsWith(k));
   if (old) return OLD_COUNTIES[old];
   const town = Object.keys(COUNTY_TOWNS).find(k => text.startsWith(k));
@@ -574,7 +589,7 @@ export function guessColumns(headers, rows = []) {
   const take = (key, index) => { if (index >= 0 && !used.has(index)) { map[key] = index; used.add(index); return true; } return false; };
   for (const [key, , aliases] of IMPORT_FIELDS) {
     if (aliases.some(alias => take(key, headers.findIndex(h => clean(h) === alias)))) continue;
-    take(key, headers.findIndex((h, i) => !used.has(i) && clean(h) && aliases.some(a => a.length > 1 && clean(h).includes(a))));
+    take(key, headers.findIndex((h, i) => !used.has(i) && clean(h) && !clean(h).includes("緊急") && aliases.some(a => a.length > 1 && clean(h).includes(a))));
   }
   const sample = rows.slice(0, 50);
   for (const [key, , , looksLike] of IMPORT_FIELDS) {
@@ -962,4 +977,201 @@ export function sharePageHtml(event, sessions = [event], { siteUrl = "", imageBa
 </body>
 </html>
 `;
+}
+
+// ───── 活動問卷與家庭報名（2026-11-17 計劃書）─────
+// 題目存在活動的 form 欄位：{ questions:[…], family_max:0~10, insurance:bool, emergency:bool }
+// 題目：{ id, type, label, help, required, per:"registration"（每筆報名答一次）|"person"（每人各答）, options:[…], when:{q,is} }
+// when：只有「另一題答了某個選項」時才出現，例如選「自行前往（共乘）」才問同車人姓名。
+// 同一套規則在 member 函式（supabase/functions/member）裡也有一份，兩邊要一起改。
+export const QUESTION_TYPES = [["single", "單選"], ["multi", "多選"], ["text", "簡答"], ["yesno", "是／否"]];
+export const QUESTION_LIMITS = { questions: 20, label: 100, help: 200, options: 30, option: 60, answer: 500, family: 10 };
+const YESNO = ["是", "否"];
+export const questionOptions = q => q?.type === "yesno" ? YESNO : (q?.options || []);
+
+export function cleanForm(form = {}) {
+  const L = QUESTION_LIMITS, ids = new Set();
+  const questions = (Array.isArray(form?.questions) ? form.questions : []).slice(0, L.questions).map((q, i) => {
+    const type = QUESTION_TYPES.some(([k]) => k === q?.type) ? q.type : "text";
+    let id = String(q?.id || "").replace(/[^a-z0-9_]/gi, "").slice(0, 20) || `q${i + 1}`;
+    while (ids.has(id)) id += "x";
+    ids.add(id);
+    const options = type === "single" || type === "multi"
+      ? [...new Set((Array.isArray(q?.options) ? q.options : String(q?.options || "").split("\n")).map(o => String(o).trim().slice(0, L.option)).filter(Boolean))].slice(0, L.options)
+      : [];
+    const out = { id, type, label: String(q?.label || "").trim().slice(0, L.label), help: String(q?.help || "").trim().slice(0, L.help),
+      required: Boolean(q?.required), per: q?.per === "person" ? "person" : "registration", options };
+    if (q?.when?.q && q?.when?.is) out.when = { q: String(q.when.q).slice(0, 20), is: String(q.when.is).slice(0, L.option) };
+    return out;
+  }).filter(q => q.label && (!["single", "multi"].includes(q.type) || q.options.length));
+  // 條件題只能看「前面、同一種回答方式的單選／是否題」，而且選項要存在，否則拿掉條件
+  questions.forEach((q, i) => {
+    if (!q.when) return;
+    const src = questions.slice(0, i).find(x => x.id === q.when.q);
+    if (!src || !["single", "yesno"].includes(src.type) || !questionOptions(src).includes(q.when.is) || src.per !== q.per) delete q.when;
+  });
+  const familyMax = Math.max(0, Math.min(L.family, Math.floor(Number(form?.family_max) || 0)));
+  return { questions, family_max: familyMax, insurance: Boolean(form?.insurance), emergency: Boolean(form?.emergency) };
+}
+
+// 這場活動有沒有用到問卷或家庭報名（沒有就維持原本的一鍵報名）
+export const formEnabled = form => Boolean(form && ((form.questions || []).length || form.family_max > 0 || form.insurance || form.emergency));
+
+function emptyAnswer(v) { return v == null || (Array.isArray(v) ? !v.length : String(v).trim() === ""); }
+
+// 依目前答案，哪些題目要出現（條件題的來源沒選到那個選項就隱藏）
+export function visibleQuestions(form, answers = {}, scopes = ["registration", "person"]) {
+  return (form?.questions || []).filter(q => scopes.includes(q.per) && (!q.when || answers?.[q.when.q] === q.when.is));
+}
+
+// 檢查一份答案：只留下該出現的題目，必填沒填、選項不在清單內都擋下
+export function checkAnswers(form, answers = {}, scopes = ["registration", "person"], who = "") {
+  const value = {}, src = answers && typeof answers === "object" && !Array.isArray(answers) ? answers : {};
+  for (const q of visibleQuestions(form, src, scopes)) {
+    let v = src[q.id];
+    const opts = questionOptions(q);
+    if (q.type === "multi") {
+      v = [...new Set((Array.isArray(v) ? v : emptyAnswer(v) ? [] : [v]).map(String))];
+      if (v.some(x => !opts.includes(x))) return { error: `${who}「${q.label}」的選項不正確` };
+    } else if (q.type === "single" || q.type === "yesno") {
+      v = emptyAnswer(v) ? "" : String(v);
+      if (v && !opts.includes(v)) return { error: `${who}「${q.label}」的選項不正確` };
+    } else {
+      v = String(v ?? "").trim();
+      if (v.length > QUESTION_LIMITS.answer) return { error: `${who}「${q.label}」請在 ${QUESTION_LIMITS.answer} 字以內` };
+    }
+    if (emptyAnswer(v)) { if (q.required) return { error: `請回答${who}「${q.label}」` }; continue; }
+    value[q.id] = v;
+  }
+  return { value };
+}
+
+export function answerText(v) {
+  if (emptyAnswer(v)) return "";
+  return Array.isArray(v) ? v.join("、") : String(v);
+}
+
+export const RELATIONS = ["配偶", "父親", "母親", "子女", "兄弟姊妹", "祖父母", "孫子女", "親戚", "朋友", "其他"];
+const PHONE_RE = /^\+[1-9]\d{7,14}$/;
+const badBirth = (birth, today) => birth && (!/^\d{4}-\d{2}-\d{2}$/.test(birth) || birth < "1900-01-01" || new Date(birth) > today);
+
+// 同行家人：每人一筆會員資料。要投保時出生日期、身分證必填。
+export function checkFamilyMember(m = {}, form = {}, index = 0, today = new Date()) {
+  const who = `第 ${index + 1} 位家人`;
+  const name = String(m.name || "").trim();
+  if (!name || name.length > 40) return { error: `請填寫${who}的姓名（40 字以內）` };
+  const relation = String(m.relation || "").trim();
+  if (!RELATIONS.includes(relation)) return { error: `請選擇${who}（${name}）的關係` };
+  if (!GENDERS.includes(m.gender)) return { error: `請選擇${who}（${name}）的性別` };
+  const birth = String(m.birth_date || "");
+  if (badBirth(birth, today)) return { error: `${who}（${name}）的出生日期不正確` };
+  const nid = String(m.national_id || "").trim().toUpperCase();
+  if (nid && !isValidNationalId(nid)) return { error: `${who}（${name}）的身分證／居留證號碼格式不正確` };
+  if (form.insurance && (!birth || !nid)) return { error: `${who}（${name}）要填出生日期與身分證字號（活動投保用）` };
+  const phone = m.phone ? String(m.phone) : "";
+  if (phone && !PHONE_RE.test(phone)) return { error: `${who}（${name}）的手機格式不正確` };
+  const answers = checkAnswers(form, m.answers || {}, ["person"], `${name} 的`);
+  if (answers.error) return answers;
+  return { value: { name, relation, gender: m.gender, birth_date: birth || null, national_id: nid || null, phone: phone || null, answers: answers.value } };
+}
+
+// 報名人自己的補充資料：緊急聯絡人（活動要求時必填）、投保資料（會員資料沒有時才要填，已有的不覆蓋）
+export function checkRegistrantExtra(p = {}, form = {}, have = {}, today = new Date()) {
+  const out = {};
+  const en = String(p.emergency_name || "").trim(), er = String(p.emergency_relation || "").trim(), ep = String(p.emergency_phone || "").trim();
+  if (en.length > 40 || er.length > 20) return { error: "緊急聯絡人姓名或關係太長" };
+  if (ep && !PHONE_RE.test(ep)) return { error: "緊急聯絡人電話格式不正確" };
+  if (form.emergency && (!en || !er || !ep)) return { error: "請填寫緊急聯絡人姓名、關係與電話" };
+  if (en || er || ep) Object.assign(out, { emergency_name: en || null, emergency_relation: er || null, emergency_phone: ep || null });
+  const birth = String(p.birth_date || "");
+  if (badBirth(birth, today)) return { error: "出生日期不正確" };
+  const nid = String(p.national_id || "").trim().toUpperCase();
+  if (nid && !isValidNationalId(nid)) return { error: "身分證／居留證號碼格式不正確" };
+  if (form.insurance && !have.birth_date && !birth) return { error: "請填寫出生日期（活動投保用）" };
+  if (form.insurance && !have.national_id && !nid) return { error: "請填寫身分證字號（活動投保用）" };
+  if (birth && !have.birth_date) out.birth_date = birth;
+  if (nid && !have.national_id) out.national_id = nid;
+  return { value: out };
+}
+
+// 名單排序：同一家的人排在一起（報名人在前），各家照最早報名時間
+export function groupRoster(rows = []) {
+  const head = r => r.group_id || r.registration_id || r.id;
+  const first = new Map();
+  for (const r of rows) { const k = head(r), t = r.registered_at || ""; if (!first.has(k) || t < first.get(k)) first.set(k, t); }
+  return [...rows].sort((a, b) => {
+    const ka = head(a), kb = head(b);
+    if (ka !== kb) return String(first.get(ka)).localeCompare(String(first.get(kb))) || String(ka).localeCompare(String(kb));
+    return (a.registered_by ? 1 : 0) - (b.registered_by ? 1 : 0) || String(a.registered_at || "").localeCompare(String(b.registered_at || ""));
+  });
+}
+
+// 依某題答案篩名單，例如「交通安排＝台中高鐵站」就是搭車名單
+export function filterByAnswer(rows = [], qid = "", value = "") {
+  if (!qid || !value) return rows;
+  return rows.filter(r => { const v = (r.answers || {})[qid]; return Array.isArray(v) ? v.includes(value) : v === value; });
+}
+
+// ───── 匯入 Google 表單回覆：問卷答案、緊急聯絡人 ─────
+// 匯入名冊時選了「同時報名到某場活動」才會用到。欄位名稱跟題目文字比對，自動猜哪一欄是哪一題。
+export const IMPORT_EXTRA_FIELDS = [
+  ["emergency_name", "緊急聯絡人姓名", ["緊急聯絡人", "緊急聯絡人姓名", "緊急聯絡人名字"]],
+  ["emergency_relation", "緊急聯絡人關係", ["緊急聯絡人關係", "與緊急聯絡人關係", "緊急聯絡人與你的關係"]],
+  ["emergency_phone", "緊急聯絡人電話", ["緊急聯絡人電話", "緊急聯絡電話", "緊急電話", "緊急聯絡人手機"]]
+];
+const cleanHead = h => String(h ?? "").replace(/[\s：:？?（）()*＊]/g, "").toLowerCase();
+export function guessFormColumns(headers, form, baseMap = {}) {
+  const used = new Set(Object.values(baseMap).filter(v => v !== undefined));
+  const extra = {}, answers = {};
+  const take = (target, key, index) => { if (index >= 0 && !used.has(index)) { target[key] = index; used.add(index); return true; } return false; };
+  const H = headers.map(cleanHead);
+  for (const [key, , aliases] of IMPORT_EXTRA_FIELDS) {
+    const a = aliases.map(cleanHead);
+    // 「緊急聯絡人電話」不能被當成緊急聯絡人姓名
+    const ok = h => key !== "emergency_name" || !/電話|手機/.test(h);
+    if (!take(extra, key, H.findIndex(h => a.includes(h)))) take(extra, key, H.findIndex((h, i) => !used.has(i) && ok(h) && a.some(x => h.includes(x))));
+  }
+  for (const q of cleanForm(form).questions) {
+    const label = cleanHead(q.label);
+    if (!label) continue;
+    if (!take(answers, q.id, H.findIndex(h => h === label)))
+      take(answers, q.id, H.findIndex((h, i) => !used.has(i) && h.length > 2 && (h.includes(label) || label.includes(h))));
+  }
+  return { extra, answers };
+}
+
+// 一格答案轉成問卷答案。Google 表單的複選題會用「, 」接起來；對不到選項的不匯入，列在說明裡讓人工處理。
+export function importAnswer(q, text) {
+  const s = String(text ?? "").trim();
+  if (!s) return { value: undefined };
+  const opts = questionOptions(q);
+  if (q.type === "text") return { value: s.slice(0, QUESTION_LIMITS.answer) };
+  if (q.type === "multi") {
+    const picked = opts.filter(o => s.includes(o));
+    let rest = s; for (const o of picked) rest = rest.split(o).join("");
+    rest = rest.replace(/[,，、;；\s]/g, "");
+    return { value: picked.length ? picked : undefined, warning: rest ? `「${q.label.slice(0, 16)}」有對不到選項的答案（${s.slice(0, 40)}）` : "" };
+  }
+  const hit = opts.find(o => o === s) || opts.find(o => s.startsWith(o) || o.startsWith(s));
+  return hit ? { value: hit } : { value: undefined, warning: `「${q.label.slice(0, 16)}」的答案「${s.slice(0, 30)}」不在選項內，未匯入` };
+}
+
+export function prepareImportAnswers(raw, maps, form) {
+  const cell = i => (i === undefined || i === "" ? "" : String(raw[i] ?? "").trim());
+  const answers = {}, warnings = [];
+  for (const q of cleanForm(form).questions) {
+    const r = importAnswer(q, cell(maps.answers?.[q.id]));
+    if (r.value !== undefined) answers[q.id] = r.value;
+    if (r.warning) warnings.push(r.warning);
+  }
+  const extra = {};
+  let en = cell(maps.extra?.emergency_name), er = cell(maps.extra?.emergency_relation);
+  // Google 表單常把「緊急聯絡人／關係」放同一格，例如「王大明/配偶」
+  if (!er && /[\/／]/.test(en)) { const [a, ...b] = en.split(/[\/／]/); en = a.trim(); er = b.join("/").trim(); }
+  en = en.slice(0, 40); er = er.slice(0, 20);
+  const epRaw = cell(maps.extra?.emergency_phone);
+  const ep = epRaw ? normalizePhone(epRaw) : "";
+  if (epRaw && !ep) warnings.push(`緊急聯絡人電話看不懂（${epRaw.slice(0, 20)}），先留空`);
+  if (en || er || ep) Object.assign(extra, { emergency_name: en, emergency_relation: er, emergency_phone: ep || "" });
+  return { answers, extra, warnings };
 }

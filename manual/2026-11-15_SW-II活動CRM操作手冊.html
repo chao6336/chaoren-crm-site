@@ -44,13 +44,15 @@
   .toc { columns:2; column-gap:12mm; }
   .toc li { break-inside:avoid; }
   .key { display:inline-block; border:0.6pt solid #9fb8a8; border-radius:3pt; padding:0 5pt; font-size:9pt; background:#fff; }
+  .need-off { display:none !important; }
+  .scoped-note { margin:0 0 12pt; padding:8pt 10pt; border-left:4px solid #8dc63f; background:#eef6e4; font-size:9.5pt; }
 </style>
 </head>
 <body>
 
 <!-- ========== 封面 ========== -->
 <section class="cover">
-  <div class="brand">SW-II ｜ 晁人文鼎協會</div>
+  <div class="brand">SW-II</div>
   <h1>活動 CRM 操作手冊</h1>
   <div class="sub">工作人員後台・六種身分適用</div>
   <div class="bar"></div>
@@ -71,13 +73,13 @@
     <li>登入與畫面介紹</li>
     <li>六種身分能做什麼</li>
     <li>總覽</li>
-    <li>建立與編輯活動／課程</li>
-    <li>分享報名連結（QR Code、LINE）</li>
-    <li>報名名單與繳費登記</li>
-    <li>現場報到</li>
-    <li>指派志工</li>
-    <li>會員資料</li>
-    <li>總管理功能與可個別開放的功能（標籤、LINE 訊息、週報、使用者…）</li>
+    <li data-need="events">建立與編輯活動／課程</li>
+    <li data-need="events">分享報名連結（QR Code、LINE）</li>
+    <li data-need="roster">報名名單與繳費登記</li>
+    <li data-need="checkin">現場報到</li>
+    <li data-need="assign">指派志工</li>
+    <li data-need="members">會員資料</li>
+    <li data-need="admin,messages,weekly,import">總管理功能與可個別開放的功能（標籤、LINE 訊息、週報、使用者…）</li>
     <li>常見問題</li>
   </ol>
 
@@ -132,7 +134,7 @@
     <tr><th style="width:30%">功能</th><th class="c">總管理</th><th class="c">單位<br>管理者</th><th class="c">活動<br>管理者</th><th class="c">會計</th><th class="c">查詢<br>人員</th><th class="c">區負責人</th></tr>
     <tr><td>活動／課程：建立、編輯、刪除、產報到 QR</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
     <tr><td>看報名名單</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">只看自己區</td></tr>
-    <tr><td>登記繳費、匯出名單</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td></tr>
+    <tr><td>登記繳費、匯出名單</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">可勾選<br>（只限自己區）</td></tr>
     <tr><td>現場報到</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">只限自己區</td></tr>
     <tr><td>會員資料頁（個資遮罩）</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">只看自己區</td></tr>
     <tr><td>指派志工</td><td class="c">✓</td><td class="c">✓</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
@@ -155,7 +157,7 @@
     <tr><td>活動管理者</td><td>總覽、活動、課程、現場報到</td><td>辦活動的主力：建活動、看名單、登記繳費、報到。</td></tr>
     <tr><td>會計</td><td>總覽、活動、課程</td><td>從活動列表點「名單」，登記繳費狀態、匯出名單。</td></tr>
     <tr><td>查詢人員</td><td>總覽、活動、課程</td><td>只能看名單，不能修改。</td></tr>
-    <tr><td>區負責人</td><td>總覽、活動、課程、會員資料、現場報到</td><td>只看得到自己區的會員與報到（只有晁人有這個角色）。</td></tr>
+    <tr><td>區負責人</td><td>總覽、活動、課程、會員資料、現場報到</td><td>只看得到自己區的會員、名單與報到（只有晁人有這個角色）。可另外勾「登記繳費」，也只限自己區；要看全部區域請改設其他角色。</td></tr>
   </table>
   <div class="note"><b>注意：</b>別的單位「共享」給你的活動，你只看得到活動資訊，看不到報名名單。</div>
 </section>
@@ -171,7 +173,7 @@
   </ul>
 
   <!-- ========== 4 活動 ========== -->
-  <h1 style="margin-top:22pt">4. 建立與編輯活動／課程</h1>
+  <h1 style="margin-top:22pt" data-need="events">4. 建立與編輯活動／課程</h1>
   <div class="whobar"><b>適用身分</b><span class="who">總管理</span><span class="who">單位管理者</span><span class="who">活動管理者</span></div>
   <p>「活動」和「課程」是兩個分開的頁面，操作方式一樣：在「活動」頁建的就是活動，在「課程」頁建的就是課程。</p>
   <figure>
@@ -199,11 +201,34 @@
 
   <h2>匯出多場活動名單</h2>
   <p>活動列表右上角的「匯出」可以依狀態、關鍵字篩選，一次勾選好幾場，合併成一個 CSV 檔，可以直接用 Excel 開。</p>
+
+  <h2>活動問卷（取代 Google 表單）</h2>
+  <p>像清明敬祖這類要多問幾題的活動，可以在活動表單最下面打開「報名問卷與家庭報名（選填）」，學員報名時就一起填，不用再另外開 Google 表單。只有單一場次的活動可以用。</p>
+  <ol>
+    <li>按「＋ 新增題目」，選題型：<b>單選</b>、<b>複選</b>、<b>簡答</b>、<b>是／否</b>。單選、複選的選項一行寫一個。</li>
+    <li>「誰要回答」：<b>每筆報名答一次</b>（例如陪同家人電話）或 <b>每人各答</b>（例如交通安排，同行家人也要各選一次）。</li>
+    <li>「顯示條件」：可以設成「上一題選到某個選項才出現」，例如交通選「自行前往（共乘）」才問「同車人姓名」。</li>
+    <li>要辦保險就勾「投保資料（每人出生日期＋身分證必填）」，報名時會要出生日期與身分證字號；勾「緊急聯絡人必填」會多問緊急聯絡人姓名、關係、電話（存在會員資料，下次自動帶出）。</li>
+    <li>題目可以用 ↑ ↓ 調整順序；已經有人回答之後，<b>盡量不要刪題或改選項文字</b>，舊答案會對不上。</li>
+  </ol>
+  <div class="tip"><b>金額只記選項，不算錢：</b>像「台中高鐵站（車資 400）」「贊助會員（年費 200）」只會記下學員選了什麼，實際收費仍照原本的繳費登記。</div>
+  <p><b>看答案：</b>名單頁每一題會多一欄；上方「依答案篩選」可以只看選某個答案的人（例如所有搭高鐵的人），旁邊括號是人數。「匯出 CSV」會多出每題答案、與報名人關係、緊急聯絡人。</p>
+  <p><b>投保名單：</b>有勾投保資料的活動，名單頁會多一個「投保名單」按鈕，下載含完整身分證字號的保險用名單（只有可看完整個資料的人看得到，下載會留紀錄）。缺生日或身分證的人在最後一欄標「資料缺漏」。</p>
+
+  <h2>幫家人一起報名</h2>
+  <p>設定裡「最多可幫幾位家人報名」填 1 以上，學員報名時就會看到「＋ 加一位家人」。</p>
+  <ul>
+    <li>每位家人要填姓名、關係、性別；要投保時還要出生日期與身分證字號。手機選填。</li>
+    <li>報名人要勾「已取得家人同意」才能送出。</li>
+    <li><b>每位家人都會各自建一筆會員資料</b>，報到時各自掃碼；名單上會排在報名人下面，標示「家人・關係（由誰報名）」。</li>
+    <li>已經報名的人可以按「修改問卷／加報家人」改答案或再加家人。家人要取消請洽工作人員。</li>
+  </ul>
+  <div class="note"><b>待合併：</b>家人的手機、身分證，或姓名＋生日和既有會員相同時，系統不會自動合併，而是在會員名字旁標「待合併」。請總管理打開這位會員確認，處理後在「編輯資料」勾「已確認處理，清除這個提醒」。</div>
 </section>
 
 <!-- ========== 5 分享 ========== -->
 <section class="chapter">
-  <h1>5. 分享報名連結（QR Code、LINE）</h1>
+  <h1 data-need="events">5. 分享報名連結（QR Code、LINE）</h1>
   <div class="whobar"><b>適用身分</b><span class="who">總管理</span><span class="who">單位管理者</span><span class="who">活動管理者</span></div>
   <p>在活動列表點活動名稱，就會打開這場活動的報名頁。左邊「活動資訊」下方有報名 QR Code 和報名網址。</p>
   <figure>
@@ -224,15 +249,15 @@
 
 <!-- ========== 6 名單 ========== -->
 <section class="chapter">
-  <h1>6. 報名名單與繳費登記</h1>
+  <h1 data-need="roster">6. 報名名單與繳費登記</h1>
   <div class="whobar"><b>適用身分</b><span class="who">總管理</span><span class="who">單位管理者</span><span class="who">活動管理者</span><span class="who">會計</span><span class="who">查詢人員（只能看）</span><span class="who">區負責人（自己區）</span></div>
   <p>在活動列表按「名單」打開。上方顯示已報到、未報到、已取消、已繳費人數。</p>
   <figure>
     <img src="img/05_roster.jpg" alt="報名名單">
     <figcaption>圖 5　報名名單：可用姓名、會員編號或手機末三碼搜尋，並依報到狀態、繳費狀態篩選</figcaption>
   </figure>
-  <h2>登記繳費狀態</h2>
-  <div class="whobar"><b>可以登記</b><span class="who">總管理</span><span class="who">單位管理者</span><span class="who">活動管理者</span><span class="who">會計</span></div>
+  <h2 data-need="pay">登記繳費狀態</h2>
+  <div class="whobar"><b>可以登記</b><span class="who">總管理</span><span class="who">單位管理者</span><span class="who">活動管理者</span><span class="who">會計</span><span class="who">區負責人（有勾才可以，只限自己區）</span></div>
   <ol>
     <li>在那位學員那一列按「<span class="key">繳費</span>」。</li>
     <li>選擇繳費狀態，按「儲存」。</li>
@@ -267,7 +292,7 @@
 
 <!-- ========== 7 報到 ========== -->
 <section class="chapter">
-  <h1>7. 現場報到</h1>
+  <h1 data-need="checkin">7. 現場報到</h1>
   <div class="whobar"><b>適用身分</b><span class="who">總管理</span><span class="who">單位管理者</span><span class="who">活動管理者</span><span class="who">區負責人（自己區）</span><span class="who">被指派的志工</span></div>
   <p>活動當天有兩種報到方式，可以同時使用：</p>
   <h2>方式一：學員掃 QR Code 自己報到</h2>
@@ -289,7 +314,7 @@
 
 <!-- ========== 8 志工 ========== -->
 <section class="chapter">
-  <h1>8. 指派志工</h1>
+  <h1 data-need="assign">8. 指派志工</h1>
   <div class="whobar"><b>適用身分</b><span class="who">總管理</span><span class="who">單位管理者</span><span class="who">被勾「指派志工」的人</span></div>
   <p>活動當天需要別人幫忙時，可以把「某一場活動」暫時開放給一位工作人員。對方只看得到這一場，時間到了權限會自動收回。</p>
   <ol>
@@ -307,7 +332,7 @@
 
 <!-- ========== 9 會員 ========== -->
 <section class="chapter">
-  <h1>9. 會員資料</h1>
+  <h1 data-need="members">9. 會員資料</h1>
   <div class="whobar"><b>適用身分</b><span class="who">總管理（完整資料）</span><span class="who">單位管理者（遮罩）</span><span class="who">區負責人（自己區、遮罩）</span></div>
   <figure>
     <img src="img/09_contacts.jpg" alt="會員資料列表">
@@ -324,11 +349,11 @@
 
 <!-- ========== 10 總管理 ========== -->
 <section class="chapter">
-  <h1>10. 總管理功能（部分可個別開放）</h1>
+  <h1 data-need="admin,messages,weekly,import">10. 總管理功能（部分可個別開放）</h1>
   <div class="whobar"><b>適用身分</b><span class="who">總管理</span><span class="who">被個別開放的人</span></div>
   <p>標籤、使用者、資料治理、待開通只有總管理能用。LINE 訊息、週報、匯入名冊可以由總管理在「使用者」頁個別開給工作人員（見第 2 章）。</p>
 
-  <h2>10-1 標籤</h2>
+  <h2 data-need="admin">10-1 標籤</h2>
   <figure>
     <img src="img/10_tags.jpg" alt="標籤管理">
     <figcaption>圖 10　標籤管理：建立、編輯、刪除、批次貼標／撕標、匯入與匯出 CSV</figcaption>
@@ -343,7 +368,7 @@
 </section>
 
 <section class="chapter">
-  <h2>10-2 LINE 訊息</h2>
+  <h2 data-need="messages">10-2 LINE 訊息</h2>
   <figure class="half">
     <img src="img/11_messages.jpg" alt="LINE 訊息" style="max-width:90mm">
     <figcaption>圖 11　LINE 訊息：工作人員寫草稿送審，總管理或核准人員檢查後送出或退回</figcaption>
@@ -371,7 +396,7 @@
     <li>看得到所有待審訊息，可以「核准並送出」或「退回」；但<b>不能核准自己寫的</b>，要由總管理或另一位核准人員處理。</li>
   </ul>
 
-  <h2 style="page-break-before:always">10-3 週報</h2>
+  <h2 style="page-break-before:always" data-need="weekly">10-3 週報</h2>
   <figure>
     <img src="img/12_weekly.jpg" alt="成效週報">
     <figcaption>圖 12　成效週報：預設看上一個完整的週，可以切換上一週、本週累計</figcaption>
@@ -385,7 +410,7 @@
 </section>
 
 <section class="chapter">
-  <h2>10-4 使用者（邀請工作人員、設定角色）</h2>
+  <h2 data-need="admin">10-4 使用者（邀請工作人員、設定角色）</h2>
   <figure>
     <img src="img/13_users.jpg" alt="使用者管理">
     <figcaption>圖 13　使用者管理：每個人在各單位的角色一目了然</figcaption>
@@ -402,12 +427,12 @@
     <figcaption>圖 14　同一個活動列表，「活動管理者」看到的樣子：選單比較少；別的單位共享的活動沒有操作按鈕</figcaption>
   </figure>
 
-  <h2>10-5 其他</h2>
+  <h2 data-need="admin,import">10-5 其他</h2>
   <table>
     <tr><th style="width:20%">頁面</th><th>用途</th></tr>
-    <tr><td>匯入名冊</td><td>上傳 Excel 或 CSV，大量新增會員。手機格式看不懂時會留空並提醒，不會整筆擋下。</td></tr>
-    <tr><td>待開通</td><td>沒有 LINE 的學員自己申請帳號後，在這裡開通或拒絕。</td></tr>
-    <tr><td>資料治理</td><td>匯出資料備份、查看最近操作紀錄、把閒置滿兩年的會員匿名化（無法復原，請先預覽名單）。</td></tr>
+    <tr data-need="import"><td>匯入名冊</td><td>上傳 Excel 或 CSV，大量新增會員。手機格式看不懂時會留空並提醒，不會整筆擋下。<br><b>匯入 Google 表單報名：</b>在「（選填）同時報名到活動」選一場活動，系統會自動對應每一題和緊急聯絡人欄位（可以手動改），匯入的人同時報名這場、答案一起存。同一份檔案重複匯入不會多出報名；「新竹縣/市」「離島地區」這種分不出縣市的、對不到選項的答案，會在預覽的「說明」欄列出來，請人工補。</td></tr>
+    <tr data-need="admin"><td>待開通</td><td>沒有 LINE 的學員自己申請帳號後，在這裡開通或拒絕。</td></tr>
+    <tr data-need="admin"><td>資料治理</td><td>匯出資料備份、查看最近操作紀錄、把閒置滿兩年的會員匿名化（無法復原，請先預覽名單）。</td></tr>
   </table>
 </section>
 
@@ -427,5 +452,29 @@
   <div class="tip" style="margin-top:14pt"><b>需要協助：</b>帳號、權限、資料錯誤，請聯絡總管理。</div>
 </section>
 
+<script>
+// 依權限只顯示看得到的章節（2026-11-18）。這只是讓畫面清楚，不是保密：手冊沒有個資，直接開網址會看到完整版。
+(function () {
+  var m = /[#&]can=([a-z_,]*)/.exec(location.hash);
+  if (!m) return;
+  var can = m[1].split(",").filter(Boolean);
+  var ok = function (el) { var need = el.getAttribute("data-need"); return !need || need.split(",").some(function (k) { return can.indexOf(k) >= 0; }); };
+  var h1Off = false, h2Off = false;
+  document.querySelectorAll("section.chapter").forEach(function (sec) {
+    var shown = 0;
+    Array.prototype.forEach.call(sec.children, function (el) {
+      if (el.tagName === "H1") { h1Off = !ok(el); h2Off = false; }
+      else if (el.tagName === "H2") { h2Off = !ok(el); }
+      var off = h1Off || h2Off || !ok(el);
+      el.classList.toggle("need-off", off);
+      if (!off) shown++;
+    });
+    sec.classList.toggle("need-off", shown === 0);
+  });
+  document.querySelectorAll("li[data-need], tr[data-need]").forEach(function (el) { el.classList.toggle("need-off", !ok(el)); });
+  var toc = document.querySelector(".toc");
+  if (toc) toc.insertAdjacentHTML("beforebegin", '<p class="scoped-note">這份手冊已依你的權限整理，只列出你用得到的章節（章節編號保留原本的順序）。</p>');
+})();
+</script>
 </body>
 </html>

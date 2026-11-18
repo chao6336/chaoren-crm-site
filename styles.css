@@ -52,3 +52,13 @@ dialog #modalBody{max-height:calc(100vh - 32px);overflow:auto}
 .ctag-list{max-height:45vh;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:10px}.ctag-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #e5ebe3;cursor:pointer}.ctag-row:last-child{border-bottom:0}.ctag-row span{flex:1;min-width:0;word-break:break-all}.ctag-row small{white-space:nowrap}.ctag-row:hover{background:#f6f9f4}.ctag-list>p{padding:12px;margin:0}
 .ctag-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px}
 .manual-frame{display:block;width:100%;height:calc(100vh - 200px);min-height:520px;border:1px solid var(--line);border-radius:14px;background:#fff}
+/* 報名問卷與家庭報名（v20261117-4） */
+.form-editor{border:1px solid var(--line);border-radius:10px;padding:10px 14px;background:#fbfcfa}.form-editor>summary{cursor:pointer;font-weight:700;color:var(--green);padding:4px 0}
+.question-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 10px;align-items:end;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;margin:10px 0}.question-row .full{grid-column:1/-1}.question-row .actions{grid-column:1/-1;justify-content:flex-end}
+.reg-form fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 14px 14px;margin:12px 0;display:grid;gap:10px}.reg-form legend{font-weight:700;padding:0 4px}
+.reg-form .choice{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font-weight:400;cursor:pointer;margin:4px 0}.reg-form .choice input{width:auto;margin:0}
+.family-card{border:1px dashed var(--green);border-radius:10px;padding:10px 12px;background:#f8faf7}.family-card .card-title{margin:0 0 6px}
+.answer-cell{max-width:220px;white-space:normal;font-size:13px}.merge-hint{color:#a15c00;font-size:12px}
+
+/* 2026-11-18 提示跟著搬進開著的視窗時，仍固定在畫面右下角、蓋在內容上 */
+#toast{z-index:1000}
