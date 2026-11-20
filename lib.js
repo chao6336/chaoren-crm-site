@@ -22,7 +22,8 @@ export const ROLE_PERMS = {
 export function permsOf(who) {
   const v = typeof who === "string" ? { role: who } : who || {};
   if (v.role === "admin") return ROLE_PERMS.admin;
-  return Array.isArray(v.permissions) ? v.permissions.filter(p => ROLE_PERMS.admin.includes(p)) : ROLE_PERMS[v.role] || [];
+  // 陣列（orgViewer 給的單位勾選）：認得舊代號和 2026-11-20 的新代號（export、assign）
+  return Array.isArray(v.permissions) ? v.permissions.filter(p => ROLE_PERMS.admin.includes(p) || p === "export" || p === "assign") : ROLE_PERMS[v.role] || [];
 }
 export function hasPerm(who, perm) {
   return permsOf(who).includes(perm);
@@ -57,12 +58,15 @@ export function canManageEvents(who) {
   return hasPerm(who, "events");
 }
 
-// 會員資料頁：總管理、區負責人（自己區），或被勾選「會員資料頁」的人（全部區域）。
+// 會員資料頁：總管理，或全平台「會員資料查看」（2026-11-20 起；有區域範圍的人只看範圍內）。
+// 舊版角色字串（測試、還沒升級的資料庫）照舊：區負責人或被勾「會員資料頁」的人。
 export function canBrowseMembers(who) {
   const role = typeof who === "string" ? who : who?.role;
+  if (role === "admin") return true;
+  if (Array.isArray(who?.platform)) return who.platform.includes("members");
   return role === "region_lead" || hasPerm(who, "members");
 }
-// 現場報到頁：區負責人（自己區），或有「現場報到」的人
+// 現場報到頁：有「現場報到」的人（舊版：區負責人也有）
 export function canCheckin(who) {
   const role = typeof who === "string" ? who : who?.role;
   return role === "region_lead" || hasPerm(who, "checkin");
@@ -75,18 +79,23 @@ export function canCheckin(who) {
 // who：{ admin, memberships:[{org_id, role, permissions, region_id}], assignments:[{event_id, can_view_roster, can_checkin, expires_at}] }
 export const ORGS = [{ id: "chaoren", name: "晁人" }, { id: "weidi", name: "維諦" }, { id: "xinlidao", name: "心理道" }];
 export const DEFAULT_ORG = "chaoren";
-export const ORG_ROLE_LABELS = { org_admin: "單位管理者", event_staff: "活動管理者", accountant: "會計", viewer: "查詢人員", region_lead: "區負責人" };
-// 2026-11-17：每個單位多兩項可勾選——指派志工（原本綁在單位管理者角色上）、LINE 訊息寫草稿。
-// 資料庫 org_role_default_perms() 與 org_members.permissions 的允許清單要一起改（2026-11-17_permission_options.sql）。
+// 2026-11-20 權限改版 2A：拿掉固定角色，每個單位逐項勾選。舊角色名稱只留給還沒轉換的舊資料。
+export const ORG_ROLE_LABELS = { member: "工作人員", org_admin: "單位管理者", event_staff: "活動管理者", accountant: "會計", viewer: "查詢人員", region_lead: "區負責人" };
+// A 類：每個單位分開勾。資料庫 org_members.permissions 的允許清單要一起改（2026-11-20b_permission_v2.sql）。
 export const ORG_PERMS = [
-  ...PERMS.filter(([key]) => key !== "sponsors"),
+  ["roster", "報名名單查看"],
+  ["export", "活動名單匯出（下載成檔案）"],
+  ["payments", "登記繳費"],
+  ["checkin", "現場報到"],
   ["assign", "指派志工（看名單／報到，可設到期）"],
-  ["messages", "LINE 訊息：寫草稿（本單位活動的報名者，送審後才發）"]
+  ["events", "活動／課程建立與編輯"]
 ];
+// 舊角色沒有自訂勾選時的預設（轉換後每個人都是明確勾選，這裡只是保險）
 export const ORG_ROLE_PERMS = {
-  org_admin: ["events", "roster", "payments", "checkin", "members", "assign"],
-  event_staff: ["events", "roster", "payments", "checkin"],
-  accountant: ["roster", "payments"],
+  member: [],
+  org_admin: ["roster", "export", "payments", "checkin", "assign", "events"],
+  event_staff: ["roster", "export", "payments", "checkin", "events"],
+  accountant: ["roster", "export", "payments"],
   viewer: ["roster"],
   region_lead: []
 };
@@ -97,48 +106,73 @@ export const eventOrg = event => event?.org_id || DEFAULT_ORG;
 export function membershipOf(who, orgId) {
   return (who?.memberships || []).find(m => m.org_id === orgId) || null;
 }
-// 單位層級（全部區域）的功能。區負責人一律沒有：他的功能都只限自己區（2026-11-18，資料庫 has_org_perm 同步）
+// 我在這個單位勾了哪些功能（資料庫 has_org_perm 同步）
 export function orgPermsOf(who, orgId) {
   if (who?.admin) return ORG_PERM_KEYS;
   const m = membershipOf(who, orgId);
-  if (!m || m.role === "region_lead") return [];
-  return Array.isArray(m.permissions) ? m.permissions.filter(p => ORG_PERM_KEYS.includes(p)) : ORG_ROLE_PERMS[m.role] || [];
-}
-// 區負責人可以另外勾的功能（只限自己區）。名單、報到、會員資料是角色本身就有的（自己區），不用勾。
-export const REGION_LEAD_EXTRA = ["payments"];
-export function regionLeadExtras(who) {
-  const m = membershipOf(who, "chaoren");
-  return m?.role === "region_lead" && Array.isArray(m.permissions) ? m.permissions.filter(p => REGION_LEAD_EXTRA.includes(p)) : [];
+  if (!m) return [];
+  return Array.isArray(m.permissions) ? ORG_PERM_KEYS.filter(p => m.permissions.includes(p)) : ORG_ROLE_PERMS[m.role] || [];
 }
 export const hasOrgPerm = (who, orgId, perm) => orgPermsOf(who, orgId).includes(perm);
 export const isOrgMember = (who, orgId) => Boolean(who?.admin || membershipOf(who, orgId));
-export const isOrgAdmin = (who, orgId) => Boolean(who?.admin || membershipOf(who, orgId)?.role === "org_admin");
-// 能不能在這個單位指派志工（2026-11-17 起看「指派志工」勾選；單位管理者預設有）
+// 能不能在這個單位指派志工
 export const canAssignIn = (who, orgId) => hasOrgPerm(who, orgId, "assign");
+export const isOrgAdmin = canAssignIn;
 // 能指派志工的單位（平台總管理：全部）
 export const assignableOrgs = (who, orgs = ORGS) => orgs.filter(o => canAssignIn(who, o.id)).map(o => o.id);
+// 存單位勾選：只留認得的代號，照固定順序
+export const orgPermsToSave = (picked = []) => ORG_PERM_KEYS.filter(p => picked.includes(p));
 
-// ───── 全平台權限（2026-11-17）─────
+// ───── 區域範圍（2026-11-20）─────
+// 每個人一組（staff_profiles.region_ids）：空的＝全部區域。名單、報到、繳費、會員資料都照這個篩（資料庫 in_my_scope）。
+// who 可以是 who()（admin）或 orgViewer()（role）
+const isAdminLike = who => Boolean(who?.admin || who?.role === "admin");
+export const regionScopeOf = who => isAdminLike(who) ? [] : (Array.isArray(who?.region_ids) ? who.region_ids : []);
+// 有範圍時，沒有區域的會員不算在範圍內
+export function inScope(who, regionId) {
+  const scope = regionScopeOf(who);
+  return isAdminLike(who) || scope.length === 0 || (Boolean(regionId) && scope.includes(regionId));
+}
+
+// ───── 全平台權限 ─────
 // 不分單位、設定在人身上（staff_profiles.platform_permissions）；預設全部沒有，總管理永遠全部都有。
-// 資料庫 has_platform_perm() 用同一組代號（2026-11-17_permission_options.sql），兩邊要一起改。
-// 使用者管理、資料治理、待開通不在清單裡：只有總管理能用，不開放勾選。
+// 資料庫 has_platform_perm() 與允許清單用同一組代號（2026-11-20b_permission_v2.sql），兩邊要一起改。
+// 使用者管理、資料治理、待開通、刪除活動、永久刪除會員不在清單裡：只有總管理能用。
+// 畫面上的「LINE 訊息管理」是一項，存成 msg_advanced＋msg_approve 兩個代號（send-campaign 函式不用改）。
 export const PLATFORM_PERMS = [
-  ["weekly", "週報（看到的是三個單位合計的數字）"],
-  ["import", "匯入名冊（從 Excel／CSV 大量新增會員）"],
-  ["full_pii", "看完整手機、Email、地址（高風險，只開給極少數人）"],
-  ["msg_advanced", "LINE 訊息：進階對象（全員、指定學員、官方帳號群發）"],
-  ["msg_approve", "LINE 訊息：核准送出（不能核准自己寫的）"]
+  ["members", "會員資料查看（手機、Email、地址遮罩；生日只顯示月日）"],
+  ["phone", "看完整手機（Email、地址仍遮罩）"],
+  ["full_pii", "完整個資：手機、Email、地址、出生年月日（高風險，只開給極少數人）"],
+  ["import", "會員資料管理（新增、編輯、匯入名冊）"],
+  ["tags", "標籤管理"],
+  ["messages", "LINE 訊息管理（寫草稿、選對象、核准送出；不能核准自己寫的）"],
+  ["weekly", "週報（三個單位合計的數字）"]
 ];
-const PLATFORM_KEYS = PLATFORM_PERMS.map(([k]) => k);
+// 實際存在資料庫的代號（member_export、archive 是 2B 的功能，先認得、保留）
+const PLATFORM_KEYS = ["members", "phone", "full_pii", "import", "tags", "msg_advanced", "msg_approve", "weekly", "member_export", "archive"];
 export const cleanPlatformPerms = (list = []) => PLATFORM_KEYS.filter(k => (list || []).includes(k));
 export const platformPermsOf = who => who?.admin ? PLATFORM_KEYS : cleanPlatformPerms(who?.platform_permissions);
+// 勾選畫面用：存的代號 → 畫面上的項目（msg_* → messages）
+export const platformUiKeys = (list = []) => {
+  const s = cleanPlatformPerms(list);
+  return PLATFORM_PERMS.map(([k]) => k).filter(k => k === "messages" ? s.includes("msg_advanced") || s.includes("msg_approve") : s.includes(k));
+};
+// 畫面上勾的項目 → 要存的代號；keep 是原本存著、畫面上沒有的代號（例如 2B 的功能），保留不動
+export function platformPermsToSave(picked = [], keep = []) {
+  const out = new Set(cleanPlatformPerms(keep).filter(k => !PLATFORM_PERMS.some(([u]) => u === k) && !k.startsWith("msg_")));
+  for (const k of picked) {
+    if (k === "messages") { out.add("msg_advanced"); out.add("msg_approve"); }
+    else if (PLATFORM_KEYS.includes(k)) out.add(k);
+  }
+  return PLATFORM_KEYS.filter(k => out.has(k));
+}
 export const hasPlatformPerm = (who, perm) => platformPermsOf(who).includes(perm);
 
 // ───── LINE 訊息（2026-11-17）：寫草稿 → 送審 → 總管理或核准人員送出 ─────
 // 資料庫 guard_campaign_write()、send-campaign 函式用同一組規則。
 export const CAMPAIGN_STATUS_LABELS = { draft: "草稿", pending: "待審核", rejected: "已退回", sending: "發送中", sent: "已送出", partial: "部分失敗", failed: "失敗" };
-// 能替哪些單位寫 LINE 草稿
-export const messageOrgs = (who, orgs = ORGS) => orgs.filter(o => hasOrgPerm(who, o.id, "messages")).map(o => o.id);
+// 能替哪些單位寫 LINE 草稿：2026-11-20 起 LINE 訊息管理是全平台一項（msg_advanced），三個單位都可以
+export const messageOrgs = (who, orgs = ORGS) => who?.admin || hasPlatformPerm(who, "msg_advanced") ? orgs.map(o => o.id) : [];
 export const canWriteCampaign = (who, orgs = ORGS) => Boolean(who?.admin || hasPlatformPerm(who, "msg_advanced") || messageOrgs(who, orgs).length);
 export const canUseMessages = (who, orgs = ORGS) => canWriteCampaign(who, orgs) || hasPlatformPerm(who, "msg_approve");
 // 可以選的發送對象：一般只有「某場活動的報名者」；進階對象再加全員、指定學員、群發
@@ -147,7 +181,7 @@ export function campaignAudiences(who, orgs = ORGS) {
   return messageOrgs(who, orgs).length ? ["event"] : [];
 }
 // 能不能替這場活動寫訊息：總管理、進階對象全部活動；其他人只能選自己有「寫草稿」的單位的活動
-export const canDraftForEvent = (who, event) => Boolean(event && (who?.admin || hasPlatformPerm(who, "msg_advanced") || hasOrgPerm(who, eventOrg(event), "messages")));
+export const canDraftForEvent = (who, event) => Boolean(event && (who?.admin || hasPlatformPerm(who, "msg_advanced")));
 // 能不能修改草稿：總管理改草稿；其他人只能改自己寫的草稿或被退回的
 export function canEditCampaign(who, c, userId) {
   if (!c) return false;
@@ -185,22 +219,22 @@ export function canSeeEventRoster(who, event, now = new Date()) {
   const a = assignmentFor(who, event?.id, now);
   return Boolean(a && (a.can_view_roster || a.can_checkin));
 }
-// 報到：單位的「現場報到」或被指派可報到；晁人區負責人自己區另外看 isRegionLeadFor
+// 報到頁：單位的「現場報到」或被指派可報到（每一筆能不能按，看 canCheckinRegistration）
 export function canCheckinEvent(who, event, now = new Date()) {
   return hasOrgPerm(who, eventOrg(event), "checkin") || Boolean(assignmentFor(who, event?.id, now)?.can_checkin);
 }
 export const canPayEvent = (who, event) => hasOrgPerm(who, eventOrg(event), "payments");
-// 某一筆報名能不能登記繳費：單位的「登記繳費」，或晁人區負責人勾了繳費、且這位會員在他的區（同資料庫 region_lead_pays）
-export function canPayRegistration(who, event, regionId) {
-  if (canPayEvent(who, event)) return true;
-  const lead = regionLeadFor(who, event);
-  return Boolean(lead && regionId === lead && regionLeadExtras(who).includes("payments"));
-}
-// 晁人區負責人：晁人活動裡自己區的會員
-export function regionLeadFor(who, event) {
-  if (eventOrg(event) !== "chaoren") return null;
-  const m = membershipOf(who, "chaoren");
-  return m?.role === "region_lead" ? m.region_id : null;
+// 某一筆報名能不能登記繳費：那場活動單位的「登記繳費」，而且會員在我的區域範圍（同資料庫 can_pay_registration）
+export const canPayRegistration = (who, event, regionId) => canPayEvent(who, event) && inScope(who, regionId);
+// 某一筆報名能不能報到：被指派可報到（整場），或單位的「現場報到」而且會員在我的區域範圍（同資料庫 set_attendance）
+export const canCheckinRegistration = (who, event, regionId, now = new Date()) =>
+  Boolean(assignmentFor(who, event?.id, now)?.can_checkin) || (hasOrgPerm(who, eventOrg(event), "checkin") && inScope(who, regionId));
+// 這場活動的名單我只看得到部分區域嗎？被指派的志工看整場；用單位權限看的人照區域範圍（回傳範圍，或 null＝全部）
+export function rosterScopeFor(who, event, now = new Date()) {
+  const a = assignmentFor(who, event?.id, now);
+  if (a && (a.can_view_roster || a.can_checkin)) return null;
+  const scope = regionScopeOf(who);
+  return scope.length ? scope : null;
 }
 
 // 某個單位畫面裡要列的活動：自己單位的＋分享給這個單位的（都要看得到）
@@ -216,12 +250,13 @@ export function orgsOf(who, orgs = ORGS) {
   return who?.admin ? orgs.map(o => o.id) : orgs.filter(o => membershipOf(who, o.id)).map(o => o.id);
 }
 
-// 轉成舊版頁面用的身分（role／permissions／region_id），讓既有畫面照單位運作
+// 頁面用的身分：目前單位的勾選（permissions）、全平台權限（platform）、區域範圍（region_ids）
 export function orgViewer(who, orgId) {
-  if (who?.admin) return { role: "admin", permissions: null, region_id: null };
+  if (who?.admin) return { role: "admin", permissions: null, region_id: null, platform: PLATFORM_KEYS, region_ids: [] };
   const m = membershipOf(who, orgId);
-  if (!m) return { role: "none", permissions: [], region_id: null };
-  return { role: m.role, permissions: orgPermsOf(who, orgId), region_id: m.region_id || null };
+  const base = { platform: platformPermsOf(who), region_ids: regionScopeOf(who), region_id: null };
+  if (!m) return { ...base, role: "none", permissions: [] };
+  return { ...base, role: "member", permissions: orgPermsOf(who, orgId) };
 }
 // 某場活動的身分：所屬單位的權限，再加上指派給我的功能
 export function eventViewer(who, event, now = new Date()) {
@@ -239,27 +274,23 @@ export function defaultAssignmentExpiry(event) {
   return d;
 }
 // 展示版的報名名單（雲端由 event_roster view 決定）：每場活動各自判斷——
-// 有名單權限或被指派的人看整場；晁人區負責人只看自己區；其他人看不到。欄位和 rosterFor 一樣只帶最少資料。
+// 被指派的志工看整場；單位有名單相關權限的人看自己區域範圍內的；其他人看不到。欄位和 rosterFor 一樣只帶最少資料。
 export function rosterForEvents(events = [], registrations = [], contacts = [], who, regionName = () => "", now = new Date()) {
   const byId = new Map(contacts.map(c => [c.id, c]));
-  const rule = new Map(events.map(e => [e.id, canSeeEventRoster(who, e, now) ? "all" : regionLeadFor(who, e)]));
-  // 金額、繳費日期、收據號碼：單位有名單相關權限、被指派「看名單」或區負責人才看得到；只被指派「操作報到」的志工看不到（同資料庫 event_roster）
-  const money = new Map(events.map(e => [e.id, ["roster", "checkin", "payments", "events"].some(p => hasOrgPerm(who, eventOrg(e), p)) || Boolean(assignmentFor(who, e.id, now)?.can_view_roster) || Boolean(regionLeadFor(who, e))]));
+  const orgOk = e => ["roster", "checkin", "payments", "events"].some(p => hasOrgPerm(who, eventOrg(e), p));
+  const assigned = e => assignmentFor(who, e.id, now);
+  const rule = new Map(events.map(e => [e.id, assigned(e) && (assigned(e).can_view_roster || assigned(e).can_checkin) ? "all" : orgOk(e) ? "scope" : null]));
+  // 金額、繳費日期、收據號碼：單位權限（範圍內）或被指派「看名單」才看得到；只被指派「操作報到」的志工看不到（同資料庫 event_roster）
+  const money = (e, c) => (orgOk(e) && inScope(who, c.region_id)) || Boolean(assigned(e)?.can_view_roster);
+  const evById = new Map(events.map(e => [e.id, e]));
   return registrations.filter(r => {
     const k = rule.get(r.event_id);
-    return k === "all" || (k && byId.get(r.contact_id)?.region_id === k);
+    return k === "all" || (k === "scope" && inScope(who, byId.get(r.contact_id)?.region_id || null));
   }).map(r => {
     const c = byId.get(r.contact_id) || {};
-    const hide = money.get(r.event_id) ? {} : { amount: null, paid_at: null, receipt_no: null };
+    const hide = money(evById.get(r.event_id), c) ? {} : { amount: null, paid_at: null, receipt_no: null };
     return { ...r, ...hide, member_no: c.member_no || "", name: c.name || "未知", region_id: c.region_id || null, region_name: c.region_id ? regionName(c.region_id) : "未分區", phone_last3: String(c.phone || "").slice(-3) };
   });
-}
-// 單位角色勾選：和角色預設一樣就存 null
-export function orgPermsToSave(role, picked = []) {
-  if (role === "region_lead") { const extra = REGION_LEAD_EXTRA.filter(p => picked.includes(p)); return extra.length ? extra : null; }
-  const list = ORG_PERM_KEYS.filter(p => picked.includes(p));
-  const base = ORG_ROLE_PERMS[role] || [];
-  return list.length === base.length && list.every(p => base.includes(p)) ? null : list;
 }
 export const GENDERS = ["男", "女", "其他"];
 
@@ -381,17 +412,26 @@ export function canViewPrivate(role) {
   return role === "admin";
 }
 
+// 生日的「幾月幾日」（MM-DD）。遮罩檢視只給這個，不給出生年和年齡（2026-11-20，同資料庫 contacts_safe.birth_md）
+export const birthMonthDay = birthDate => /^\d{4}-\d{2}-\d{2}/.test(String(birthDate || "")) ? String(birthDate).slice(5, 10) : "";
 // 完整身分證永遠不放在一般畫面資料裡，只留遮罩；總管理要另外按「查看」才取得。
-export function visibleContact(contact, role) {
+// role 是 "admin"（＝完整個資）時不遮；opts.phone＝有「看完整手機」，手機和緊急聯絡電話不遮。
+export function visibleContact(contact, role, opts = {}) {
   const { national_id, ...rest } = contact;
   const safe = { ...rest, national_id_masked: contact.national_id_masked || maskNationalId(national_id) };
-  if (canViewPrivate(role)) return safe;
-  return { ...safe, phone: maskPhone(contact.phone), email: maskEmail(contact.email), address: maskAddress(contact.address), line_uid_hidden: true };
+  if (canViewPrivate(role)) return { ...safe, birth_md: contact.birth_md || birthMonthDay(contact.birth_date) };
+  const phoneOk = Boolean(opts.phone);
+  return { ...safe, phone: phoneOk ? contact.phone : maskPhone(contact.phone), email: maskEmail(contact.email), address: maskAddress(contact.address),
+    ...(contact.emergency_phone && !phoneOk && !String(contact.emergency_phone).includes("*") ? { emergency_phone: maskPhone(contact.emergency_phone) } : {}),
+    birth_date: null, age: null, birth_md: contact.birth_md || birthMonthDay(contact.birth_date), line_uid_hidden: true };
 }
 
 // 區負責人只看得到自己區的會員；沒有區域的會員只有總管理看得到。
 export function canSeeContact(contact, viewer) {
-  if (viewer.role === "admin" || hasPerm(viewer, "members")) return true;
+  if (viewer.role === "admin") return true;
+  // 2026-11-20 起：全平台「會員資料查看」，有區域範圍的只看範圍內（同資料庫 can_see_contact）
+  if (Array.isArray(viewer.platform)) return viewer.platform.includes("members") && inScope(viewer, contact.region_id || null);
+  if (hasPerm(viewer, "members")) return true;
   return viewer.role === "region_lead" && Boolean(contact.region_id) && contact.region_id === viewer.region_id;
 }
 
