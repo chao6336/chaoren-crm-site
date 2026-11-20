@@ -24,6 +24,8 @@ body.student-view .field input,body.student-view .field select{font-size:17px;pa
 .map-grid{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:820px){.map-grid{grid-template-columns:1fr 1fr}}#importFile{margin:10px 0;font:inherit}
 .tag-box{margin:10px 0}.tag-box summary{cursor:pointer;font-weight:700;color:var(--green);padding:6px 0}.tag-box div{display:flex;flex-wrap:wrap;gap:6px;max-height:240px;overflow:auto;padding:6px 0}
 body.signed-out .sidebar{display:none!important}body.signed-out .shell{display:block}
+/* 2026-11-20：重新整理時，資料還沒載入完就先看到全部選單（含總管理才有的項目）會閃一下；載入完成、render 決定好哪些能看前先藏起來 */
+body.booting .sidebar a{visibility:hidden}
 #logoutBtn{padding:6px 10px;font-size:13px}
 .link-box{display:flex;gap:8px;margin:12px 0}.link-box input{flex:1;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px}.row-actions{display:flex;gap:6px;flex-wrap:wrap}.row-actions button{padding:6px 10px;font-size:13px}
 /* 關閉鈕必須在內容之上（#modalBody 也有定位，排在後面會蓋住 ×）；內容自己捲動，× 永遠留在右上角 */
