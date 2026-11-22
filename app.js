@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived } from "./lib.js?v=20261122-1";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived } from "./lib.js?v=20261123-1";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -2019,7 +2019,7 @@ function formEditor(e,sessionCount){
     </div>
     <div id="questionRows">${f.questions.map((q,i)=>questionRow(q,i)).join("")}</div>
     <div class="actions"><button type="button" class="secondary" data-action="add-question">＋ 新增題目</button></div>
-    <small class="muted">「每人各答」：報名人和每位家人都要回答（例如交通、上車點）。「每筆報名答一次」：只有報名人回答。選項的價格請直接寫在選項文字裡，例如「台中高鐵站（車資 400）」；系統只記錄選項，不算金額。</small>
+    <small class="muted">選項的價格請直接寫在選項文字裡，例如「台中高鐵站（車資 400）」；系統只記錄選項，不算金額。</small>
   </details>`;
 }
 function questionRow(q={},i=0){
@@ -2027,7 +2027,7 @@ function questionRow(q={},i=0){
   return `<div class="question-row" data-qid="${escapeHtml(id)}">
     <div class="field full"><label>題目 *</label><input data-q="label" maxlength="100" value="${escapeHtml(q.label||"")}" placeholder="例如：交通安排"></div>
     <div class="field"><label>題型</label><select data-q="type">${QUESTION_TYPES.map(([k,l])=>`<option value="${k}" ${type===k?"selected":""}>${l}</option>`).join("")}</select></div>
-    <div class="field"><label>誰要回答</label><select data-q="per"><option value="registration" ${q.per!=="person"?"selected":""}>每筆報名答一次</option><option value="person" ${q.per==="person"?"selected":""}>每人各答（含家人）</option></select></div>
+    <div class="field"><label>誰要回答</label><select data-q="per"><option value="registration" selected>每筆報名答一次</option></select></div><!-- 2026-11-23 louis趙：只保留「每筆報名答一次」，拿掉「每人各答」；舊題目再存檔也會改成每筆報名答一次 -->
     <div class="field full" data-q-options ${["single","multi"].includes(type)?"":"hidden"}><label>選項（一行一個）</label><textarea data-q="options" rows="4">${escapeHtml((q.options||[]).join("\n"))}</textarea></div>
     <div class="field full"><label>說明（選填）</label><input data-q="help" maxlength="200" value="${escapeHtml(q.help||"")}"></div>
     <div class="field full"><label class="check-line"><input type="checkbox" data-q="required" ${q.required?"checked":""}> 必填</label>
@@ -2049,7 +2049,7 @@ function refreshWhenRows(){
     const keep=sel.value||sel.dataset.saved||"";
     sel.innerHTML=opts.map(o=>`<option ${o===keep?"selected":""}>${escapeHtml(o)}</option>`).join("");
     sel.disabled=!on.checked;
-    if(on.checked){ per.value=prev.querySelector("[data-q=per]").value; per.disabled=true; note.textContent=`上一題：「${prev.querySelector("[data-q=label]").value||"（未命名）"}」。這一題的「誰要回答」會跟上一題一樣。`; }
+    if(on.checked){ per.value=prev.querySelector("[data-q=per]").value; per.disabled=true; note.textContent=`上一題：「${prev.querySelector("[data-q=label]").value||"（未命名）"}」。`; }
     else { per.disabled=false; note.textContent=""; }
   });
 }
