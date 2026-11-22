@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave } from "./lib.js?v=20261120-2";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived } from "./lib.js?v=20261122-1";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -131,7 +131,7 @@ function isAdmin(){ return state.role==="admin"; }
 function regionName(id){ return state.regions?.find(r=>r.id===id)?.name||"未分區"; }
 function myContacts(){ return scopeContacts(state.contacts,viewer()); }
 function myRegistrations(){ return scopeRegistrations(state.registrations,state.contacts,viewer()); }
-// 這個畫面列的活動：目前單位的＋分享給目前單位的＋指派給我的（不是成員的單位）
+// 這個畫面列的活動：目前單位主辦的＋指派給我的（不是成員的單位）；別的單位共享的不列（2026-11-22）
 function visibleEvents(){
   const w=who(), o=curOrg(), list=o?eventsInOrgView(state.events,w,o):[];
   return [...list,...assignedEvents(state.events,w).filter(e=>!list.includes(e))];
@@ -320,7 +320,9 @@ async function loadLiveData(){
   const staff = profile.data?.role === "admin" ? await supabase.from("staff_profiles").select("*") : {data:[]};
   const sponsorships = canManageMoney(profile.data||{}) ? await supabase.from("sponsorships").select("*").order("created_at",{ascending:false}) : {data:[]};
   const clickStats = profile.data?.role === "admin" ? await supabase.from("campaign_click_stats").select("*") : {data:[]};
-  const tags = profile.data?.role === "admin" ? await supabase.from("tag_stats").select("*") : {data:[]};
+  // 2026-11-22 修正：有「標籤管理」權限的工作人員也要讀標籤（原本只有總管理會讀，標籤頁顯示 0 個）
+  const tagsOk = profile.data?.role === "admin" || (Array.isArray(profile.data?.platform_permissions) && profile.data.platform_permissions.includes("tags"));
+  const tags = tagsOk ? await supabase.from("tag_stats").select("*") : {data:[]};
   const applications = profile.data?.role === "admin" ? await supabase.from("student_applications").select("*").eq("status","pending").order("created_at") : {data:[]};
   // 全平台權限（2026-11-17）：資料庫還沒加欄位時是 undefined，當作沒有
   const pp=Array.isArray(profile.data?.platform_permissions)?profile.data.platform_permissions:[];
@@ -446,7 +448,7 @@ function eventsPage(kind){
   if(kind==="event"&&query().get("kind")==="course"){ location.replace("#courses"); return ""; } // 舊書籤 #events?kind=course
   const K=KIND_LABELS[kind], home=KIND_ROUTES[kind], list=visibleEvents().filter(e=>kindOf(e)===kind);
   // 主辦單位標記：別的單位分享來的、或指派給我的，標出主辦單位；自己單位的標出共享方式
-  const orgTag=e=>eventOrg(e)!==curOrg()?`<span class="pill off">${escapeHtml(orgName(eventOrg(e)))}主辦${canEvents(e)||canRosterOf(e)?"":"・僅活動資訊"}</span>`:e.visibility&&e.visibility!=="org"?`<span class="pill">${VISIBILITY_LABELS[e.visibility]}${e.visibility==="selected"?`：${(e.shared_org_ids||[]).map(orgName).join("、")}`:""}</span>`:"";
+  const orgTag=e=>eventOrg(e)!==curOrg()?`<span class="pill off">${escapeHtml(orgName(eventOrg(e)))}主辦${canEvents(e)||canRosterOf(e)?"":"・僅活動資訊"}</span>`:"";
   const ops=e=>[canRosterPageOf(e)&&`<a href="#roster?event=${e.id}">名單</a>`,canCheckinOf(e)&&`<a href="#checkin?event=${e.id}">報到</a>`,
     canAssignOf(e)&&`<a href="#${home}" data-action="assign-staff" data-id="${e.id}">志工</a>`,
     canEvents(e)&&`<a href="#${home}" data-action="edit-event" data-id="${e.id}">編輯</a>`,isAdmin()&&`<a href="#${home}" class="danger-link" data-action="delete-event" data-id="${e.id}">刪除</a>`].filter(Boolean).join("　")||`<span class="muted">—</span>`;
@@ -636,7 +638,7 @@ function filterRoster(){
   const el=$("#rosterShown"); if(el) el.textContent=`顯示 ${shown}／${document.querySelectorAll("[data-roster-row]").length} 人`;
 }
 // 標籤管理（參考 MAAC 標籤頁）：搜尋、依時效／分類篩選、建立（一行一個）、編輯、刪除、CSV 匯入匯出、看名單、批次貼標／撕標。
-// 只有總管理能進。雲端資料來自 tag_stats（人數只算未過期、未刪除的會員）；展示版從會員身上的標籤算。
+// 總管理與有「標籤管理」的人能進。雲端資料來自 tag_stats（人數只算未過期、未刪除的會員）；展示版從會員身上的標籤算。
 let tagView={q:"",expiry:"",category:""}, tagPick=new Set(), tagImport=null, tagAssign=null;
 function tagList(){
   if(live) return state.tags||[];
@@ -662,7 +664,7 @@ function tagsPage(){
   return `${pageHead("標籤",`共 ${all.length} 個標籤。時效標籤貼上後過了天數會自動失效；活動報到、課程繳費的標籤由系統自動貼。`,actions)}
     <div class="toolbar" style="margin-bottom:14px"><input id="tagSearch" class="search" type="search" placeholder="搜尋標籤名稱" value="${escapeHtml(tagView.q)}" autocomplete="off">
       ${sel("tagExpiry",tagView.expiry,[["","全部時效"],["permanent","永久標籤"],["temporary","暫時性標籤"]])}${sel("tagCategory",tagView.category,[["","全部分類"],...cats.map(c=>[c,c]),["none","未分類"]])}<span class="muted" id="tagShown"></span></div>
-    <div class="notice" id="tagBulk" ${tagPick.size?"":"hidden"}>已選 <strong id="tagPickCount">${tagPick.size}</strong> 個標籤　<button class="secondary small" data-action="tag-bulk-category">設定分類</button> <button class="danger small" data-action="tag-bulk-delete">刪除</button> <button class="link" data-action="tag-pick-clear">取消選取</button></div>
+    <div class="notice" id="tagBulk" ${tagPick.size?"":"hidden"}>已選 <strong id="tagPickCount">${tagPick.size}</strong> 個標籤　${canTagExport()?`<button class="small" data-action="tag-members-export">匯出名單</button> `:""}<button class="secondary small" data-action="tag-bulk-category">設定分類</button> <button class="danger small" data-action="tag-bulk-delete">刪除</button> <button class="link" data-action="tag-pick-clear">取消選取</button></div>
     <div class="table-wrap"><table><thead><tr><th><input type="checkbox" id="tagPickAll" aria-label="全選目前顯示的標籤"></th><th>標籤名稱</th><th>分類</th><th>貼標人數</th><th>時效</th><th>動作</th></tr></thead><tbody>${all.map(row).join("")||`<tr><td colspan="6" class="empty">還沒有標籤</td></tr>`}</tbody></table></div>`;
 }
 function filterTagRows(){
@@ -770,7 +772,44 @@ function tagMembers(id){
   const people=myContacts().filter(c=>!c.anonymized_at&&(c.tags||[]).includes(t.name));
   modal(`<h2>${escapeHtml(t.name)}</h2><p class="muted">${people.length} 位會員${t.valid_days?`・${escapeHtml(tagExpiryLabel(t.valid_days))}內有效`:""}</p>
     <div class="table-wrap" style="max-height:55vh"><table style="min-width:0"><thead><tr><th>會員</th><th>區域</th><th></th></tr></thead><tbody>${people.slice(0,500).map(c=>`<tr><td><strong>${escapeHtml(c.name)}</strong> <span class="muted">${escapeHtml(c.member_no||"")}</span></td><td>${escapeHtml(c.region_name||regionName(c.region_id))}</td><td><button class="secondary small" data-action="tag-untag-one" data-id="${escapeHtml(t.id)}" data-contact="${c.id}">撕下</button></td></tr>`).join("")||`<tr><td colspan="3" class="empty">沒有會員有這個標籤</td></tr>`}</tbody></table></div>
-    ${people.length>500?`<p class="muted">只列前 500 位</p>`:""}<div class="actions" style="margin-top:12px"><button class="secondary" data-action="close-modal">關閉</button></div>`);
+    ${people.length>500?`<p class="muted">只列前 500 位</p>`:""}<div class="actions" style="margin-top:12px">${canTagExport()&&people.length?`<button data-action="tag-export-one" data-id="${escapeHtml(t.id)}">匯出名單 CSV</button>`:""}<button class="secondary" data-action="close-modal">關閉</button></div>`);
+}
+// 2026-11-22 依標籤匯出會員名單（分眾）：勾幾個標籤 → 選「有任一個」或「全部都有」→ 下載 CSV。
+// 名單含會員個資，和會員資料頁的「匯出 CSV」一樣只給總管理（之後 2B 的「會員資料庫下載」權限可以再開放）。
+// 資料來自畫面上已載入的會員（雲端是 contacts_safe），手機、Email 依登入者的權限顯示。
+const canTagExport=()=>isAdmin();
+function tagSegment(names,mode){
+  return myContacts().filter(c=>!c.anonymized_at).filter(c=>{ const has=new Set(c.tags||[]); return mode==="all"?names.every(n=>has.has(n)):names.some(n=>has.has(n)); });
+}
+function tagExportForm(ids){
+  if(!canTagExport()) return toast("匯出會員名單只有總管理可以操作");
+  const names=ids.map(tagById).filter(Boolean).map(t=>t.name); if(!names.length) return toast("請先勾選標籤");
+  modal(`<h2>依標籤匯出名單</h2><form id="tagExportForm"><input type="hidden" name="names" value="${escapeHtml(JSON.stringify(names))}">
+    <p>已選標籤：${names.map(n=>`<span class="pill">${escapeHtml(n)}</span>`).join(" ")}</p>
+    ${names.length>1?`<div class="field"><label>條件</label><div class="actions"><label><input type="radio" name="mode" value="any" checked> 有任一個標籤</label><label><input type="radio" name="mode" value="all"> 這些標籤全部都有</label></div></div>`:`<input type="hidden" name="mode" value="any">`}
+    <p class="notice" id="tagExportCount"></p>
+    <small class="muted">檔案含會員個資，用完請刪除，不要轉寄到私人信箱或公開群組。</small>
+    <div class="actions" style="margin-top:12px"><button>匯出 CSV</button><button type="button" class="secondary" data-action="close-modal">取消</button></div></form>`);
+  tagExportCount();
+}
+function tagExportCount(){
+  const f=$("#tagExportForm"), el=$("#tagExportCount"); if(!f||!el) return;
+  const names=JSON.parse(f.elements.names.value), mode=f.querySelector("[name=mode]:checked")?.value||f.elements.mode.value;
+  el.textContent=`符合的會員：${tagSegment(names,mode).length} 位`;
+}
+function tagExportDownload(f){
+  if(!canTagExport()) return toast("匯出會員名單只有總管理可以操作");
+  const names=JSON.parse(f.elements.names.value), mode=f.querySelector("[name=mode]:checked")?.value||f.elements.mode.value;
+  const people=tagSegment(names,mode); if(!people.length) return toast("沒有符合條件的會員");
+  const LINE={active:"可聯絡",blocked:"已封鎖",unlinked:"未綁定",unknown:"未知"};
+  const rows=people.map(c=>({member_no:c.member_no||"",name:c.name||"",gender:c.gender||"",region:c.region_name||regionName(c.region_id),city:c.residence_city||"",
+    phone:c.phone?(String(c.phone).includes("*")?c.phone:displayPhone(c.phone)):"",email:fullPii()?(c.email||""):"",line:LINE[c.line_status]||c.line_status||"",
+    matched:(c.tags||[]).filter(t=>names.includes(t)).join("、"),tags:(c.tags||[]).join("、")}));
+  const cols=[["會員編號","member_no"],["姓名","name"],["性別","gender"],["區域","region"],["居住縣市","city"],["手機","phone"],...(fullPii()?[["Email","email"]]:[]),["LINE 狀態","line"],["符合的標籤","matched"],["全部標籤","tags"]];
+  const label=names.length===1?names[0]:`${names.length}個標籤_${mode==="all"?"全部都有":"任一"}`;
+  download(`標籤名單_${label.replace(/[\/:*?"<>|]/g,"_")}_${localToday()}.csv`,rowsToCsv(rows,cols),"text/csv;charset=utf-8");
+  audit("匯出標籤名單",`${names.join("、")}（${mode==="all"?"全部都有":"任一"}）${rows.length} 位`);
+  closeModal(); toast(`已匯出 ${rows.length} 位`);
 }
 function tagAssignForm(){
   tagAssign=null; const all=tagList().sort((a,b)=>a.name.localeCompare(b.name,"zh-Hant"));
@@ -1028,16 +1067,20 @@ async function revealNationalId(id){
 
 function checkin(){
   const mine=visibleEvents().filter(canCheckinOf);
-  const eventId=query().get("event")||mine[0]?.id; const event=mine.find(e=>e.id===eventId);
+  // 預設選第一場還沒封存的活動；結束的活動仍可選來看（唯讀）
+  const eventId=query().get("event")||(mine.find(e=>!checkinArchived(e))||mine[0])?.id; const event=mine.find(e=>e.id===eventId);
+  const archived=event?checkinArchived(event):false;
   if(!event&&query().get("event")) return `${pageHead("現場報到","找不到這場活動，或你沒有這場活動的報到權限。")}`;
   const regs=roster().filter(r=>r.event_id===eventId&&!r.cancelled_at);
   const done=regs.filter(r=>r.attendance_status==="attended").length;
   const sc=event?rosterScopeFor(who(),event):null, scope=sc?`只顯示${sc.map(regionName).join("、")}`:"全部區域";
   const pay=r=>r.payment_status==="installment"?"分期繳費":r.payment_status==="paid"?"已繳":r.payment_status==="free"?"免費":"待確認款項";
-  const qrBtn=event&&canEvents(event)?`<button data-action="show-qr" data-event="${event.id}">報到 QR Code</button>`:"";
-  const picker=`<select id="eventSwitch">${mine.map(e=>`<option value="${e.id}" ${e.id===eventId?"selected":""}>${escapeHtml(eventLabel(e))}</option>`).join("")}</select>`;
-  const rows=regs.map(r=>`<div class="checkin-item" data-search="${escapeHtml(`${r.member_no||""} ${r.name} ${r.phone_last3}`.toLowerCase())}"><div><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span><small>${escapeHtml(r.region_name||"未分區")}・手機末三碼 ${escapeHtml(r.phone_last3||"---")}・${r.source==="walk-in"?"現場報名・":""}${pay(r)}</small></div><button data-action="toggle-checkin" data-id="${r.id}" class="${r.attendance_status==="attended"?"secondary":""}">${r.attendance_status==="attended"?"已報到 ✓":"確認報到"}</button></div>`).join("");
-  return `${pageHead("現場報到",event?`${escapeHtml(eventLabel(event))}・${fmtDate(event.starts_at)}`:"請先建立活動",qrBtn+picker)}<p class="muted">${scope}・已報到 ${done}／${regs.length}</p><input class="search" id="checkinSearch" placeholder="搜尋姓名或手機末三碼"><div class="checkin-list" style="margin-top:15px">${rows||"<div class='empty'>目前沒有報名者</div>"}</div>`;
+  const qrBtn=event&&canEvents(event)&&!archived?`<button data-action="show-qr" data-event="${event.id}">報到 QR Code</button>`:"";
+  const picker=`<select id="eventSwitch">${mine.map(e=>`<option value="${e.id}" ${e.id===eventId?"selected":""}>${escapeHtml(eventLabel(e))}${checkinArchived(e)?"（已結束・封存）":""}</option>`).join("")}</select>`;
+  const stateBox=r=>archived?`<span class="pill${r.attendance_status==="attended"?"":" off"}">${r.attendance_status==="attended"?"已報到":"未報到"}</span>`:`<button data-action="toggle-checkin" data-id="${r.id}" class="${r.attendance_status==="attended"?"secondary":""}">${r.attendance_status==="attended"?"已報到 ✓":"確認報到"}</button>`;
+  const archNote=archived?`<div class="notice">這場活動已結束，報到資料已封存，不能再修改報到。報到時系統自動貼的活動標籤，之後如需新增或修改，請管理者到「標籤」頁或會員資料頁手動處理。</div>`:"";
+  const rows=regs.map(r=>`<div class="checkin-item" data-search="${escapeHtml(`${r.member_no||""} ${r.name} ${r.phone_last3}`.toLowerCase())}"><div><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span><small>${escapeHtml(r.region_name||"未分區")}・手機末三碼 ${escapeHtml(r.phone_last3||"---")}・${r.source==="walk-in"?"現場報名・":""}${pay(r)}</small></div>${stateBox(r)}</div>`).join("");
+  return `${pageHead("現場報到",event?`${escapeHtml(eventLabel(event))}・${fmtDate(event.starts_at)}`:"請先建立活動",qrBtn+picker)}${archNote}<p class="muted">${scope}・已報到 ${done}／${regs.length}</p><input class="search" id="checkinSearch" placeholder="搜尋姓名或手機末三碼"><div class="checkin-list" style="margin-top:15px">${rows||"<div class='empty'>目前沒有報名者</div>"}</div>`;
 }
 
 // 2026-11-17：非總管理寫草稿 → 送審 → 總管理或核准人員送出／退回（規則在 lib.js，資料庫與 send-campaign 再檢查一次）
@@ -1937,8 +1980,8 @@ function toLocalInput(value){ if(!value)return ""; const d=new Date(value); retu
 function eventOrgFields(e){
   const mineOrgs=orgList().filter(o=>hasOrgPerm(who(),o.id,"events")), org=eventOrg(e), vis=e.visibility||"org", shared=e.shared_org_ids||[];
   return `<div class="field"><label>主辦單位</label><select name="org_id">${mineOrgs.map(o=>`<option value="${o.id}" ${o.id===org?"selected":""}>${escapeHtml(o.name)}</option>`).join("")}</select></div>
-    <div class="field"><label>共享給其他單位</label><select name="visibility">${Object.entries(VISIBILITY_LABELS).map(([k,label])=>`<option value="${k}" ${k===vis?"selected":""}>${label}</option>`).join("")}</select></div>
-    <div class="field full" data-shared-box ${vis==="selected"?"":"hidden"}><label>指定分享給</label>${orgList().map(o=>`<label data-shared-org="${o.id}" ${o.id===org?"hidden":""}><input type="checkbox" name="shared_org" value="${o.id}" ${shared.includes(o.id)?"checked":""}> ${escapeHtml(o.name)}</label>`).join("　")}<br><small class="muted">分享出去的單位只看得到活動資訊；報名名單只有主辦單位與被指派的志工看得到。</small></div>`;
+    <input type="hidden" name="visibility" value="${vis}"><!-- 2026-11-22 louis趙：拿掉「共享給其他單位」欄位；保留原本的值 -->
+    <div class="field full" data-shared-box hidden><label>指定分享給</label>${orgList().map(o=>`<label data-shared-org="${o.id}" ${o.id===org?"hidden":""}><input type="checkbox" name="shared_org" value="${o.id}" ${shared.includes(o.id)?"checked":""}> ${escapeHtml(o.name)}</label>`).join("　")}<br><small class="muted">分享出去的單位只看得到活動資訊；報名名單只有主辦單位與被指派的志工看得到。</small></div>`;
 }
 function eventForm(id,newKind){
   const e=id?state.events.find(x=>x.id===id):{capacity:24,fee_note:"免費",status:"published",kind:newKind==="course"?"course":"event",org_id:curOrg(),visibility:"org",shared_org_ids:[]}; if(!e)return;
@@ -1957,6 +2000,7 @@ function eventForm(id,newKind){
     ${formEditor(e,rows.length)}
     <div class="field"><label>狀態</label><select name="status">${Object.entries(EVENT_STATUS_LABELS).map(([k,label])=>`<option value="${k}" ${e.status===k?"selected":""}>${label}</option>`).join("")}</select></div>
     <button class="field full">儲存${K}</button>${id&&rows.length===1&&isAdmin()?`<button type="button" class="field full danger" data-action="delete-event" data-id="${id}">刪除${K}</button>`:""}</div></form>`);
+  refreshWhenRows();
 }
 // 編輯活動裡的一個場次：已存在的場次帶 data-id，新增的沒有
 function sessionRow(s={}){
@@ -1966,11 +2010,11 @@ function sessionRow(s={}){
 // 題目 id 建立後就不變（答案用 id 對應），改題目文字不影響已收到的答案
 function formEditor(e,sessionCount){
   const f=cleanForm(e.form||{}), open=formEnabled(f);
-  return `<details class="field full form-editor" ${open?"open":""}><summary>報名問卷與家庭報名（選填）${open?"・已設定":""}</summary>
+  return `<details class="field full form-editor" ${open?"open":""}><summary>報名問卷（選填）${open?"・已設定":""}</summary>
     ${sessionCount>1?`<div class="notice">多場次的活動目前不支援報名問卷，學員報名時不會看到題目。</div>`:""}
-    <p class="muted">沒有設定時，報名頁和原本一樣（會員一鍵報名）。有設定時，會員報名要先回答題目，也可以幫家人一起報名。</p>
+    <p class="muted">沒有設定時，報名頁和原本一樣（會員一鍵報名）。有設定時，會員報名要先回答題目。</p>
     <div class="form-grid">
-      <div class="field"><label>最多可幫幾位家人報名（0＝不開放）</label><input id="fFamilyMax" type="number" min="0" max="10" value="${f.family_max}"></div>
+      <input type="hidden" id="fFamilyMax" value="${f.family_max}"><!-- 2026-11-22 louis趙：拿掉「最多可幫幾位家人報名」欄位；保留原本的值 -->
       <div class="field"><label class="check-line"><input type="checkbox" id="fInsurance" ${f.insurance?"checked":""}> 要投保資料（每人出生日期＋身分證必填）</label><label class="check-line"><input type="checkbox" id="fEmergency" ${f.emergency?"checked":""}> 緊急聯絡人必填</label></div>
     </div>
     <div id="questionRows">${f.questions.map((q,i)=>questionRow(q,i)).join("")}</div>
@@ -1987,9 +2031,27 @@ function questionRow(q={},i=0){
     <div class="field full" data-q-options ${["single","multi"].includes(type)?"":"hidden"}><label>選項（一行一個）</label><textarea data-q="options" rows="4">${escapeHtml((q.options||[]).join("\n"))}</textarea></div>
     <div class="field full"><label>說明（選填）</label><input data-q="help" maxlength="200" value="${escapeHtml(q.help||"")}"></div>
     <div class="field full"><label class="check-line"><input type="checkbox" data-q="required" ${q.required?"checked":""}> 必填</label>
-      <label class="check-line"><input type="checkbox" data-q="when_on" ${q.when?"checked":""}> 只有上一題選到這個選項時才問：</label><input data-q="when_is" maxlength="60" value="${escapeHtml(q.when?.is||"")}" placeholder="例如：自行前往（共乘）"></div>
+      <div data-when-box hidden><label class="check-line"><input type="checkbox" data-q="when_on" ${q.when?"checked":""}> 只有在上一題選到下面這個答案時，才問這一題</label><select data-q="when_is" data-saved="${escapeHtml(q.when?.is||"")}"></select><small class="muted" data-when-note></small></div></div>
     <div class="actions"><button type="button" class="secondary small" data-action="move-question">上移</button><button type="button" class="danger small" data-action="remove-question">刪除這題</button></div>
   </div>`;
+}
+// 2026-11-22：條件題改成下拉選單，選項直接帶上一題的答案（單選的選項、是／否）；上一題不是單選或是／否就不顯示。
+// 勾了條件，「誰要回答」自動跟上一題一樣（規則要求相同）。
+function refreshWhenRows(){
+  const rows=[...document.querySelectorAll("#questionRows .question-row")];
+  rows.forEach((r,i)=>{
+    const box=r.querySelector("[data-when-box]"), on=r.querySelector("[data-q=when_on]"), sel=r.querySelector("[data-q=when_is]"), per=r.querySelector("[data-q=per]"), note=r.querySelector("[data-when-note]");
+    if(!box) return;
+    const prev=rows[i-1], ptype=prev?.querySelector("[data-q=type]")?.value;
+    const opts=!prev?[]:ptype==="yesno"?questionOptions({type:"yesno"}):ptype==="single"?prev.querySelector("[data-q=options]").value.split("\n").map(x=>x.trim()).filter(Boolean):[];
+    box.hidden=!opts.length;
+    if(!opts.length){ on.checked=false; per.disabled=false; return; }
+    const keep=sel.value||sel.dataset.saved||"";
+    sel.innerHTML=opts.map(o=>`<option ${o===keep?"selected":""}>${escapeHtml(o)}</option>`).join("");
+    sel.disabled=!on.checked;
+    if(on.checked){ per.value=prev.querySelector("[data-q=per]").value; per.disabled=true; note.textContent=`上一題：「${prev.querySelector("[data-q=label]").value||"（未命名）"}」。這一題的「誰要回答」會跟上一題一樣。`; }
+    else { per.disabled=false; note.textContent=""; }
+  });
 }
 // 從畫面讀出問卷設定；條件題接在「上一題」，最後交給 cleanForm 統一整理（不合規則的條件會被拿掉）
 function readFormEditor(){
@@ -2344,9 +2406,9 @@ async function onClick(event){
   if(action==="remove-family") return removeFamilyCard(btn);
   if(action==="edit-reg-form"){ if(regMember) regMember.editing=true; return render(); }
   if(action==="cancel-edit-reg-form"){ if(regMember) regMember.editing=false; return render(); }
-  if(action==="add-question"){ const box=$("#questionRows"); box.insertAdjacentHTML("beforeend",questionRow({},box.children.length)); return box.lastElementChild.querySelector("[data-q=label]").focus(); }
-  if(action==="remove-question") return btn.closest(".question-row").remove();
-  if(action==="move-question"){ const row=btn.closest(".question-row"); if(row.previousElementSibling) row.parentNode.insertBefore(row,row.previousElementSibling); return; }
+  if(action==="add-question"){ const box=$("#questionRows"); box.insertAdjacentHTML("beforeend",questionRow({},box.children.length)); refreshWhenRows(); return box.lastElementChild.querySelector("[data-q=label]").focus(); }
+  if(action==="remove-question"){ btn.closest(".question-row").remove(); return refreshWhenRows(); }
+  if(action==="move-question"){ const row=btn.closest(".question-row"); if(row.previousElementSibling) row.parentNode.insertBefore(row,row.previousElementSibling); return refreshWhenRows(); }
   if(action==="remove-session") return removeSessionRow(btn);
   if(action==="forgot-password") return forgotPassword();
   if(action==="redeem-link") return redeemLink(btn);
@@ -2378,6 +2440,8 @@ async function onClick(event){
   if(action==="tag-template") return download("標籤匯入範本.csv",toCsv([{name:"區域_桃園市",valid_days:"",category:"區域"},{name:"2026_春節小禮",valid_days:"30",category:"活動"}],[["name","name"],["valid_days","valid_days"],["category","category"]]),"text/csv;charset=utf-8");
   if(action==="tag-import-go") return runTagImport();
   if(action==="tag-members") return tagMembers(btn.dataset.id);
+  if(action==="tag-members-export") return tagExportForm([...tagPick]);
+  if(action==="tag-export-one") return tagExportForm([btn.dataset.id]);
   if(action==="tag-untag-one") return untagOne(btn.dataset.id,btn.dataset.contact);
   if(action==="tag-assign") return tagAssignForm();
   if(action==="ctag-open") return ctagOpen(btn.dataset.id);
@@ -2434,6 +2498,7 @@ async function onClick(event){
 }
 
 document.addEventListener("input",event=>{
+  if(["options","label"].includes(event.target.dataset?.q)&&event.target.closest?.("#questionRows")) refreshWhenRows();
   if(event.target.id==="pickSearch") return renderPickList();
   if(event.target.id==="exportSearch") return filterExportList();
   if(event.target.id==="rosterSearch"){ rosterView.q=event.target.value; return filterRoster(); }
@@ -2450,11 +2515,13 @@ document.addEventListener("input",event=>{
   }
 });
 document.addEventListener("change",event=>{
+  if(event.target.name==="mode"&&event.target.closest?.("#tagExportForm")) tagExportCount();
   if(event.target.closest?.(".reg-form")) refreshConditional(document);
   if(event.target.name==="account_type"){ const box=event.target.form.querySelector("[data-org-roles]"); if(box) box.hidden=event.target.value==="admin"; return; }
   if(/^org_in_/.test(event.target.name||"")){ const box=event.target.closest("[data-org-box]")?.querySelector("[data-org-perms]"); if(box) box.hidden=!event.target.checked; return; }
   if(event.target.name==="scope_mode"){ const box=event.target.form.querySelector("[data-scope-box]"); if(box) box.hidden=event.target.value!=="some"; return; }
   if(event.target.dataset?.q==="type"){ const box=event.target.closest(".question-row")?.querySelector("[data-q-options]"); if(box) box.hidden=!["single","multi"].includes(event.target.value); }
+  if(event.target.closest?.("#questionRows")) refreshWhenRows();
   if(event.target.form?.id==="eventForm"&&["visibility","org_id"].includes(event.target.name)){ const f=event.target.form, box=f.querySelector("[data-shared-box]"); box.hidden=f.elements.visibility.value!=="selected"; box.querySelectorAll("[data-shared-org]").forEach(l=>{ l.hidden=l.dataset.sharedOrg===f.elements.org_id.value; if(l.hidden) l.querySelector("input").checked=false; }); return; }
   if(event.target.id==="eventImage"){ const f=event.target.files?.[0], img=$("#eventImagePreview"); if(img){ img.hidden=!f; if(f) img.src=URL.createObjectURL(f); } return; }
   if(event.target.id==="campaignImage"){ const f=event.target.files?.[0], img=$("#campaignImagePreview"); if(img){ img.hidden=!f; if(f) img.src=URL.createObjectURL(f); } return; }
@@ -2486,7 +2553,7 @@ document.addEventListener("change",event=>{
 });
 
 async function onSubmit(event){
-  if(!["assignForm","rejectCampaignForm","eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","regPayForm","tagCreateForm","tagEditForm","tagCategoryForm","tagAssignForm","ctagCreateForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","staffDeleteForm","deleteContactForm","deleteEventForm","regFormMember","profileForm","signinForm","activateForm","studentLinkForm","applyForm"].includes(event.target.id))return;
+  if(!["assignForm","rejectCampaignForm","eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","regPayForm","tagCreateForm","tagEditForm","tagCategoryForm","tagExportForm","tagAssignForm","ctagCreateForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","staffDeleteForm","deleteContactForm","deleteEventForm","regFormMember","profileForm","signinForm","activateForm","studentLinkForm","applyForm"].includes(event.target.id))return;
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target));
   if(event.target.id==="contactForm") return saveContact(data);
   if(event.target.id==="profileForm") return saveProfile(event.target,data);
@@ -2502,6 +2569,7 @@ async function onSubmit(event){
   if(event.target.id==="ctagCreateForm") return saveCtagCreate(data);
   if(event.target.id==="tagEditForm") return saveTagEdit(data);
   if(event.target.id==="tagCategoryForm") return saveTagBulkCategory(data);
+  if(event.target.id==="tagExportForm") return tagExportDownload(event.target);
   if(event.target.id==="tagAssignForm") return previewTagAssign(data);
   if(event.target.id==="batchSponsorForm") return saveBatchSponsor(data);
   if(event.target.id==="eventForm") return saveEvent(data);
@@ -2675,8 +2743,9 @@ async function executeAnonymize(confirmText){
 async function toggleCheckin(id){
   const reg=roster().find(r=>r.id===id), ev=state.events.find(e=>e.id===reg?.event_id);
   if(!reg||!ev||!canCheckinReg(ev,reg))return toast("你沒有權限處理這位會員的報到");
+  if(checkinArchived(ev)) return toast("這場活動已結束，報到資料已封存，不能再修改");
   const next=reg.attendance_status==="attended"?"registered":"attended";
-  if(live){ const {error}=await supabase.rpc("set_attendance",{p_registration_id:id,p_attended:next==="attended"}); if(error)return toast(error.message.includes("FORBIDDEN")?"你沒有權限處理這位會員的報到":error.message); await loadLiveData(); }
+  if(live){ const {error}=await supabase.rpc("set_attendance",{p_registration_id:id,p_attended:next==="attended"}); if(error)return toast(error.message.includes("CHECKIN_ARCHIVED")?"這場活動已結束，報到資料已封存，不能再修改":error.message.includes("FORBIDDEN")?"你沒有權限處理這位會員的報到":error.message); await loadLiveData(); }
   else {
     const r=state.registrations.find(x=>x.id===id), c=state.contacts.find(x=>x.id===r.contact_id), e=state.events.find(x=>x.id===r.event_id);
     Object.assign(r,{attendance_status:next,checked_in_at:next==="attended"?new Date().toISOString():null});

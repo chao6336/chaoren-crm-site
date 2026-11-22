@@ -239,7 +239,8 @@ export function rosterScopeFor(who, event, now = new Date()) {
 
 // 某個單位畫面裡要列的活動：自己單位的＋分享給這個單位的（都要看得到）
 export function eventsInOrgView(events = [], who, orgId, now = new Date()) {
-  return events.filter(e => canViewEvent(who, e, now) && (eventOrg(e) === orgId || sharedWith(e, orgId)));
+  // 2026-11-22 louis趙：各單位只列自己主辦的活動，別的單位共享的不顯示
+  return events.filter(e => canViewEvent(who, e, now) && eventOrg(e) === orgId);
 }
 // 指派給我、但我不是那個單位成員的活動（志工看的清單）
 export function assignedEvents(events = [], who, now = new Date()) {
@@ -554,6 +555,12 @@ export function checkinWindow(event) {
   const start = new Date(event.starts_at).getTime();
   const end = event.ends_at ? new Date(event.ends_at).getTime() : start + 4 * 3600e3;
   return { opensAt: new Date(start - 3 * 3600e3), closesAt: new Date(end + 2 * 3600e3) };
+}
+
+// 2026-11-22：報到時間結束（活動結束後 2 小時）＝報到資料封存，任何人都不能再改報到（資料庫 2026-11-22_checkin_archive 同規則）。
+// 報到會自動貼活動標籤；封存後標籤要改請到標籤頁手動處理。
+export function checkinArchived(event, now = new Date()) {
+  return Boolean(event?.starts_at) && now > checkinWindow(event).closesAt;
 }
 
 export function checkinProblem(event, token, validToken, now = new Date()) {
