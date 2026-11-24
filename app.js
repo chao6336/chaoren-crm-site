@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived } from "./lib.js?v=20261124-1";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived } from "./lib.js?v=20261124-2";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -1076,7 +1076,10 @@ function checkin(){
   const sc=event?rosterScopeFor(who(),event):null, scope=sc?`只顯示${sc.map(regionName).join("、")}`:"全部區域";
   const pay=r=>r.payment_status==="installment"?"分期繳費":r.payment_status==="paid"?"已繳":r.payment_status==="free"?"免費":"待確認款項";
   const qrBtn=event&&canEvents(event)&&!archived?`<button data-action="show-qr" data-event="${event.id}">報到 QR Code</button>`:"";
-  const picker=`<select id="eventSwitch">${mine.map(e=>`<option value="${e.id}" ${e.id===eventId?"selected":""}>${escapeHtml(eventLabel(e))}${checkinArchived(e)?"（已結束・封存）":""}</option>`).join("")}</select>`;
+  // 2026-11-24 louis趙：活動變多時可以直接打字搜尋
+  checkinPick={items:mine.map(e=>({id:e.id,label:`${eventLabel(e)}${checkinArchived(e)?"（已結束・封存）":""}`})),current:eventId,active:0};
+  const curLabel=checkinPick.items.find(x=>x.id===eventId)?.label||"";
+  const picker=`<div class="event-search"><input id="eventSwitchSearch" type="search" role="combobox" aria-expanded="false" aria-controls="eventSwitchList" aria-label="輸入活動名稱搜尋" placeholder="輸入活動名稱搜尋" autocomplete="off" value="${escapeHtml(curLabel)}"><div class="event-search-list" id="eventSwitchList" role="listbox" hidden></div></div>`;
   const stateBox=r=>archived?`<span class="pill${r.attendance_status==="attended"?"":" off"}">${r.attendance_status==="attended"?"已報到":"未報到"}</span>`:`<button data-action="toggle-checkin" data-id="${r.id}" class="${r.attendance_status==="attended"?"secondary":""}">${r.attendance_status==="attended"?"已報到 ✓":"確認報到"}</button>`;
   const archNote=archived?`<div class="notice">這場活動已結束，報到資料已封存，不能再修改報到。報到時系統自動貼的活動標籤，之後如需新增或修改，請管理者到「標籤」頁或會員資料頁手動處理。</div>`:"";
   const rows=regs.map(r=>`<div class="checkin-item" data-search="${escapeHtml(`${r.member_no||""} ${r.name} ${r.phone_last3}`.toLowerCase())}"><div><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span><small>${escapeHtml(r.region_name||"未分區")}・手機末三碼 ${escapeHtml(r.phone_last3||"---")}・${r.source==="walk-in"?"現場報名・":""}${pay(r)}</small></div>${stateBox(r)}</div>`).join("");
@@ -2439,6 +2442,7 @@ async function onClick(event){
   if(action==="tag-import") return tagImportForm();
   if(action==="tag-template") return download("標籤匯入範本.csv",toCsv([{name:"區域_桃園市",valid_days:"",category:"區域"},{name:"2026_春節小禮",valid_days:"30",category:"活動"}],[["name","name"],["valid_days","valid_days"],["category","category"]]),"text/csv;charset=utf-8");
   if(action==="tag-import-go") return runTagImport();
+  if(action==="checkin-event-pick") return chooseCheckinEvent(btn.dataset.id);
   if(action==="tag-members") return tagMembers(btn.dataset.id);
   if(action==="tag-members-export") return tagExportForm([...tagPick]);
   if(action==="tag-export-one") return tagExportForm([btn.dataset.id]);
@@ -2497,7 +2501,40 @@ async function onClick(event){
   if(action==="quick-join"){ btn.disabled=true; btn.textContent="報到中…"; return runScan({quickJoin:true}); }
 }
 
+// 現場報到的活動搜尋：點一下列出全部，打字即時篩選，方向鍵＋Enter 或滑鼠選擇
+let checkinPick={items:[],current:null,active:0};
+function checkinPickMatches(){
+  const box=$("#eventSwitchSearch"), q=(box?.dataset.typing?box.value:"").trim().toLowerCase();
+  return checkinPick.items.filter(x=>!q||x.label.toLowerCase().includes(q));
+}
+function renderCheckinPick(){
+  const box=$("#eventSwitchSearch"), list=$("#eventSwitchList"); if(!box||!list) return;
+  const found=checkinPickMatches(); checkinPick.active=Math.min(checkinPick.active,Math.max(found.length-1,0));
+  list.innerHTML=found.length?found.map((x,i)=>`<button type="button" role="option" aria-selected="${x.id===checkinPick.current}" class="${i===checkinPick.active?"active":""}" data-action="checkin-event-pick" data-id="${escapeHtml(x.id)}">${escapeHtml(x.label)}</button>`).join(""):`<p class="muted">找不到符合的活動</p>`;
+  list.hidden=false; box.setAttribute("aria-expanded","true");
+  list.querySelector(".active")?.scrollIntoView({block:"nearest"});
+}
+function closeCheckinPick(){
+  const box=$("#eventSwitchSearch"), list=$("#eventSwitchList"); if(!box||!list) return;
+  list.hidden=true; box.setAttribute("aria-expanded","false"); delete box.dataset.typing;
+  box.value=checkinPick.items.find(x=>x.id===checkinPick.current)?.label||"";
+}
+function chooseCheckinEvent(id){
+  if(id===checkinPick.current){ closeCheckinPick(); return $("#eventSwitchSearch")?.blur(); }
+  location.hash=`checkin?event=${id}`;
+}
+document.addEventListener("focusin",event=>{ if(event.target.id==="eventSwitchSearch"){ checkinPick.active=Math.max(checkinPick.items.findIndex(x=>x.id===checkinPick.current),0); event.target.value=""; renderCheckinPick(); } });
+document.addEventListener("focusout",event=>{ if(event.target.id==="eventSwitchSearch") closeCheckinPick(); });
+document.addEventListener("mousedown",event=>{ if(event.target.closest?.("#eventSwitchList")) event.preventDefault(); });
+document.addEventListener("keydown",event=>{
+  if(event.target.id!=="eventSwitchSearch"||event.isComposing||event.keyCode===229) return; // 注音選字時按 Enter 不算選活動
+  const found=checkinPickMatches();
+  if(event.key==="ArrowDown"||event.key==="ArrowUp"){ event.preventDefault(); if(found.length){ checkinPick.active=(checkinPick.active+(event.key==="ArrowDown"?1:found.length-1))%found.length; renderCheckinPick(); } }
+  else if(event.key==="Enter"){ event.preventDefault(); if(found[checkinPick.active]) chooseCheckinEvent(found[checkinPick.active].id); }
+  else if(event.key==="Escape"){ event.preventDefault(); closeCheckinPick(); event.target.blur(); }
+});
 document.addEventListener("input",event=>{
+  if(event.target.id==="eventSwitchSearch"){ event.target.dataset.typing="1"; checkinPick.active=0; return renderCheckinPick(); }
   if(["options","label"].includes(event.target.dataset?.q)&&event.target.closest?.("#questionRows")) refreshWhenRows();
   if(event.target.id==="pickSearch") return renderPickList();
   if(event.target.id==="exportSearch") return filterExportList();
@@ -2540,7 +2577,6 @@ document.addEventListener("change",event=>{
   if(event.target.name==="event_id"&&event.target.closest("#campaignForm")) return updateAudienceCount();
   if(event.target.name==="login_type"&&event.target.closest("#signinForm")) document.querySelectorAll("#signinForm [data-login]").forEach(el=>el.hidden=el.dataset.login!==event.target.value);
   if(event.target.name==="login_type"&&event.target.closest("#applyForm")) $("#applyEmailLabel").textContent=event.target.value==="email"?"Email *（登入帳號）":"Email";
-  if(event.target.id==="eventSwitch")location.hash=`checkin?event=${event.target.value}`;
   if(event.target.id==="regionFilter")location.hash=event.target.value?`contacts?region=${event.target.value}`:"contacts";
   if(event.target.id==="demoUser")switchDemoUser(event.target.value);
   if(event.target.id==="orgPicker")switchOrg(event.target.value);

@@ -64,3 +64,13 @@ dialog #modalBody{max-height:calc(100vh - 32px);overflow:auto}
 
 /* 2026-11-18 提示跟著搬進開著的視窗時，仍固定在畫面右下角、蓋在內容上 */
 #toast{z-index:1000}
+
+
+/* 2026-11-24 現場報到：可打字搜尋的活動選單 */
+.event-search{position:relative;width:min(360px,100%)}
+.event-search input{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--white);color:var(--ink);font:inherit}
+.event-search-list{position:absolute;z-index:40;top:calc(100% + 4px);left:0;right:0;max-height:320px;overflow:auto;padding:4px;background:var(--white);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow)}
+.event-search-list button{display:block;width:100%;min-height:40px;padding:8px 10px;border:0;border-radius:7px;background:transparent;color:var(--ink);font:inherit;font-weight:400;text-align:left;white-space:normal}
+.event-search-list button:hover,.event-search-list button.active{background:var(--bg)}
+.event-search-list button[aria-selected="true"]{color:var(--green);font-weight:700}
+.event-search-list p{margin:0;padding:10px}
