@@ -496,7 +496,8 @@ export function isFreeEvent(event) {
 }
 
 export function campaignEligible(contact) {
-  return Boolean(contact.line_user_id && contact.marketing_consent && contact.line_status === "active" && !contact.anonymized_at);
+  // 2026-11-24：非總管理拿不到 LINE 編號，改看資料庫給的是非欄位 line_bound
+  return Boolean((contact.line_user_id || contact.line_bound) && contact.marketing_consent && contact.line_status === "active" && !contact.anonymized_at);
 }
 
 export const OUTDOOR_CITIES = ["台中", "大台北", "高雄"];
