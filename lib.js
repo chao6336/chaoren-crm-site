@@ -1239,22 +1239,3 @@ export function sortContacts(rows, key = "member_no") {
     : key === "age" ? (a, b) => (a.age == null) - (b.age == null) || (a.age ?? 0) - (b.age ?? 0) : () => 0;
   return [...rows].sort((a, b) => cmp(a, b) || byNo(a, b));
 }
-
-// 2026-11-24 操作紀錄顯示：把 target_type 代碼翻成中文；刪除紀錄自己講清楚（經授權、幾筆、有沒有備份），避免其他總管理誤會
-export const AUDIT_TARGET_LABELS = { contacts: "會員", events: "活動", audit_log: "操作紀錄", system: "系統", student_applications: "學員申請", message_campaigns: "LINE 訊息", tags: "標籤" };
-export function describeAudit(x, contacts = []) {
-  if (x.action === "刪除操作紀錄") {
-    const d = x.details || {};
-    const what = d.deleted_action === "reveal_national_id" ? "身分證查看紀錄" : "操作紀錄";
-    const n = d.count ? ` ${d.count} 筆` : "";
-    const bk = d.backup ? "（已備份）" : "";
-    return { action: "刪除操作紀錄（經授權）", target: `${what}${n}${bk}` };
-  }
-  const label = AUDIT_TARGET_LABELS[x.target_type] || x.target_type || "";
-  const id = x.target_id || "";
-  if (x.target_type === "contacts" && /^[0-9a-f-]{36}$/i.test(id)) {
-    const c = contacts.find(c => c.id === id);
-    return { action: x.action, target: c ? `會員：${c.member_no || c.name || c.display_name || "—"}` : "會員" };
-  }
-  return { action: x.action, target: id ? `${label}：${id}` : label };
-}
