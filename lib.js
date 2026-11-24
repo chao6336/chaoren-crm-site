@@ -701,13 +701,17 @@ export function prepareImportRow(raw, map, { regions = [], existing = [], seen =
     if (seen.has(key) || (line_user_id && seen.has(line_user_id))) { status = "duplicate"; warnings.push("檔案內重複"); }
     else {
       const match = (line_user_id && existing.find(c => c.line_user_id === line_user_id)) || existing.find(c => c.name?.replace(/\s/g, "") === name && (c.phone || null) === phone);
-      if (match) {
+      // 2026-11-24：同一支手機只能有一位會員；手機已是別人的就不匯入（資料庫也會擋）
+      const owner = !match && phone && existing.find(c => !c.anonymized_at && c.phone === phone);
+      if (owner) { status = "error"; errors.push(`手機已是其他會員（${owner.member_no || owner.name}）`); }
+      else if (phone && seen.has(`phone:${phone}`)) { status = "error"; errors.push("檔案內有另一位用同一支手機"); }
+      else if (match) {
         const plan = fillPlan(match, row);
         if (plan) { status = "update"; row.existing_id = match.id; warnings.push(`系統已有此人，補上：${[...plan.fields.map(f => FIELD_LABELS[f]), ...(plan.tags.length ? [`${plan.tags.length} 個標籤`] : [])].join("、")}`); }
         else { status = "duplicate"; warnings.push("系統已有此人，資料沒有需要補的"); }
       }
     }
-    seen.add(key); if (line_user_id) seen.add(line_user_id);
+    seen.add(key); if (line_user_id) seen.add(line_user_id); if (phone && status !== "error") seen.add(`phone:${phone}`);
   }
   return { row, status, errors, warnings };
 }
@@ -1222,4 +1226,16 @@ export function prepareImportAnswers(raw, maps, form) {
   if (epRaw && !ep) warnings.push(`緊急聯絡人電話看不懂（${epRaw.slice(0, 20)}），先留空`);
   if (en || er || ep) Object.assign(extra, { emergency_name: en, emergency_relation: er, emergency_phone: ep || "" });
   return { answers, extra, warnings };
+}
+
+// 2026-11-24 會員資料排序：數字由小到大、中文依筆劃由少到多；沒有資料的排最後，同分再依會員編號
+export const CONTACT_SORTS = [["member_no", "會員編號"], ["name", "姓名（筆劃）"], ["gender", "性別"], ["age", "年齡"]];
+const strokeCollator = new Intl.Collator("zh-TW-u-co-stroke", { numeric: true });
+const memberNoValue = c => { const m = String(c?.member_no || "").match(/\d+/); return m ? Number(m[0]) : Infinity; };
+export function sortContacts(rows, key = "member_no") {
+  const byNo = (a, b) => memberNoValue(a) - memberNoValue(b) || String(a.member_no || "").localeCompare(String(b.member_no || ""));
+  const text = k => (a, b) => { const x = String(a[k] || ""), y = String(b[k] || ""); return (!x) - (!y) || strokeCollator.compare(x, y); };
+  const cmp = key === "name" ? text("name") : key === "gender" ? text("gender")
+    : key === "age" ? (a, b) => (a.age == null) - (b.age == null) || (a.age ?? 0) - (b.age ?? 0) : () => 0;
+  return [...rows].sort((a, b) => cmp(a, b) || byNo(a, b));
 }

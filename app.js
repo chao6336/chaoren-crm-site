@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived } from "./lib.js?v=20261124-2";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts } from "./lib.js?v=20261124-3";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -213,6 +213,17 @@ function phoneField(label,value="",{required=false,autocomplete=""}={}){
   const {code,local}=splitPhone(value||"");
   const options=COUNTRY_CODES.map(([c,text])=>`<option value="${c}" ${c===code?"selected":""}>${text}</option>`).join("")+`<option value="other" ${code==="other"?"selected":""}>其他（號碼請以 + 開頭）</option>`;
   return `<div class="field"><label>${label}${required?" *":""}</label><div class="phone-input"><select name="phone_code" aria-label="國碼">${options}</select><input name="phone" inputmode="tel" ${required?"required":""} ${autocomplete?`autocomplete="${autocomplete}"`:""} placeholder="912345678" value="${escapeHtml(local)}"></div></div>`;
+}
+// 2026-11-24：同一支手機只能有一位會員（資料庫 PHONE_DUPLICATE）；註冊、申請、後台新增時手機／生日／縣市／Email 必填
+const PHONE_TAKEN_MSG="這支手機已經是會員了，不能重複建立。請先搜尋這支手機，確認是不是同一個人。";
+const isPhoneDup=e=>/PHONE_DUPLICATE|contacts_phone_unique/.test(String(e?.message||e||""));
+const phoneOwner=(phone,exceptId)=>phone&&state.contacts.find(c=>c.id!==exceptId&&!c.anonymized_at&&c.phone===phone);
+function missingRequired(d){
+  if(!d.phone) return "請填寫手機";
+  if(!d.birth_date) return "請填寫出生年月日";
+  if(!d.residence_city) return "請選擇居住縣市";
+  if(!String(d.email||"").trim()) return "請填寫 Email";
+  return "";
 }
 function readPhone(data){
   if(!String(data.phone||"").trim()) return {phone:null};
@@ -463,14 +474,15 @@ function regionOptions(selected,{withAll=false,withNone=false,only=null}={}){
 
 function contacts(){
   // 2026-11-20：會員資料看全平台「會員資料查看」；有區域範圍的人只看範圍內（myContacts 已篩），區域下拉也只列範圍內
-  const scope=regionScopeOf(who()), filter=query().get("region")||"";
+  const scope=regionScopeOf(who()), filter=query().get("region")||"", sortKey=CONTACT_SORTS.some(([k])=>k===query().get("sort"))?query().get("sort"):"member_no";
   const base=myContacts().filter(c=>!c.anonymized_at&&(!filter||(filter==="none"?!c.region_id:c.region_id===filter)));
-  const rows=base.map(c=>{ const vc=visibleContact(c,fullPii()?"admin":viewer().role,{phone:phoneOk()}); return {...vc,age:vc.birth_date?(c.age??ageFrom(c.birth_date)):null}; });
+  const rows=sortContacts(base.map(c=>{ const vc=visibleContact(c,fullPii()?"admin":viewer().role,{phone:phoneOk()}); return {...vc,age:vc.birth_date?(c.age??ageFrom(c.birth_date)):null}; }),sortKey);
+  const sortMenu=`<select id="contactSort" aria-label="排序方式">${CONTACT_SORTS.map(([k,l])=>`<option value="${k}" ${k===sortKey?"selected":""}>排序：${l}</option>`).join("")}</select>`;
   const actions=`${canManageMembers()?`<button data-action="edit-contact">＋ 新增會員</button><a class="button secondary" href="#import">匯入 Excel</a>`:""}${isAdmin()?`<button class="secondary" data-action="export-contacts">匯出 CSV</button>`:""}`;
   const subtitle=isAdmin()?"總管理看得到全部會員；身分證只顯示遮罩，需要時另按「查看」。"
     :`三個單位共用同一份會員名冊${scope.length?`；你只看得到${escapeHtml(scopeText())}的會員`:""}。${fullPii()?"你有完整個資權限。":`${phoneOk()?"手機完整顯示；":"手機、"}Email、地址與身分證會遮罩，生日只顯示月日。`}`;
   const regionFilter=scope.length===1?"":`<select id="regionFilter" aria-label="依區域篩選"><option value="">全部區域</option>${(state.regions||[]).filter(r=>!scope.length||scope.includes(r.id)).map(r=>`<option value="${r.id}" ${r.id===filter?"selected":""}>${escapeHtml(r.name)}</option>`).join("")}${scope.length?"":`<option value="none" ${filter==="none"?"selected":""}>未分區</option>`}</select>`;
-  return `${pageHead("會員資料",subtitle,actions)}<div class="toolbar"><input class="search" id="contactSearch" placeholder="搜尋會員編號、姓名、LINE 名稱或標籤" aria-label="搜尋會員">${regionFilter}</div><p class="muted">共 ${rows.length} 位</p><div class="table-wrap"><table><thead><tr><th>編號</th><th>會員</th><th>性別／年齡</th><th>區域</th><th>手機</th><th>標籤</th><th>LINE</th></tr></thead><tbody id="contactRows">${contactRows(rows)||`<tr><td colspan="7" class="empty">沒有符合的會員</td></tr>`}</tbody></table></div>`;
+  return `${pageHead("會員資料",subtitle,actions)}<div class="toolbar"><input class="search" id="contactSearch" placeholder="搜尋會員編號、姓名、LINE 名稱或標籤" aria-label="搜尋會員">${regionFilter}${sortMenu}</div><p class="muted">共 ${rows.length} 位</p><div class="table-wrap"><table><thead><tr><th>編號</th><th>會員</th><th>性別／年齡</th><th>區域</th><th>手機</th><th>標籤</th><th>LINE</th></tr></thead><tbody id="contactRows">${contactRows(rows)||`<tr><td colspan="7" class="empty">沒有符合的會員</td></tr>`}</tbody></table></div>`;
 }
 // 從舊系統匯入的會員常有幾十個標籤：清單只顯示前 3 個，其餘在詳細頁展開。
 function tagPills(tags=[],limit=3){ const shown=tags.slice(0,limit).map(t=>`<span class="pill">${escapeHtml(t)}</span>`).join(" "); return tags.length>limit?`${shown} <span class="pill off">＋${tags.length-limit}</span>`:shown; }
@@ -973,7 +985,7 @@ function viewContact(id){
 
 // 性別必填（員工表單、學員首次填資料、新人報名表共用）；LINE 一鍵報到與匯入舊名冊不擋，之後再補。
 function genderField(selected){ return `<div class="field"><label>性別 *</label><select name="gender" required><option value="">請選擇</option>${GENDERS.map(g=>`<option ${selected===g?"selected":""}>${g}</option>`).join("")}</select></div>`; }
-function cityField(selected){ return `<div class="field"><label>居住縣市</label><select name="residence_city"><option value="">未填</option>${CITIES.map(c=>`<option ${selected===c?"selected":""}>${c}</option>`).join("")}</select></div>`; }
+function cityField(selected,required=false){ return `<div class="field"><label>居住縣市${required?" *":""}</label><select name="residence_city" ${required?"required":""}><option value="">${required?"請選擇":"未填"}</option>${CITIES.map(c=>`<option ${selected===c?"selected":""}>${c}</option>`).join("")}</select></div>`; }
 
 function contactForm(id){
   if(!canManageMembers())return toast("你沒有「會員資料管理」權限");
@@ -984,12 +996,12 @@ function contactForm(id){
   const v=key=>escapeHtml(c?.[key]||"");
   modal(`<h2>${id?"編輯會員":"新增會員"}</h2><form id="contactForm"><input type="hidden" name="contact_id" value="${id||""}"><div class="form-grid">
     <div class="field"><label>姓名 *</label><input name="name" required maxlength="40" value="${v("name")}"></div>
-    ${hideP?phoneField("手機","")+keepNote:phoneField("手機",c?.phone||"")}
+    ${hideP?phoneField("手機","")+keepNote:phoneField("手機",c?.phone||"",{required:!id})}
     ${genderField(c?.gender)}
-    <div class="field"><label>出生年月日</label><input name="birth_date" type="date" min="1900-01-01" value="${hideF?"":v("birth_date")}">${hideF?keepNote:""}</div>
+    <div class="field"><label>出生年月日${id?"":" *"}</label><input name="birth_date" type="date" min="1900-01-01" ${id?"":"required"} value="${hideF?"":v("birth_date")}">${hideF?keepNote:""}</div>
     <div class="field"><label>區域</label><select name="region_id">${regionOptions(c?.region_id,{withNone:!scope.length,only:scope.length?scope:null})}</select></div>
-    ${cityField(c?.residence_city)}
-    <div class="field"><label>Email</label><input name="email" type="email" value="${hideF?"":v("email")}">${hideF?keepNote:""}</div>
+    ${cityField(c?.residence_city,!id)}
+    <div class="field"><label>Email${id?"":" *"}</label><input name="email" type="email" ${id?"":"required"} maxlength="120" value="${hideF?"":v("email")}">${hideF?keepNote:""}</div>
     <div class="field full"><label>地址</label><input name="address" maxlength="200" value="${hideF?"":v("address")}">${hideF?keepNote:""}</div>
     ${!fullPii()?"":`<div class="field full"><label>身分證字號</label><input name="national_id" maxlength="10" autocomplete="off" placeholder="${c?.national_id_masked||maskNationalId(c?.national_id)||"A123456789"}"><small class="muted">${id?"留空＝不變更；":""}只有總管理看得到完整號碼，存檔後加密保存。</small></div>`}
     <div class="field full"><label>備註</label><textarea name="notes" maxlength="2000">${v("notes")}</textarea></div>
@@ -1009,9 +1021,11 @@ async function saveContact(data){
   if(emPhoneRaw&&!emPhone) return toast("緊急聯絡電話格式不正確");
   const extra={emergency_name:String(data.emergency_name||"").trim(),emergency_relation:String(data.emergency_relation||"").trim(),emergency_phone:emPhone||"",clear_merge_hint:data.clear_merge_hint==="on"};
   const fields={name:data.name.trim(),phone:data.phone,email:data.email,gender:data.gender,birth_date:data.birth_date,region_id:data.region_id||null,residence_city:data.residence_city||null,address:data.address,notes:data.notes};
+  if(!data.contact_id){ const miss=missingRequired(fields); if(miss) return toast(miss); }
+  if(phoneOwner(fields.phone,data.contact_id||null)) return toast(PHONE_TAKEN_MSG);
   if(live){
     const {data:savedId,error}=await supabase.rpc("admin_save_contact",{p_contact_id:data.contact_id||null,p_data:fields,p_national_id:nid||null});
-    if(error)return toast(error.message.includes("FORBIDDEN")?"沒有權限":"儲存失敗："+error.message);
+    if(error)return toast(error.message.includes("FORBIDDEN")?"沒有權限":isPhoneDup(error)?PHONE_TAKEN_MSG:"儲存失敗："+error.message);
     const id=data.contact_id||savedId, old=state.contacts.find(x=>x.id===id)||{};
     const changed=extra.clear_merge_hint||extra.emergency_name!==(old.emergency_name||"")||extra.emergency_relation!==(old.emergency_relation||"")||extra.emergency_phone!==(old.emergency_phone||"");
     if(id&&changed){ const r=await supabase.rpc("admin_save_contact_extra",{p_contact_id:id,p_data:extra}); if(r.error) toast("基本資料已存，但緊急聯絡人沒有存到："+r.error.message); }
@@ -1417,10 +1431,10 @@ function apply(){
       <div class="field full"><label>登入帳號用</label><div class="actions"><label><input type="radio" name="login_type" value="phone" checked> 手機</label><label><input type="radio" name="login_type" value="email"> Email</label></div></div>
       <div class="field"><label>姓名 *</label><input name="name" required maxlength="40" autocomplete="name"></div>
       ${phoneField("手機",'',{required:true,autocomplete:"tel"})}
-      <div class="field"><label id="applyEmailLabel">Email</label><input name="email" type="email" maxlength="120" autocomplete="email"></div>
+      <div class="field"><label id="applyEmailLabel">Email *</label><input name="email" type="email" required maxlength="120" autocomplete="email"></div>
       ${genderField()}
-      <div class="field"><label>生日</label><input name="birth_date" type="date" min="1900-01-01"></div>
-      ${cityField()}
+      <div class="field"><label>出生年月日 *</label><input name="birth_date" type="date" required min="1900-01-01"></div>
+      ${cityField("",true)}
       <div class="field"><label>密碼 *（至少 8 個字）</label><input name="password" type="password" required minlength="8" maxlength="72" autocomplete="new-password"></div>
       <div class="field"><label>再輸入一次密碼 *</label><input name="again" type="password" required minlength="8" maxlength="72" autocomplete="new-password"></div>
       <label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="${STUDENT_HOME}privacy.html" target="_blank">個資告知</a>，資料僅用於活動與會員服務。</span></label>
@@ -1431,6 +1445,7 @@ function apply(){
 async function submitApply(form,data){
   const ph=readPhone(data); if(ph.error||!ph.phone) return toast(ph.error||"請填寫手機");
   const checked=checkProfile({...data,phone:ph.phone}); if(checked.error) return toast(checked.error);
+  const miss=missingRequired(checked.value); if(miss) return toast(miss);
   const type=data.login_type==="email"?"email":"phone";
   if(type==="email"&&!checked.value.email) return toast("用 Email 當帳號時，請填寫 Email");
   const problem=checkNewPassword(data.password,data.again); if(problem) return toast(problem);
@@ -1448,6 +1463,8 @@ function demoApply(p){
   const email=studentAuthEmail(p.login_type,p.login_type==="email"?p.email:p.phone);
   const taken=Object.values(state.student_accounts||{}).some(a=>studentAuthEmail(a.login_type,a.login)===email)||(state.student_applications||[]).some(a=>a.status==="pending"&&studentAuthEmail(a.login_type,a.login)===email);
   if(taken) return {error:"這個帳號已經申請過或已有人使用；忘記密碼請洽工作人員"};
+  if(phoneOwner(p.phone)) return {error:"這支手機已經是會員了，不能重複註冊。請改用 LINE 登入，或洽工作人員協助。"};
+  if((state.student_applications||[]).some(a=>a.status==="pending"&&a.phone===p.phone)) return {error:"這支手機已經送出申請，請等工作人員開通；有問題請洽工作人員。"};
   const app={id:crypto.randomUUID(),...p,login:p.login_type==="email"?p.email:p.phone,status:"pending",created_at:new Date().toISOString()};
   state.student_applications=[...(state.student_applications||[]),app]; state.applications=state.student_applications.filter(a=>a.status==="pending");
   state.demoApplicant=app.id; state.demoStudent=null; persist(); return {ok:true};
@@ -1467,7 +1484,7 @@ async function reviewApplication(id,approve){
   const a=(state.applications||[]).find(x=>x.id===id); if(!a||!isAdmin()) return;
   if(!confirm(approve?`開通「${a.name}」並建立新會員？`:`拒絕「${a.name}」的申請？他的登入帳號會被刪除。`)) return;
   if(live){
-    if(approve){ const {error}=await supabase.rpc("admin_approve_student_application",{p_id:id}); if(error) return toast(error.message.includes("NOT_PENDING")?"這筆申請已經處理過了":"開通失敗："+error.message); }
+    if(approve){ const {error}=await supabase.rpc("admin_approve_student_application",{p_id:id}); if(error) return toast(error.message.includes("NOT_PENDING")?"這筆申請已經處理過了":isPhoneDup(error)?"開通失敗：這支手機已經是其他會員，請先到會員資料搜尋這支手機確認":"開通失敗："+error.message); }
     else { const res=await callStaff("reject_application",{id}); if(res.error) return toast(res.error); }
     await loadLiveData();
   } else {
@@ -1523,12 +1540,14 @@ function demoMemberApi(action,payload){
   if(action==="update_profile"){
     if(!me)return notMember;
     const checked=checkProfile(payload); if(checked.error)return {error:checked.error};
+    if(phoneOwner(checked.value.phone,me.id)) return {error:"這支手機已經是其他會員在使用，請確認號碼，或洽工作人員協助。"};
     Object.assign(me,checked.value,{marketing_consent:Boolean(payload.marketing),last_interaction_at:new Date().toISOString()}); audit("學員自行修改資料",me.name); persist();
     return {ok:true};
   }
   if(action==="signup"){
     if(me)return {ok:true,contactId:me.id,existing:true};
     const legacy=findLegacyContact(state.contacts,payload);
+    if(!legacy&&phoneOwner(payload.phone)) return {error:"這支手機已經是會員了，不能重複註冊。請改用 LINE 登入，或洽工作人員協助。"};
     const fields={gender:payload.gender||null,birth_date:payload.birth_date||null,region_id:payload.region_id||null,residence_city:payload.residence_city||null,email:payload.email||""};
     let id;
     if(legacy){ id=legacy.id; for(const [k,v] of Object.entries(fields)) if(!legacy[k]&&v)legacy[k]=v; Object.assign(legacy,{line_user_id:line,display_name:"LINE 新朋友",line_status:"active",marketing_consent:Boolean(payload.marketing),last_interaction_at:new Date().toISOString()}); }
@@ -1681,10 +1700,10 @@ function signupForm(data,next){
     <div class="field"><label>姓名 *</label><input name="name" required maxlength="40" autocomplete="name"></div>
     ${phoneField("手機","",{required:true,autocomplete:"tel"})}
     ${genderField()}
-    <div class="field"><label>出生年月日</label><input name="birth_date" type="date" min="1900-01-01"></div>
+    <div class="field"><label>出生年月日 *</label><input name="birth_date" type="date" required min="1900-01-01"></div>
     <div class="field"><label>所屬區域</label><select name="region_id"><option value="">不確定</option>${(data.regions||[]).map(r=>`<option value="${r.id}">${escapeHtml(r.name)}</option>`).join("")}</select></div>
-    ${cityField()}
-    <div class="field"><label>Email</label><input name="email" type="email" autocomplete="email"></div>
+    ${cityField("",true)}
+    <div class="field"><label>Email *</label><input name="email" type="email" required maxlength="120" autocomplete="email"></div>
     <label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="${STUDENT_HOME}privacy.html" target="_blank">個資告知</a>。</span></label>
     <label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收活動與課程訊息，可隨時撤回。</span></label>
     <button class="field full big">${next==="scan"?"送出並完成報到":"送出"}</button></div></form></article>`;
@@ -1693,6 +1712,7 @@ function signupForm(data,next){
 async function submitSignup(data){
   if(!GENDERS.includes(data.gender))return toast("請選擇性別");
   const ph=readPhone(data); if(ph.error) return toast(ph.error); data.phone=ph.phone;
+  const miss=missingRequired(data); if(miss) return toast(miss);
   const btn=$("#signupForm button"); if(btn)btn.disabled=true;
   const result=await memberApi("signup",{...data,privacy:data.privacy==="on",marketing:data.marketing==="on"}); if(result.pending)return;
   if(result.error){ if(btn)btn.disabled=false; return toast(result.error); }
@@ -2233,7 +2253,7 @@ async function runImport(){
       const chunk=todo.slice(i,i+200).map(p=>({...p.row,_row:p.line}));
       const {data,error}=await supabase.rpc("admin_import_contacts",{p_rows:chunk});
       if(error){ result.errors.push(...chunk.map(c=>({row:c._row,error:"上傳失敗："+error.message,name:c.name}))); continue; }
-      result.created+=data.created; result.updated+=data.updated||0; result.skipped+=data.skipped; result.errors.push(...data.errors);
+      result.created+=data.created; result.updated+=data.updated||0; result.skipped+=data.skipped; result.errors.push(...data.errors.map(e=>isPhoneDup(e.error)?{...e,error:"手機已是其他會員"}:e));
     }
     const ev=importEvent();
     if(ev){
@@ -2576,8 +2596,8 @@ document.addEventListener("change",event=>{
   if(event.target.name==="audience"&&event.target.closest("#campaignForm")){ document.querySelectorAll("#campaignForm [data-audience]").forEach(el=>el.hidden=el.dataset.audience!==event.target.value); return updateAudienceCount(); }
   if(event.target.name==="event_id"&&event.target.closest("#campaignForm")) return updateAudienceCount();
   if(event.target.name==="login_type"&&event.target.closest("#signinForm")) document.querySelectorAll("#signinForm [data-login]").forEach(el=>el.hidden=el.dataset.login!==event.target.value);
-  if(event.target.name==="login_type"&&event.target.closest("#applyForm")) $("#applyEmailLabel").textContent=event.target.value==="email"?"Email *（登入帳號）":"Email";
-  if(event.target.id==="regionFilter")location.hash=event.target.value?`contacts?region=${event.target.value}`:"contacts";
+  if(event.target.name==="login_type"&&event.target.closest("#applyForm")) $("#applyEmailLabel").textContent=event.target.value==="email"?"Email *（登入帳號）":"Email *";
+  if(event.target.id==="regionFilter"||event.target.id==="contactSort"){ const q=new URLSearchParams(); const r=$("#regionFilter")?.value, s=$("#contactSort")?.value; if(r)q.set("region",r); if(s&&s!=="member_no")q.set("sort",s); location.hash="contacts"+(q.toString()?"?"+q:""); }
   if(event.target.id==="demoUser")switchDemoUser(event.target.value);
   if(event.target.id==="orgPicker")switchOrg(event.target.value);
   if(event.target.id==="importFile")readImportFile(event.target.files[0]);
