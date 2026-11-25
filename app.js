@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts } from "./lib.js?v=20261124-7";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations } from "./lib.js?v=20261124-8";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -239,7 +239,7 @@ const showPhone=v=>!v?"":String(v).includes("*")?v:displayPhone(v);
 
 // 操作手冊：檔案放在網站根目錄 /manual/（正式站與展示版一樣）；更新手冊時改這兩個檔名
 // 手冊內容更新時改這個版本字串，網址會帶上它，瀏覽器才不會給舊的快取
-const MANUAL_VER="20261125";
+const MANUAL_VER="20261125b";
 const MANUAL_HTML=encodeURI("/manual/2026-11-15_SW-II活動CRM操作手冊.html")+"?v="+MANUAL_VER, MANUAL_PDF=encodeURI("/manual/2026-11-15_SW-II活動CRM操作手冊.pdf")+"?v="+MANUAL_VER;
 // 2026-11-18：手冊依權限只顯示用得到的章節（手冊裡的 data-need 對到這裡的代號）；總管理看完整版。
 // 只是讓畫面清楚，不是保密：手冊沒有個資，直接開網址仍是完整版。
@@ -406,7 +406,7 @@ function dashboard(){
 }
 
 // 活動與課程共用同一套（場次、報名、名單、報到、繳費都一樣），只差 kind 與顯示的字
-const KIND_LABELS={event:"活動",course:"課程"};
+const KIND_LABELS={event:"免費活動",course:"付費課程"};
 const kindOf=e=>e?.kind==="course"?"course":"event";
 // ───── 週報（只有總管理）：2026-11-15 起不做營收分析，金額改由會計的繳費程式處理 ─────
 const ymd=d=>d.toLocaleDateString("sv-SE");
@@ -534,7 +534,7 @@ function registerFeeDemo(r){
 }
 // 活動／課程管理右上角「匯出」：只列這一頁的類別，勾選一或多場（可依狀態、關鍵字篩選），合併成一個 CSV；多場時每列前面加名稱與日期
 function exportPicker(kind){
-  const K=KIND_LABELS[kind]||"活動", mine=visibleEvents().filter(e=>kindOf(e)===kind&&canExportOf(e));
+  const K=KIND_LABELS[kind]||"免費活動", mine=visibleEvents().filter(e=>kindOf(e)===kind&&canExportOf(e));
   const states=[...new Set(mine.map(e=>eventState(e)))];
   const sel=(id,opts)=>`<select id="${id}">${opts.map(([v,t])=>`<option value="${v}">${t}</option>`).join("")}</select>`;
   const rows=[...mine].sort((a,b)=>String(a.starts_at||"").localeCompare(String(b.starts_at||""))).map(e=>{
@@ -611,7 +611,7 @@ const rosterStatusOf=r=>r.cancelled_at?"cancelled":r.attendance_status==="attend
 function rosterPage(){
   const id=query().get("event"), e=visibleEvents().find(x=>x.id===id);
   if(e&&!canRosterPageOf(e)) return `${pageHead("報名名單","這場活動只開放活動資訊，名單只有主辦單位與被指派的志工看得到。",`<a class="button secondary" href="#events">回活動管理</a>`)}`;
-  if(!e) return `${pageHead("報名名單","找不到這場活動，可能已刪除。",`<a class="button secondary" href="#events">回活動管理</a>`)}`;
+  if(!e) return `${pageHead("報名名單","找不到這場活動，可能已刪除。",`<a class="button secondary" href="#events">回免費活動管理</a>`)}`;
   if(rosterView.event!==id) rosterView={event:id,q:"",status:"",pay:"",ans:""};
   const form=cleanForm(e.form||{}), hasForm=formEnabled(form), qs=form.questions;
   const K=KIND_LABELS[kindOf(e)], home=KIND_ROUTES[kindOf(e)], free=isFreeEvent(e); // 免費活動／課程不顯示繳費
@@ -972,7 +972,7 @@ function contactRows(rows){ return rows.map(c=>`<tr class="clickable" data-actio
 function viewContact(id){
   const raw=myContacts().find(c=>c.id===id); if(!raw)return toast("找不到這位會員，或你沒有權限查看");
   const c=visibleContact(raw,fullPii()?"admin":viewer().role,{phone:phoneOk()}); const age=raw.age??ageFrom(raw.birth_date);
-  const history=myRegistrations().filter(r=>r.contact_id===id).map(r=>({...r,event:state.events.find(e=>e.id===r.event_id)}));
+  const history=recentRegistrations(myRegistrations().filter(r=>r.contact_id===id).map(r=>({...r,event:state.events.find(e=>e.id===r.event_id)})));
   const line=(label,value)=>`<div class="kpi-line"><span>${label}</span><strong>${escapeHtml(value||"—")}</strong></div>`;
   const nid=c.national_id_masked?`${escapeHtml(c.national_id_masked)}${isAdmin()?` <button class="link" data-action="reveal-nid" data-id="${id}">查看</button>`:""}`:"—";
   modal(`<div class="profile-head"><div class="avatar" aria-hidden="true">${escapeHtml((c.name||"?").slice(0,1))}</div><div><h2>${escapeHtml(c.name)}</h2><p class="muted">${raw.line_user_id||raw.line_status==="active"?`已綁定 LINE${c.display_name?`（${escapeHtml(c.display_name)}）`:""}`:"尚未綁定 LINE"}</p></div></div>

@@ -1239,3 +1239,9 @@ export function sortContacts(rows, key = "member_no") {
     : key === "age" ? (a, b) => (a.age == null) - (b.age == null) || (a.age ?? 0) - (b.age ?? 0) : () => 0;
   return [...rows].sort((a, b) => cmp(a, b) || byNo(a, b));
 }
+
+// 2026-11-25 會員頁「活動與課程」只顯示近 90 天內（或未來）的活動；更久以前的收起來。查不到日期的（活動已刪）保留。
+export function recentRegistrations(regs, now = Date.now(), days = 90) {
+  const cutoff = now - days * 864e5;
+  return regs.filter(r => { const d = r.event?.starts_at; return !d || new Date(d).getTime() >= cutoff; });
+}
