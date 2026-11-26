@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations, defaultStudentPassword } from "./lib.js?v=20261124-13";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations, defaultStudentPassword } from "./lib.js?v=20261124-14";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -239,7 +239,7 @@ const showPhone=v=>!v?"":String(v).includes("*")?v:displayPhone(v);
 
 // 操作手冊：檔案放在網站根目錄 /manual/（正式站與展示版一樣）；更新手冊時改這兩個檔名
 // 手冊內容更新時改這個版本字串，網址會帶上它，瀏覽器才不會給舊的快取
-const MANUAL_VER="20261127b";
+const MANUAL_VER="20261127c";
 const MANUAL_HTML=encodeURI("/manual/2026-11-15_SW-II活動CRM操作手冊.html")+"?v="+MANUAL_VER, MANUAL_PDF=encodeURI("/manual/2026-11-15_SW-II活動CRM操作手冊.pdf")+"?v="+MANUAL_VER;
 // 2026-11-18：手冊依權限只顯示用得到的章節（手冊裡的 data-need 對到這裡的代號）；總管理看完整版。
 // 只是讓畫面清楚，不是保密：手冊沒有個資，直接開網址仍是完整版。
@@ -1124,7 +1124,8 @@ function messages(){
 }
 function governance(){
   const old=state.contacts.filter(c=>!c.anonymized_at&&new Date(c.last_interaction_at)<new Date(Date.now()-730*864e5));
-  return `${pageHead("資料治理","備份、操作紀錄與兩年閒置資料匿名化。")}<section class="two-col"><article class="card"><h2>資料保存</h2><p>目前符合「閒置滿兩年」的聯絡人：<strong>${old.length}</strong> 位。</p><button data-action="preview-anonymize" ${!isAdmin()?"disabled":""}>預覽匿名化名單</button><p class="muted">匿名化只保留活動統計，姓名、手機、Email 與 LINE 識別碼將不可還原。</p></article><article class="card"><h2>備份</h2><p>管理者可匯出不含系統秘密的 JSON 備份。</p><button class="secondary" data-action="backup" ${!isAdmin()?"disabled":""}>匯出資料備份</button></article></section><h2>最近操作</h2>${(()=>{const isView=a=>String(a.action||"").startsWith("查看");const row=a=>`<tr><td>${escapeHtml(a.at)}</td><td>${escapeHtml(a.actor)}</td><td>${escapeHtml(a.action)}</td><td>${escapeHtml(a.target)}</td></tr>`;const head=`<thead><tr><th>時間</th><th>人員</th><th>動作</th><th>對象</th></tr></thead>`;const main=state.audit.filter(a=>!isView(a)),views=state.audit.filter(isView);return `<div class="table-wrap"><table>${head}<tbody>${main.map(row).join("")||`<tr><td colspan="4" class="muted">沒有紀錄</td></tr>`}</tbody></table></div>${views.length?`<details class="audit-views" style="margin-top:10px"><summary style="cursor:pointer">查看類紀錄（${views.length} 筆，含查看完整身分證；僅檢視、未變更資料，收合以免洗版）</summary><div class="table-wrap" style="margin-top:8px"><table>${head}<tbody>${views.map(row).join("")}</tbody></table></div></details>`:""}`;})()}`;
+  return `${pageHead("資料治理","備份、操作紀錄與兩年閒置資料匿名化。")}<section class="two-col"><article class="card"><h2>資料保存</h2><p>目前符合「閒置滿兩年」的聯絡人：<strong>${old.length}</strong> 位。</p><button data-action="preview-anonymize" ${!isAdmin()?"disabled":""}>預覽匿名化名單</button><p class="muted">匿名化只保留活動統計，姓名、手機、Email 與 LINE 識別碼將不可還原。</p></article><article class="card"><h2>備份</h2><p>管理者可匯出不含系統秘密的 JSON 備份。</p><button class="secondary" data-action="backup" ${!isAdmin()?"disabled":""}>匯出資料備份</button></article></section>
+  <section><article class="card"><h2>批次建立手機登入</h2><p>幫系統裡<b>有手機＋生日、還沒有登入帳號</b>的會員一次建立手機登入，預設密碼用生日（國內民國6碼、海外西元8碼）。目前符合：<strong>${eligiblePhoneLogins().length}</strong> 位。</p><button data-action="bulk-phone-login" ${!isAdmin()?"disabled":""}>批次建立手機登入</button><p class="muted">已有帳號、沒生日的會自動略過。密碼是生日較好猜，請提醒學員登入後自行修改。</p></article></section><h2>最近操作</h2>${(()=>{const isView=a=>String(a.action||"").startsWith("查看");const row=a=>`<tr><td>${escapeHtml(a.at)}</td><td>${escapeHtml(a.actor)}</td><td>${escapeHtml(a.action)}</td><td>${escapeHtml(a.target)}</td></tr>`;const head=`<thead><tr><th>時間</th><th>人員</th><th>動作</th><th>對象</th></tr></thead>`;const main=state.audit.filter(a=>!isView(a)),views=state.audit.filter(isView);return `<div class="table-wrap"><table>${head}<tbody>${main.map(row).join("")||`<tr><td colspan="4" class="muted">沒有紀錄</td></tr>`}</tbody></table></div>${views.length?`<details class="audit-views" style="margin-top:10px"><summary style="cursor:pointer">查看類紀錄（${views.length} 筆，含查看完整身分證；僅檢視、未變更資料，收合以免洗版）</summary><div class="table-wrap" style="margin-top:8px"><table>${head}<tbody>${views.map(row).join("")}</tbody></table></div></details>`:""}`;})()}`;
 }
 
 function users(){
@@ -1807,6 +1808,18 @@ function demoStaff(action,payload){
     state.student_accounts={...(state.student_accounts||{}),[c.id]:{...(state.student_accounts||{})[c.id],login_type:type,login,used:false}};
     return {ok:true,link:`${STUDENT_HOME}#activate?t=demo-${c.id}`,login,login_type:type,name:c.name};
   }
+  if(action==="student_bulk_phone"){
+    const phones=(payload.phones||[]).map(String); const skipped=[]; let created=0;
+    for(const phone of phones){
+      const c=state.contacts.find(x=>!x.anonymized_at&&x.phone===phone);
+      if(!/^\+[1-9]\d{7,14}$/.test(phone)){ skipped.push({phone,reason:"手機格式不正確"}); continue; }
+      if(!c){ skipped.push({phone,reason:"找不到會員"}); continue; }
+      const pw=defaultStudentPassword(phone,c.birth_date||""); if(!pw){ skipped.push({phone,reason:"沒有生日，無法設預設密碼"}); continue; }
+      if((state.student_accounts||{})[c.id]){ skipped.push({phone,reason:"已有登入帳號"}); continue; }
+      state.student_accounts={...(state.student_accounts||{}),[c.id]:{login_type:"phone",login:phone,password:pw,used:true}}; created++;
+    }
+    persist(); return {ok:true,created,skipped};
+  }
   if(action==="student_set_password"){
     const c=state.contacts.find(x=>x.id===payload.contact_id); const type=payload.login_type==="phone"?"phone":"email";
     const login=type==="email"?String(c?.email||"").trim().toLowerCase():c?.phone||"";
@@ -1866,6 +1879,36 @@ async function studentLinkModal(id){
         <div class="field"><label>初始密碼</label><input name="password" minlength="6" maxlength="72" required value="${escapeHtml(defaultStudentPassword(c.phone,c.birth_date))}">
         <p class="muted">預設帶生日（國內民國6碼、海外西元8碼），可自行修改；登入後學員可自行改密碼。</p></div>
         <button type="submit">設定手機登入密碼</button></form>`:""}`);
+}
+// 批次建立手機登入：手機去重、分批（每批 50 支）呼叫後端，彙整結果。密碼由後端用生日算（國內民國6碼／海外西元8碼）。
+async function bulkCreatePhoneLogins(phones){
+  const list=[...new Set(phones.filter(p=>/^\+[1-9]\d{7,14}$/.test(String(p||""))))];
+  let created=0; const skipped=[];
+  for(let i=0;i<list.length;i+=50){
+    const res=await callStaff("student_bulk_phone",{phones:list.slice(i,i+50)});
+    if(res.error) return {error:res.error};
+    created+=res.created||0; skipped.push(...(res.skipped||[]));
+  }
+  return {total:list.length,created,skipped};
+}
+// 資料治理：把現在系統裡「有手機＋生日、還沒有登入帳號」的會員一次建立手機登入
+function eligiblePhoneLogins(){
+  return [...new Set((state.contacts||[]).filter(c=>!c.anonymized_at&&/^\+[1-9]\d{7,14}$/.test(c.phone||"")&&c.birth_date&&!(state.student_accounts||{})[c.id]).map(c=>c.phone))];
+}
+async function runBulkPhoneLogins(){
+  if(!isAdmin()) return;
+  const phones=eligiblePhoneLogins();
+  if(!phones.length) return toast("沒有符合條件的會員（需要有手機＋生日、且還沒有登入帳號）");
+  if(!confirm(`要幫 ${phones.length} 位會員建立手機登入嗎？\n預設密碼用生日（國內民國6碼、海外西元8碼），已有帳號或沒生日的會略過。`)) return;
+  const btn=$("[data-action='bulk-phone-login']"); if(btn){btn.disabled=true;btn.textContent="建立中…";}
+  const res=await bulkCreatePhoneLogins(phones);
+  if(res.error){ if(btn){btn.disabled=false;btn.textContent="批次建立手機登入";} return toast(res.error); }
+  audit("批次建立學員手機登入",`建立 ${res.created}、略過 ${res.skipped.length}`); persist();
+  const reasons={}; res.skipped.forEach(s=>{reasons[s.reason]=(reasons[s.reason]||0)+1;});
+  const rlist=Object.entries(reasons).map(([r,n])=>`${r} ${n} 位`).join("、")||"無";
+  modal(`<h2>批次建立手機登入完成</h2><p>成功建立 <strong>${res.created}</strong> 位；略過 <strong>${res.skipped.length}</strong> 位（${escapeHtml(rlist)}）。</p>
+    <p class="muted">學員用<b>手機號碼＋生日</b>登入；國內民國6碼、海外西元8碼。提醒他們登入後可自行改密碼。</p>
+    <div class="actions"><button data-action="close-modal">好</button></div>`);
 }
 async function setStudentPassword(data){
   if(!data.password||data.password.length<6) return toast("密碼至少 6 碼");
@@ -2258,7 +2301,7 @@ function importPage(){
   if(!canOpen("import"))return `${pageHead("匯入名冊","你沒有匯入名冊的權限。")}`;
   const head=pageHead("匯入會員名冊","從 Excel 或 CSV 一次建立舊會員；姓名＋手機與現有會員相同的會自動略過。",`<button class="secondary" data-action="import-template">下載範本</button>`);
   if(!importState) return `${head}<article class="card"><h2>1. 選擇檔案</h2><p class="muted">第一列要是欄位名稱，例如：姓名、手機、性別、出生年月日、區域、地址、Email、身分證、備註。欄位順序不拘，系統會自動辨認。</p><input type="file" id="importFile" accept=".xlsx,.xls,.csv"><p class="muted">資料只在你的瀏覽器裡整理，按下「確認匯入」之前不會寫入系統。</p></article>`;
-  if(importState.result){ const r=importState.result; return `${head}<article class="card result-card ok"><div class="result-icon" aria-hidden="true">✓</div><h1>匯入完成</h1><p>新增 <strong>${r.created}</strong> 位・補資料 <strong>${r.updated||0}</strong> 位・略過 <strong>${r.skipped}</strong> 位（已存在或重複）・失敗 <strong>${r.errors.length}</strong> 列</p>${r.event?`<p>報名到「${escapeHtml(r.event)}」：新報名 <strong>${r.registered}</strong> 位・更新答案 <strong>${r.regUpdated}</strong> 位</p>`:""}<div class="actions" style="justify-content:center">${r.errors.length?`<button class="secondary" data-action="import-errors">下載失敗清單</button>`:""}<a class="button" href="#contacts">看會員資料</a><button class="secondary" data-action="import-reset">再匯入一個檔案</button></div></article>`; }
+  if(importState.result){ const r=importState.result; return `${head}<article class="card result-card ok"><div class="result-icon" aria-hidden="true">✓</div><h1>匯入完成</h1><p>新增 <strong>${r.created}</strong> 位・補資料 <strong>${r.updated||0}</strong> 位・略過 <strong>${r.skipped}</strong> 位（已存在或重複）・失敗 <strong>${r.errors.length}</strong> 列</p>${r.event?`<p>報名到「${escapeHtml(r.event)}」：新報名 <strong>${r.registered}</strong> 位・更新答案 <strong>${r.regUpdated}</strong> 位</p>`:""}${r.logins?`<p>手機登入：建立 <strong>${r.logins.created}</strong> 位・略過 <strong>${r.logins.skipped.length}</strong> 位（已有帳號或沒生日）。密碼用生日（國內民國6碼、海外西元8碼）。</p>`:""}<div class="actions" style="justify-content:center">${r.errors.length?`<button class="secondary" data-action="import-errors">下載失敗清單</button>`:""}<a class="button" href="#contacts">看會員資料</a><button class="secondary" data-action="import-reset">再匯入一個檔案</button></div></article>`; }
   const prepared=preparedRows(); const count=k=>prepared.filter(p=>p.status===k).length;
   const opts=sel=>`<option value="">（不匯入）</option>${importState.headers.map((h,i)=>`<option value="${i}" ${sel===i?"selected":""}>${escapeHtml(h||`第 ${i+1} 欄`)}</option>`).join("")}`;
   const mapping=IMPORT_FIELDS.map(([key,label])=>`<div class="field"><label>${label}${key==="name"?" *":""}</label><select data-map-field="${key}">${opts(importState.map[key])}</select></div>`).join("");
@@ -2268,11 +2311,13 @@ function importPage(){
     <article class="card" style="margin-top:16px"><h2>3. 預覽</h2>${importEvent()?`<div class="kpi-line"><span>報名到「${escapeHtml(importEvent().title)}」</span><strong>${prepared.filter(p=>p.status!=="error"&&!p.fileDup).length} 人</strong></div>`:""}<div class="kpi-line"><span>會新增</span><strong>${count("new")}</strong></div><div class="kpi-line"><span>已存在、補上空白欄位與新標籤（不覆蓋）</span><strong>${count("update")}</strong></div><div class="kpi-line"><span>會略過（已存在且不需補／檔案內重複）</span><strong>${count("duplicate")}</strong></div><div class="kpi-line"><span>有錯誤、不會匯入</span><strong>${count("error")}</strong></div>
     ${importState.map.name===undefined?`<div class="notice">請先指定哪一欄是「姓名」。</div>`:""}
     <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>列</th><th>結果</th><th>姓名</th><th>手機</th><th>性別</th><th>生日</th><th>區域</th><th>身分證</th><th>LINE</th><th>標籤</th>${importEvent()?"<th>答案</th>":""}<th>說明</th></tr></thead><tbody>${preview}</tbody></table></div>${prepared.length>100?`<p class="muted">只顯示前 100 列，匯入時會處理全部。</p>`:""}
+    ${isAdmin()?`<label class="field" style="display:flex;gap:8px;align-items:flex-start;margin:12px 0 0"><input type="checkbox" id="importMakeLogin"><span>同時幫有手機＋生日的人建立「手機登入」，預設密碼用生日（國內民國6碼、海外西元8碼）。已有帳號、沒生日的會略過。</span></label>`:""}
     <div class="actions" style="margin-top:14px"><button data-action="import-run" ${!(count("new")+count("update")+(importEvent()?count("duplicate"):0))||importState.map.name===undefined?"disabled":""}>確認匯入（新增 ${count("new")}、補資料 ${count("update")}${importEvent()?`、報名 ${prepared.filter(p=>p.status!=="error"&&!p.fileDup).length}`:""}）</button><button class="secondary" data-action="import-reset">換一個檔案</button></div></article>`;
 }
 async function runImport(){
   if(!canOpen("import")||!importState)return;
   const prepared=preparedRows(); const todo=prepared.filter(p=>p.status==="new"||p.status==="update");
+  const makeLogin=$("#importMakeLogin")?.checked;  // 先記下勾選，之後畫面會重繪
   const btn=$("[data-action='import-run']"); if(btn){btn.disabled=true;btn.textContent="匯入中…";}
   const result={created:0,updated:0,skipped:prepared.filter(p=>p.status==="duplicate").length,errors:prepared.filter(p=>p.status==="error").map(p=>({row:p.line,error:p.errors.join("；"),name:p.row.name}))};
   if(live){
@@ -2302,6 +2347,10 @@ async function runImport(){
     }
     const ev=importEvent();
     if(ev){ Object.assign(result,{event:ev.title,registered:0,regUpdated:0}); for(const p of prepared.filter(p=>p.status!=="error"&&!p.fileDup)) demoImportRegistration(ev,p,result); ev.registration_count=state.registrations.filter(r=>r.event_id===ev.id&&!r.cancelled_at).length; }
+  }
+  if(makeLogin&&isAdmin()){
+    const phones=prepared.filter(p=>p.status!=="error"&&p.row.phone&&p.row.birth_date).map(p=>p.row.phone);
+    if(phones.length){ const lg=await bulkCreatePhoneLogins(phones); if(!lg.error){ result.logins=lg; audit("批次建立學員手機登入",`匯入時建立 ${lg.created}、略過 ${lg.skipped.length}`); } }
   }
   importState.result=result; audit("匯入會員名冊",`${importState.fileName}：新增 ${result.created}、補資料 ${result.updated}、略過 ${result.skipped}、失敗 ${result.errors.length}${result.event?`；報名「${result.event}」新增 ${result.registered}、更新 ${result.regUpdated}`:""}`); persist(); render();
 }
@@ -2472,6 +2521,7 @@ async function onClick(event){
   if(action==="student-logout"){ await studentSignOut(); location.hash="#register"; return toast("已登出"); }
   if(action==="line-login-me"){ if(!lineReady()) return toast(LINE_NOT_READY); await liffReady; return lineLogin(); }
   if(action==="student-link") return studentLinkModal(btn.dataset.id);
+  if(action==="bulk-phone-login") return runBulkPhoneLogins();
   if(action==="approve-application") return reviewApplication(btn.dataset.id,true);
   if(action==="reject-application") return reviewApplication(btn.dataset.id,false);
   if(action==="logout"){ await supabase?.auth.signOut(); location.hash="login"; return location.reload(); }
