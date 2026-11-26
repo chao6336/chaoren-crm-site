@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations, defaultStudentPassword } from "./lib.js?v=20261124-12";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations, defaultStudentPassword } from "./lib.js?v=20261124-13";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -218,11 +218,11 @@ function phoneField(label,value="",{required=false,autocomplete=""}={}){
 const PHONE_TAKEN_MSG="這支手機已經是會員了，不能重複建立。請先搜尋這支手機，確認是不是同一個人。";
 const isPhoneDup=e=>/PHONE_DUPLICATE|contacts_phone_unique/.test(String(e?.message||e||""));
 const phoneOwner=(phone,exceptId)=>phone&&state.contacts.find(c=>c.id!==exceptId&&!c.anonymized_at&&c.phone===phone);
-function missingRequired(d){
+function missingRequired(d,opts={}){
   if(!d.phone) return "請填寫手機";
   if(!d.birth_date) return "請填寫出生年月日";
   if(!d.residence_city) return "請選擇居住縣市";
-  if(!String(d.email||"").trim()) return "請填寫 Email";
+  if(!opts.emailOptional&&!String(d.email||"").trim()) return "請填寫 Email";  // 2026-11-27 後台新增會員 Email 改選填（年長學員多無 Email）
   return "";
 }
 function readPhone(data){
@@ -239,7 +239,7 @@ const showPhone=v=>!v?"":String(v).includes("*")?v:displayPhone(v);
 
 // 操作手冊：檔案放在網站根目錄 /manual/（正式站與展示版一樣）；更新手冊時改這兩個檔名
 // 手冊內容更新時改這個版本字串，網址會帶上它，瀏覽器才不會給舊的快取
-const MANUAL_VER="20261127";
+const MANUAL_VER="20261127b";
 const MANUAL_HTML=encodeURI("/manual/2026-11-15_SW-II活動CRM操作手冊.html")+"?v="+MANUAL_VER, MANUAL_PDF=encodeURI("/manual/2026-11-15_SW-II活動CRM操作手冊.pdf")+"?v="+MANUAL_VER;
 // 2026-11-18：手冊依權限只顯示用得到的章節（手冊裡的 data-need 對到這裡的代號）；總管理看完整版。
 // 只是讓畫面清楚，不是保密：手冊沒有個資，直接開網址仍是完整版。
@@ -1004,7 +1004,7 @@ function contactForm(id){
     <div class="field"><label>出生年月日${id?"":" *"}</label><input name="birth_date" type="date" min="1900-01-01" ${id?"":"required"} value="${hideF?"":v("birth_date")}">${hideF?keepNote:""}</div>
     <div class="field"><label>區域</label><select name="region_id">${regionOptions(c?.region_id,{withNone:!scope.length,only:scope.length?scope:null})}</select></div>
     ${cityField(c?.residence_city,!id)}
-    <div class="field"><label>Email${id?"":" *"}</label><input name="email" type="email" ${id?"":"required"} maxlength="120" value="${hideF?"":v("email")}">${hideF?keepNote:""}</div>
+    <div class="field"><label>Email</label><input name="email" type="email" maxlength="120" value="${hideF?"":v("email")}">${hideF?keepNote:""}</div>
     <div class="field full"><label>地址</label><input name="address" maxlength="200" value="${hideF?"":v("address")}">${hideF?keepNote:""}</div>
     ${!fullPii()?"":`<div class="field full"><label>身分證字號</label><input name="national_id" maxlength="10" autocomplete="off" placeholder="${c?.national_id_masked||maskNationalId(c?.national_id)||"A123456789"}"><small class="muted">${id?"留空＝不變更；":""}只有總管理看得到完整號碼，存檔後加密保存。</small></div>`}
     <div class="field full"><label>備註</label><textarea name="notes" maxlength="2000">${v("notes")}</textarea></div>
@@ -1024,7 +1024,7 @@ async function saveContact(data){
   if(emPhoneRaw&&!emPhone) return toast("緊急聯絡電話格式不正確");
   const extra={emergency_name:String(data.emergency_name||"").trim(),emergency_relation:String(data.emergency_relation||"").trim(),emergency_phone:emPhone||"",clear_merge_hint:data.clear_merge_hint==="on"};
   const fields={name:data.name.trim(),phone:data.phone,email:data.email,gender:data.gender,birth_date:data.birth_date,region_id:data.region_id||null,residence_city:data.residence_city||null,address:data.address,notes:data.notes};
-  if(!data.contact_id){ const miss=missingRequired(fields); if(miss) return toast(miss); }
+  if(!data.contact_id){ const miss=missingRequired(fields,{emailOptional:true}); if(miss) return toast(miss); }
   if(phoneOwner(fields.phone,data.contact_id||null)) return toast(PHONE_TAKEN_MSG);
   if(live){
     const {data:savedId,error}=await supabase.rpc("admin_save_contact",{p_contact_id:data.contact_id||null,p_data:fields,p_national_id:nid||null});
