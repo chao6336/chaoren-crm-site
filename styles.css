@@ -78,8 +78,8 @@ dialog #modalBody{max-height:calc(100vh - 32px);overflow:auto}
 /* 登入頁 2026-11-26（v4 品牌版：左品牌右表單，手機收成單欄＋頂部 LOGO） */
 body.auth-screen .topbar,body.auth-screen .sidebar{display:none!important}
 body.auth-screen .shell{display:block;height:100vh;height:100dvh}
-body.auth-screen #app{height:100vh;height:100dvh;padding:0;overflow:auto;display:grid;place-items:center;background:linear-gradient(135deg,#eef3f0,#dfe9e3)}
-.auth{display:grid;grid-template-columns:1.05fr .95fr;width:min(1120px,94vw);aspect-ratio:16/9;max-height:94vh;border-radius:20px;overflow:hidden;box-shadow:0 30px 80px -24px rgba(20,70,45,.4)}
+body.auth-screen #app{height:100vh;height:100dvh;padding:0;overflow:auto}
+.auth{display:grid;grid-template-columns:1.05fr .95fr;min-height:100vh;min-height:100dvh;width:100%}
 .auth-brand,.auth-form{overflow:auto}
 .auth-brand{position:relative;overflow:hidden;color:#fff;padding:54px 50px;display:flex;flex-direction:column;justify-content:space-between;background:radial-gradient(620px 420px at 18% 16%,rgba(114,175,45,.28),transparent 60%),linear-gradient(150deg,#0a7f58 0%,#00694B 48%,#013f2c 100%)}
 .auth-brand .deco{position:absolute;border-radius:50%;filter:blur(2px);background:#72AF2D}
@@ -111,7 +111,7 @@ body.auth-screen #app{height:100vh;height:100dvh;padding:0;overflow:auto;display
 .auth-panel .btn:hover{background:#013f2c}
 .auth-panel .forgot{display:block;text-align:center;margin-top:14px;color:#2a7d4e;font-size:13px;background:none;border:0;cursor:pointer;width:100%;text-decoration:none}
 .auth-panel .forgot:hover{text-decoration:underline}
-@media(max-width:760px){.auth{grid-template-columns:1fr;width:100%;aspect-ratio:auto;max-height:none;min-height:100vh;min-height:100dvh;border-radius:0;box-shadow:none}.auth-brand{display:none}.auth-panel .mhead{display:flex}}
+@media(max-width:760px){.auth{grid-template-columns:1fr}.auth-brand{display:none}.auth-panel .mhead{display:flex}}
 .auth-panel .actions{display:flex;gap:16px;margin-top:2px}
 .auth-panel .actions label{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#30423a;margin:0}
 .auth-panel select{width:100%;padding:11px 14px;border:1px solid #d7e0da;border-radius:12px;font-size:15px;background:#fff;outline:none}
