@@ -12,7 +12,7 @@
     // 新版自動更新：GitHub Pages 會把網頁快取 10 分鐘，一般重新整理可能還拿到舊版。
     // 開頁時向伺服器問一次最新版本號（不走快取），跟這頁不同就自動重新載入一次。
     // 登入／重設密碼連結（網址帶憑證）不重新載入，避免憑證被吃掉。
-    window.CRM_BUILD="20261124-9";
+    window.CRM_BUILD="20261124-10";
     (function(){ try{
       if(/access_token=|refresh_token=|error_description=/.test(location.hash)||/[?&](code|state|liff\.state|flow)=/.test(location.search)) return;
       fetch("../version.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null;}).then(function(j){
@@ -22,7 +22,7 @@
       }).catch(function(){});
     }catch(e){} })();
   </script>
-  <link rel="stylesheet" href="../styles.css?v=20261124-9">
+  <link rel="stylesheet" href="../styles.css?v=20261124-10">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
@@ -58,6 +58,6 @@
   <div id="toast" role="status" aria-live="polite"></div>
 
   <script src="../config.js?v=20261030-1"></script>
-  <script type="module" src="../app.js?v=20261124-9"></script>
+  <script type="module" src="../app.js?v=20261124-10"></script>
 </body>
 </html>

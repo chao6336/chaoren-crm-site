@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations } from "./lib.js?v=20261124-9";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations } from "./lib.js?v=20261124-10";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -2426,9 +2426,11 @@ function login(){ return `<div class="auth">
         <div class="mhead"><img src="/assets/sw-ii-icon.png" alt="SW-II" width="48" height="48"><span class="name">CRM</span></div>
         <div class="accent"></div>
         <h1>登入</h1>
-        <p class="sub">請用你的帳號登入</p>
+        <p class="sub">工作人員與學員，請用自己的帳號登入</p>
         <form id="loginForm">
-          <div class="field"><label>Email</label><input type="email" name="email" required autocomplete="username"></div>
+          <div class="field"><label>帳號</label><div class="actions"><label><input type="radio" name="login_type" value="email" checked> Email</label><label><input type="radio" name="login_type" value="phone"> 手機</label></div></div>
+          <div class="field" data-login="email"><label>Email</label><input name="email" type="email" autocomplete="username"></div>
+          <div class="full" data-login="phone" hidden>${phoneField("手機")}</div>
           <div class="field"><label>密碼</label><input type="password" name="password" required autocomplete="current-password"></div>
           <button class="btn" type="submit">登　入</button>
         </form>
@@ -2624,7 +2626,7 @@ document.addEventListener("change",event=>{
   if(event.target.name==="export_event") return updateExportCount();
   if(event.target.name==="audience"&&event.target.closest("#campaignForm")){ document.querySelectorAll("#campaignForm [data-audience]").forEach(el=>el.hidden=el.dataset.audience!==event.target.value); return updateAudienceCount(); }
   if(event.target.name==="event_id"&&event.target.closest("#campaignForm")) return updateAudienceCount();
-  if(event.target.name==="login_type"&&event.target.closest("#signinForm")) document.querySelectorAll("#signinForm [data-login]").forEach(el=>el.hidden=el.dataset.login!==event.target.value);
+  if(event.target.name==="login_type"){ const f=event.target.closest("#signinForm,#loginForm"); if(f) f.querySelectorAll("[data-login]").forEach(el=>el.hidden=el.dataset.login!==event.target.value); }
   if(event.target.name==="login_type"&&event.target.closest("#applyForm")) $("#applyEmailLabel").textContent=event.target.value==="email"?"Email *（登入帳號）":"Email *";
   if(event.target.id==="regionFilter"||event.target.id==="contactSort"){ const q=new URLSearchParams(); const r=$("#regionFilter")?.value, s=$("#contactSort")?.value; if(r)q.set("region",r); if(s&&s!=="member_no")q.set("sort",s); location.hash="contacts"+(q.toString()?"?"+q:""); }
   if(event.target.id==="demoUser")switchDemoUser(event.target.value);
@@ -2684,8 +2686,14 @@ async function onSubmit(event){
   if(event.target.id==="registrationForm") return submitRegistration(data,sessionIds(event.target));
   if(event.target.id==="quickRegisterForm") return quickRegisterMany(event.target,sessionIds(event.target));
   if(event.target.id==="loginForm"){
-    const {error}=await supabase.auth.signInWithPassword(data); if(error)return toast("登入失敗，請確認帳號與密碼"); setStudentMode(false); await loadLiveData();
-    if(state.role==="none"){ await supabase.auth.signOut(); return toast("這個帳號尚未開通工作人員權限，請洽總管理"); }
+    // 2026-11-26 同一個登入頁：工作人員進後台；帳密學員（登入成功但沒有工作人員身分）導到學員頁（報名／報到／改資料）
+    const type=data.login_type==="phone"?"phone":"email";
+    let value=data.email;
+    if(type==="phone"){ const ph=readPhone(data); if(ph.error||!ph.phone) return toast(ph.error||"請輸入手機"); value=ph.phone; }
+    const email=studentAuthEmail(type,value); if(!email) return toast(type==="phone"?"請輸入正確的手機":"請輸入正確的 Email");
+    const {error}=await supabase.auth.signInWithPassword({email,password:data.password}); if(error)return toast("登入失敗，請確認帳號與密碼");
+    setStudentMode(false); await loadLiveData();
+    if(state.role==="none"){ setStudentMode(true); location.replace(publicUrl("#me")); return; }  // 不是工作人員 → 當學員
     let back=""; try{ back=sessionStorage.getItem("afterLogin")||""; sessionStorage.removeItem("afterLogin"); }catch{}
     location.hash=back==="messages"?"messages":"dashboard";  // 從 LINE 待審通知點進來的，登入後直接到 LINE 訊息頁
   }
