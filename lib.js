@@ -1245,3 +1245,15 @@ export function recentRegistrations(regs, now = Date.now(), days = 90) {
   const cutoff = now - days * 864e5;
   return regs.filter(r => { const d = r.event?.starts_at; return !d || new Date(d).getTime() >= cutoff; });
 }
+
+// 2026-11-26 幫學員設手機登入初始密碼的預設值：國內（手機 +886 或沒國碼）用民國年6碼 YYMMDD，海外（其他國碼）用西元年8碼 YYYYMMDD。沒生日回空字串。
+export function defaultStudentPassword(phone = "", birthDate = "") {
+  const m = String(birthDate).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return "";
+  const [, y, mo, d] = m;
+  const p = String(phone).trim();
+  const overseas = p.startsWith("+") && !p.startsWith("+886");  // 只有「+國碼且非 +886」算海外；本地 09… 視為國內
+  if (overseas) return `${y}${mo}${d}`;
+  const roc = Number(y) - 1911;
+  return roc >= 1 ? `${String(roc).padStart(2, "0")}${mo}${d}` : `${y}${mo}${d}`;
+}

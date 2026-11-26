@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations } from "./lib.js?v=20261124-11";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations, defaultStudentPassword } from "./lib.js?v=20261124-12";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -239,7 +239,7 @@ const showPhone=v=>!v?"":String(v).includes("*")?v:displayPhone(v);
 
 // 操作手冊：檔案放在網站根目錄 /manual/（正式站與展示版一樣）；更新手冊時改這兩個檔名
 // 手冊內容更新時改這個版本字串，網址會帶上它，瀏覽器才不會給舊的快取
-const MANUAL_VER="20261125b";
+const MANUAL_VER="20261127";
 const MANUAL_HTML=encodeURI("/manual/2026-11-15_SW-II活動CRM操作手冊.html")+"?v="+MANUAL_VER, MANUAL_PDF=encodeURI("/manual/2026-11-15_SW-II活動CRM操作手冊.pdf")+"?v="+MANUAL_VER;
 // 2026-11-18：手冊依權限只顯示用得到的章節（手冊裡的 data-need 對到這裡的代號）；總管理看完整版。
 // 只是讓畫面清楚，不是保密：手冊沒有個資，直接開網址仍是完整版。
@@ -1807,6 +1807,14 @@ function demoStaff(action,payload){
     state.student_accounts={...(state.student_accounts||{}),[c.id]:{...(state.student_accounts||{})[c.id],login_type:type,login,used:false}};
     return {ok:true,link:`${STUDENT_HOME}#activate?t=demo-${c.id}`,login,login_type:type,name:c.name};
   }
+  if(action==="student_set_password"){
+    const c=state.contacts.find(x=>x.id===payload.contact_id); const type=payload.login_type==="phone"?"phone":"email";
+    const login=type==="email"?String(c?.email||"").trim().toLowerCase():c?.phone||"";
+    if(!c||!studentAuthEmail(type,login)) return {error:"這位會員沒有正確的"+(type==="email"?" Email":"手機")};
+    if(!payload.password||payload.password.length<6) return {error:"密碼請設定 6 到 72 個字"};
+    state.student_accounts={...(state.student_accounts||{}),[c.id]:{...(state.student_accounts||{})[c.id],login_type:type,login,password:payload.password,used:true}};
+    persist(); return {ok:true,login,login_type:type,name:c.name};
+  }
   if(action==="update"){ const s=state.staff.find(x=>x.id===payload.user_id); if(s.id===state.as&&(payload.active===false||(payload.role&&payload.role!=="admin"))) return {error:"不能停用或降級自己的帳號，避免沒有總管理"}; Object.assign(s,{...(payload.role?{role:payload.role,region_id:payload.role==="region_lead"?payload.region_id:null}:{}),...("permissions" in payload?{permissions:(payload.role||s.role)==="admin"?null:payload.permissions}:{}),...(typeof payload.active==="boolean"?{active:payload.active}:{})}); persist(); return {ok:true}; }
   if(action==="delete"){ const s=state.staff.find(x=>x.id===payload.user_id); if(!s) return {error:"找不到這位工作人員"}; if(s.id===state.as) return {error:"不能刪除自己的帳號"}; if(payload.confirm_name!==s.display_name) return {error:"姓名不符，未刪除"}; if(s.role==="admin"&&s.active&&state.staff.filter(x=>x.role==="admin"&&x.active).length<=1) return {error:"至少要留一位使用中的總管理"}; state.staff=state.staff.filter(x=>x!==s); persist(); return {ok:true}; }
 }
@@ -1850,7 +1858,23 @@ async function studentLinkModal(id){
       <label><input type="radio" name="login_type" value="email" ${hasEmail?"":"disabled"} ${pick==="email"&&hasEmail?"checked":""}> Email：${escapeHtml(c.email||"（沒有填）")}</label>
       <label><input type="radio" name="login_type" value="phone" ${hasPhone?"":"disabled"} ${pick==="phone"&&hasPhone?"checked":""}> 手機：${escapeHtml(showPhone(c.phone)||"（沒有填）")}</label></div>
       <button type="submit">${a?"重新產生連結":"產生連結"}</button></form>`:`<div class="notice">這位會員沒有 Email 或手機，請先按「編輯資料」補上。</div>`}
-    <p class="muted" style="margin-top:12px">連結 7 天內有效、只能用一次；重新產生會讓舊連結失效。學員忘記密碼時，也是重新產生一次。</p>`);
+    <p class="muted" style="margin-top:12px">連結 7 天內有效、只能用一次；重新產生會讓舊連結失效。學員忘記密碼時，也是重新產生一次。</p>
+    ${hasPhone?`<hr style="margin:18px 0;border:0;border-top:1px solid var(--line)">
+      <h3 style="margin:0 0 4px">或：直接設定手機登入密碼</h3>
+      <p class="muted">給年長、沒有 Email 的學員：用手機 <strong>${escapeHtml(showPhone(c.phone))}</strong> 登入，由你設一組密碼、當面告訴他，不用他自己開連結。</p>
+      <form id="studentPwForm"><input type="hidden" name="contact_id" value="${id}"><input type="hidden" name="login_type" value="phone">
+        <div class="field"><label>初始密碼</label><input name="password" minlength="6" maxlength="72" required value="${escapeHtml(defaultStudentPassword(c.phone,c.birth_date))}">
+        <p class="muted">預設帶生日（國內民國6碼、海外西元8碼），可自行修改；登入後學員可自行改密碼。</p></div>
+        <button type="submit">設定手機登入密碼</button></form>`:""}`);
+}
+async function setStudentPassword(data){
+  if(!data.password||data.password.length<6) return toast("密碼至少 6 碼");
+  const res=await callStaff("student_set_password",data); if(res.error) return toast(res.error);
+  audit("設定學員登入密碼",res.name||""); persist();
+  const label=res.login_type==="phone"?`手機 ${displayPhone(res.login)}`:`Email ${res.login}`;
+  modal(`<h2>手機登入已設定</h2><p><strong>${escapeHtml(res.name||"學員")}</strong> 現在可以用 <strong>${escapeHtml(label)}</strong> 加你剛設定的密碼登入了。</p>
+    <p class="muted">請當面或用紙條把密碼告訴學員（不要貼在群組）；提醒他登入後可自行改密碼。</p>
+    <div class="actions"><button data-action="close-modal">好</button></div>`);
 }
 async function createStudentLink(data){
   if(!data.login_type) return toast("請選擇登入帳號用 Email 或手機");
@@ -2640,13 +2664,14 @@ document.addEventListener("change",event=>{
 });
 
 async function onSubmit(event){
-  if(!["assignForm","rejectCampaignForm","eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","regPayForm","tagCreateForm","tagEditForm","tagCategoryForm","tagExportForm","tagAssignForm","ctagCreateForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","staffDeleteForm","deleteContactForm","deleteEventForm","regFormMember","profileForm","signinForm","activateForm","studentLinkForm","applyForm"].includes(event.target.id))return;
+  if(!["assignForm","rejectCampaignForm","eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","regPayForm","tagCreateForm","tagEditForm","tagCategoryForm","tagExportForm","tagAssignForm","ctagCreateForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","staffDeleteForm","deleteContactForm","deleteEventForm","regFormMember","profileForm","signinForm","activateForm","studentLinkForm","studentPwForm","applyForm"].includes(event.target.id))return;
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target));
   if(event.target.id==="contactForm") return saveContact(data);
   if(event.target.id==="profileForm") return saveProfile(event.target,data);
   if(event.target.id==="signinForm") return submitSignin(data);
   if(event.target.id==="activateForm") return submitActivate(event.target,data);
   if(event.target.id==="studentLinkForm") return createStudentLink(data);
+  if(event.target.id==="studentPwForm") return setStudentPassword(data);
   if(event.target.id==="applyForm") return submitApply(event.target,data);
   if(event.target.id==="signupForm") return submitSignup(data);
   if(event.target.id==="sponsorForm") return saveSponsor(data);
