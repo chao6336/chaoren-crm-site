@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations } from "./lib.js?v=20261124-8";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations } from "./lib.js?v=20261124-9";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -361,6 +361,7 @@ function render(){
   const signedOut=!IS_ADMIN||live&&["none","setting-password","link-pending","public"].includes(state.role);
   if(signedOut&&!["login","register","set-password",...STUDENT_ROUTES].includes(name)){ if(IS_ADMIN&&name==="messages") try{ sessionStorage.setItem("afterLogin","messages"); }catch{} location.hash="login"; return; }
   document.body.classList.toggle("signed-out",signedOut);
+  document.body.classList.toggle("auth-screen",name==="login");  // 登入頁全螢幕（藏 topbar／sidebar）
   renderOrgPicker();
   document.body.classList.toggle("student-view",STUDENT_ROUTES.includes(name));
   const appLink=document.querySelector('.sidebar a[data-route="applications"]'); if(appLink) appLink.textContent=`待開通${(state.applications||[]).length?`（${state.applications.length}）`:""}`;
@@ -2406,9 +2407,35 @@ function exportSponsors(){
   download("贊助紀錄.csv",rowsToCsv(rows,[["會員","member"],["項目","item"],["金額","amount"],["狀態","status"],["收款日期","paid_at"],["感謝狀／收據編號","receipt_no"],["備註","note"]]),"text/csv;charset=utf-8");
 }
 
-function login(){ return `${pageHead("工作人員登入","只有經總管理開通的帳號能查看 CRM。")}
-  <article class="card" style="max-width:460px;margin:auto"><form id="loginForm"><div class="field"><label>Email</label><input type="email" name="email" required autocomplete="username"></div><div class="field" style="margin-top:12px"><label>密碼</label><input type="password" name="password" required autocomplete="current-password"></div><button style="margin-top:16px;width:100%">登入</button></form>
-  <p style="text-align:center;margin:14px 0 0"><button class="link" data-action="forgot-password">忘記密碼？</button></p></article>`; }
+// 登入頁（2026-11-26 品牌版）：左側品牌＋使命，右側表單；手機收成單欄、表單上方顯示 LOGO。
+// 全螢幕（render() 會加 body.auth-screen 把 topbar／sidebar 藏掉）。表單 id、欄位名與 forgot-password 不變。
+function login(){ return `<div class="auth">
+    <div class="auth-brand">
+      <span class="deco d1"></span><span class="deco d2"></span>
+      <div class="head"><img src="/assets/sw-ii-icon.png" alt="SW-II" width="56" height="56"><span class="name">CRM</span></div>
+      <div>
+        <div class="eyebrow">使命　Mission</div>
+        <h2>建立一個全球性的正念生命<br><span class="hl">教育與涵養教育的網絡</span></h2>
+        <p class="mission">Create a world-wide network of Mindfulness Life and Self-cultivation Education.</p>
+      </div>
+      <div class="foot">晁人文鼎協會</div>
+    </div>
+    <div class="auth-form">
+      <span class="auth-cloud">${live?"已連雲端":"展示模式"}</span>
+      <div class="auth-panel">
+        <div class="mhead"><img src="/assets/sw-ii-icon.png" alt="SW-II" width="48" height="48"><span class="name">CRM</span></div>
+        <div class="accent"></div>
+        <h1>登入</h1>
+        <p class="sub">請用你的帳號登入</p>
+        <form id="loginForm">
+          <div class="field"><label>Email</label><input type="email" name="email" required autocomplete="username"></div>
+          <div class="field"><label>密碼</label><input type="password" name="password" required autocomplete="current-password"></div>
+          <button class="btn" type="submit">登　入</button>
+        </form>
+        <button class="forgot" data-action="forgot-password">忘記密碼？</button>
+      </div>
+    </div>
+  </div>`; }
 
 async function onClick(event){
   const btn=event.target.closest("[data-action]");
