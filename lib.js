@@ -625,7 +625,7 @@ export const IMPORT_FIELDS = [
   ["region", "區域", ["區域", "地區", "分區", "所屬區域", "區別", "region"]],
   ["address", "地址", ["地址", "住址", "通訊地址", "address"]],
   ["email", "Email", ["email", "e-mail", "電子郵件", "信箱"]],
-  ["national_id", "身分證", ["身分證", "身分證字號", "身份證", "身份證字號", "身分證號"], v => /^[A-Z][0-9A-Z][0-9]{8}$/i.test(v)],
+  ["national_id", "身分證字號／護照號碼", ["身分證", "身分證字號", "身份證", "身份證字號", "身分證號", "護照", "護照號碼"], v => /^[A-Z][0-9A-Z][0-9]{8}$/i.test(v)],
   ["line_user_id", "LINE ID", ["lineuserid", "line_user_id", "lineid", "external_member_id"], v => /^U[0-9a-f]{32}$/.test(v)],
   ["tags", "標籤／參加紀錄", ["標籤", "tag", "tags"]],
   ["notes", "備註", ["備註", "說明", "notes", "note"]]
@@ -688,9 +688,8 @@ export function prepareImportRow(raw, map, { regions = [], existing = [], seen =
   const cityText = cell("residence_city");
   const residence_city = normalizeCity(cityText) || normalizeCity(cell("address"));
   if (cityText && !normalizeCity(cityText)) warnings.push(`看不懂居住縣市「${cityText}」${residence_city ? `，改用地址的${residence_city}` : "，先留空"}`);
-  const nid = cell("national_id").toUpperCase();
-  const national_id = nid && isValidNationalId(nid) ? nid : "";
-  if (nid && !national_id) warnings.push("身分證格式不正確，未匯入");
+  // 2026-11-27：身分證／護照不限制格式（海外用護照），有填就收
+  const national_id = cell("national_id").toUpperCase().slice(0, 20);
   const lineText = cell("line_user_id");
   const line_user_id = /^U[0-9a-f]{32}$/.test(lineText) ? lineText : null;
   if (lineText && !line_user_id) warnings.push("LINE ID 格式不正確，未匯入");
@@ -1117,9 +1116,8 @@ export function checkFamilyMember(m = {}, form = {}, index = 0, today = new Date
   if (!GENDERS.includes(m.gender)) return { error: `請選擇${who}（${name}）的性別` };
   const birth = String(m.birth_date || "");
   if (badBirth(birth, today)) return { error: `${who}（${name}）的出生日期不正確` };
-  const nid = String(m.national_id || "").trim().toUpperCase();
-  if (nid && !isValidNationalId(nid)) return { error: `${who}（${name}）的身分證／居留證號碼格式不正確` };
-  if (form.insurance && (!birth || !nid)) return { error: `${who}（${name}）要填出生日期與身分證字號（活動投保用）` };
+  const nid = String(m.national_id || "").trim().toUpperCase().slice(0, 20);  // 不限格式（海外護照）
+  if (form.insurance && (!birth || !nid)) return { error: `${who}（${name}）要填出生日期與身分證／護照號碼（活動投保用）` };
   const phone = m.phone ? String(m.phone) : "";
   if (phone && !PHONE_RE.test(phone)) return { error: `${who}（${name}）的手機格式不正確` };
   const answers = checkAnswers(form, m.answers || {}, ["person"], `${name} 的`);
@@ -1137,11 +1135,10 @@ export function checkRegistrantExtra(p = {}, form = {}, have = {}, today = new D
   if (en || er || ep) Object.assign(out, { emergency_name: en || null, emergency_relation: er || null, emergency_phone: ep || null });
   const birth = String(p.birth_date || "");
   if (badBirth(birth, today)) return { error: "出生日期不正確" };
-  const nid = String(p.national_id || "").trim().toUpperCase();
-  if (nid && !isValidNationalId(nid)) return { error: "身分證／居留證號碼格式不正確" };
+  const nid = String(p.national_id || "").trim().toUpperCase().slice(0, 20);  // 不限格式（海外護照）
   if (form.insurance && !have.birth_date && !birth) return { error: "請填寫出生日期（活動投保用）" };
-  if (form.insurance && !have.national_id && !nid) return { error: "請填寫身分證字號（活動投保用）" };
-  if (birth && !have.birth_date) out.birth_date = birth;
+  if (form.insurance && !have.national_id && !nid) return { error: "請填寫身分證／護照號碼（活動投保用）" };
+  if (birth && !have.birth_date) out.birth_date = birth;   // 已有就沿用、不覆蓋（投保只是確認）
   if (nid && !have.national_id) out.national_id = nid;
   return { value: out };
 }

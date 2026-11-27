@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations, defaultStudentPassword } from "./lib.js?v=20261124-15";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations, defaultStudentPassword } from "./lib.js?v=20261124-16";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -239,7 +239,7 @@ const showPhone=v=>!v?"":String(v).includes("*")?v:displayPhone(v);
 
 // 操作手冊：檔案放在網站根目錄 /manual/（正式站與展示版一樣）；更新手冊時改這兩個檔名
 // 手冊內容更新時改這個版本字串，網址會帶上它，瀏覽器才不會給舊的快取
-const MANUAL_VER="20261127c";
+const MANUAL_VER="20261127d";
 const MANUAL_HTML=encodeURI("/manual/2026-11-15_SW-II活動CRM操作手冊.html")+"?v="+MANUAL_VER, MANUAL_PDF=encodeURI("/manual/2026-11-15_SW-II活動CRM操作手冊.pdf")+"?v="+MANUAL_VER;
 // 2026-11-18：手冊依權限只顯示用得到的章節（手冊裡的 data-need 對到這裡的代號）；總管理看完整版。
 // 只是讓畫面清楚，不是保密：手冊沒有個資，直接開網址仍是完整版。
@@ -567,7 +567,7 @@ async function exportInsurance(id){
   const nameOf=cid=>list.find(x=>x.contact_id===cid)?.name||state.contacts.find(x=>x.id===cid)?.name||"";
   const rows=list.map(x=>({member_no:x.member_no||"",name:x.name||"",gender:x.gender||"",birth:x.birth_date||"",nid:x.national_id||"",phone:x.phone?displayPhone(x.phone):"",
     relation:x.registered_by?(x.relation||"家人"):"本人",registrant:x.registered_by?nameOf(x.registered_by):"",missing:!x.birth_date||!x.national_id?"缺出生日期或身分證":""}));
-  const cols=[["會員編號","member_no"],["姓名","name"],["性別","gender"],["出生日期","birth"],["身分證字號","nid"],["手機","phone"],["與報名人關係","relation"],["由誰報名","registrant"],["資料缺漏","missing"]];
+  const cols=[["會員編號","member_no"],["姓名","name"],["性別","gender"],["出生日期","birth"],["身分證字號／護照號碼","nid"],["手機","phone"],["與報名人關係","relation"],["由誰報名","registrant"],["資料缺漏","missing"]];
   download(`投保名單_${eventLabel(e).replace(/[/:*?"<>|]/g,"_")}_${String(e.starts_at||"").slice(0,10)}.csv`,rowsToCsv(rows,cols),"text/csv;charset=utf-8");
   const miss=rows.filter(r=>r.missing).length;
   toast(`已匯出 ${rows.length} 人${miss?`，其中 ${miss} 人缺出生日期或身分證`:""}`);
@@ -980,7 +980,7 @@ function viewContact(id){
     ${line("會員編號",c.member_no)}${line("性別",c.gender)}${c.birth_date?line("出生年月日",`${c.birth_date}（${age} 歲）`):line("生日",c.birth_md?c.birth_md.replace("-","月")+"日":"")}${line("區域",c.region_name||regionName(c.region_id))}${line("居住縣市",c.residence_city)}${line("手機",showPhone(c.phone))}${line("Email",c.email)}${line("地址",c.address)}
     ${raw.emergency_name?line("緊急聯絡人",[raw.emergency_name,raw.emergency_relation].filter(Boolean).join("／")+(c.emergency_phone?`・${showPhone(c.emergency_phone)}`:"")):""}
     ${raw.merge_hint?`<div class="notice merge-hint">待合併：${escapeHtml(raw.merge_hint)}${canManageMembers()?"（到「編輯資料」確認後清除）":""}</div>`:""}
-    <div class="kpi-line"><span>身分證</span><strong id="nidValue">${nid}</strong></div>${isAdmin()?line("LINE UID",raw.line_user_id||"未綁定"):""}${line("備註",c.notes)}${canTags()?contactTagBox(raw):(raw.tags||[]).length?`<details class="tag-box"><summary>標籤與參加紀錄（${raw.tags.length}）</summary><div>${raw.tags.map(t=>`<span class="pill">${escapeHtml(t)}</span>`).join(" ")}</div></details>`:""}
+    <div class="kpi-line"><span>身分證／護照</span><strong id="nidValue">${nid}</strong></div>${isAdmin()?line("LINE UID",raw.line_user_id||"未綁定"):""}${line("備註",c.notes)}${canTags()?contactTagBox(raw):(raw.tags||[]).length?`<details class="tag-box"><summary>標籤與參加紀錄（${raw.tags.length}）</summary><div>${raw.tags.map(t=>`<span class="pill">${escapeHtml(t)}</span>`).join(" ")}</div></details>`:""}
     <h3>活動與課程</h3>${history.length?`<ul class="plain">${history.map(h=>`<li>${escapeHtml(h.event?.title||"已刪除的活動")}・${({attended:"已參加",registered:"已報名",cancelled:"已取消",absent:"未出席"})[h.attendance_status]||h.attendance_status}</li>`).join("")}</ul>`:`<p class="muted">尚無紀錄</p>`}
     ${isAdmin()&&SPONSORSHIPS_ENABLED?sponsorBlock(id):""}
     ${canManageMembers()?`<div class="actions"><button data-action="edit-contact" data-id="${id}">編輯資料</button>${isAdmin()?`<button class="secondary" data-action="student-link" data-id="${id}">學員登入連結</button><button class="danger" data-action="delete-contact" data-id="${id}">刪除會員</button>`:""}</div>`:""}`);
@@ -1006,7 +1006,7 @@ function contactForm(id){
     ${cityField(c?.residence_city,!id)}
     <div class="field"><label>Email</label><input name="email" type="email" maxlength="120" value="${hideF?"":v("email")}">${hideF?keepNote:""}</div>
     <div class="field full"><label>地址</label><input name="address" maxlength="200" value="${hideF?"":v("address")}">${hideF?keepNote:""}</div>
-    ${!fullPii()?"":`<div class="field full"><label>身分證字號</label><input name="national_id" maxlength="10" autocomplete="off" placeholder="${c?.national_id_masked||maskNationalId(c?.national_id)||"A123456789"}"><small class="muted">${id?"留空＝不變更；":""}只有總管理看得到完整號碼，存檔後加密保存。</small></div>`}
+    ${!fullPii()?"":`<div class="field full"><label>身分證字號／護照號碼</label><input name="national_id" maxlength="20" autocomplete="off" placeholder="${c?.national_id_masked||maskNationalId(c?.national_id)||"身分證或護照號碼"}"><small class="muted">${id?"留空＝不變更；":""}海外人士可填護照號碼；選填。只有總管理看得到完整號碼，存檔後加密保存。</small></div>`}
     <div class="field full"><label>備註</label><textarea name="notes" maxlength="2000">${v("notes")}</textarea></div>
     <div class="field"><label>緊急聯絡人</label><input name="emergency_name" maxlength="40" value="${v("emergency_name")}"></div>
     <div class="field"><label>緊急聯絡人關係</label><input name="emergency_relation" maxlength="20" value="${v("emergency_relation")}" placeholder="例如：配偶"></div>
@@ -1018,8 +1018,7 @@ function contactForm(id){
 async function saveContact(data){
   if(!GENDERS.includes(data.gender))return toast("請選擇性別");
   const ph=readPhone(data); if(ph.error) return toast(ph.error); data.phone=ph.phone||"";
-  const nid=fullPii()?String(data.national_id||"").trim().toUpperCase():"";
-  if(nid&&!isValidNationalId(nid))return toast("身分證格式不正確，例如 A123456789");
+  const nid=fullPii()?String(data.national_id||"").trim().toUpperCase().slice(0,20):"";  // 2026-11-27 不限格式（海外護照）、選填
   const emPhoneRaw=String(data.emergency_phone||"").trim(), emPhone=emPhoneRaw?normalizePhone(emPhoneRaw,"886"):"";
   if(emPhoneRaw&&!emPhone) return toast("緊急聯絡電話格式不正確");
   const extra={emergency_name:String(data.emergency_name||"").trim(),emergency_relation:String(data.emergency_relation||"").trim(),emergency_phone:emPhone||"",clear_merge_hint:data.clear_merge_hint==="on"};
@@ -1275,7 +1274,7 @@ function familyCard(form,preset={}){
     <div class="field"><label>關係 *</label><select data-f="relation"><option value="">請選擇</option>${rel}</select></div>
     <div class="field"><label>性別 *</label><select data-f="gender"><option value="">請選擇</option>${gen}</select></div>
     <div class="field"><label>出生日期${form.insurance?" *":""}</label><input data-f="birth_date" type="date" value="${escapeHtml(preset.birth_date||"")}"></div>
-    <div class="field"><label>身分證字號${form.insurance?" *（投保用）":""}</label><input data-f="national_id" maxlength="10" autocomplete="off" value="${escapeHtml(preset.national_id||"")}" placeholder="A123456789"></div>
+    <div class="field"><label>身分證字號／護照號碼${form.insurance?" *（投保用）":""}</label><input data-f="national_id" maxlength="20" autocomplete="off" value="${escapeHtml(preset.national_id||"")}" placeholder="身分證或護照號碼"></div>
     <div class="field"><label>手機（選填）</label><input data-f="phone" type="tel" maxlength="20" value="${escapeHtml(preset.phone||"")}" placeholder="0912345678"></div>
   </div>${answerBlock(form,preset.answers||{},["person"])}</div>`;
 }
@@ -1283,10 +1282,16 @@ function familyCard(form,preset={}){
 function regFormBlock(event,{guest=false,contact={},answers={},familyNow=[]}={}){
   const form=cleanForm(event.form||{}), left=Math.max(0,form.family_max-familyNow.length);
   const needBirth=form.insurance&&!contact.birth_date, needNid=form.insurance&&!contact.has_national_id;
+  const hasBirth=form.insurance&&contact.birth_date, hasNid=form.insurance&&contact.has_national_id&&!guest;
   const qs=(form.questions||[]).length;
   return `<div class="reg-form field full" data-event="${event.id}">
     ${qs?`<fieldset><legend>報名問卷</legend>${answerBlock(form,answers,["registration","person"])}</fieldset>`:""}
-    ${needBirth||needNid?`<fieldset><legend>投保資料（只用於活動保險）</legend>${needBirth?`<div class="field"><label>${guest?"":"你的"}出生日期 *</label><input data-p="birth_date" type="date"></div>`:""}${needNid?`<div class="field"><label>${guest?"":"你的"}身分證字號 *</label><input data-p="national_id" maxlength="10" autocomplete="off" placeholder="A123456789"></div>`:""}<small class="muted">海外人士沒有身分證或居留證，請先洽工作人員協助報名。</small></fieldset>`:""}
+    ${form.insurance?`<fieldset><legend>投保資料（只用於活動保險）</legend>
+      ${guest||needBirth?`<div class="field"><label>${guest?"":"你的"}出生日期 *</label><input data-p="birth_date" type="date" value="${escapeHtml(guest?"":contact.birth_date||"")}"></div>`
+        :`<div class="field"><label>出生日期</label><input type="date" value="${escapeHtml(contact.birth_date||"")}" readonly><small class="muted">系統已有你的出生日期（投保沿用），請確認；如需更正請洽工作人員。</small></div>`}
+      ${hasNid?`<div class="notice">系統已有你的身分證字號／護照號碼，投保會沿用，<b>不用再填</b>。要更新才在下面填。</div><div class="field"><label>身分證字號／護照號碼（要更新才填）</label><input data-p="national_id" maxlength="20" autocomplete="off" placeholder="不填＝沿用原本的"></div>`
+        :`<div class="field"><label>${guest?"":"你的"}身分證字號／護照號碼 *</label><input data-p="national_id" maxlength="20" autocomplete="off" placeholder="身分證或護照號碼"></div><small class="muted">海外人士沒有身分證請填護照號碼。</small>`}
+    </fieldset>`:""}
     ${form.emergency?`<fieldset><legend>緊急聯絡人</legend><div class="field"><label>姓名 *</label><input data-p="emergency_name" maxlength="40" value="${escapeHtml(contact.emergency_name||"")}"></div><div class="field"><label>關係 *</label><input data-p="emergency_relation" maxlength="20" value="${escapeHtml(contact.emergency_relation||"")}" placeholder="例如：配偶"></div><div class="field"><label>電話 *</label><input data-p="emergency_phone" type="tel" maxlength="20" value="${escapeHtml(displayPhone(contact.emergency_phone||""))}" placeholder="0912345678"></div></fieldset>`:""}
     ${form.family_max?`<fieldset><legend>幫家人一起報名（${familyNow.length?`已報 ${familyNow.length} 位，還可加 ${left} 位`:`最多 ${form.family_max} 位`}）</legend>
       ${familyNow.length?`<p class="muted">已一起報名：${familyNow.map(f=>`${escapeHtml(f.name)}（${escapeHtml(f.relation||"")}）`).join("、")}</p>`:""}
