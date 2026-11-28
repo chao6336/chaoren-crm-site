@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations, defaultStudentPassword } from "./lib.js?v=20261124-19";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, feeModeOf, feeDisplay, amountText, planFee, plansForEvent, cleanFeePlan, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations, defaultStudentPassword } from "./lib.js?v=20261124-20";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -34,7 +34,7 @@ function readRegDraft(){
 }
 function clearRegDraft(){ try{ sessionStorage.removeItem(REG_DRAFT_KEY); }catch{} }
 
-const SEED_VERSION = 11;
+const SEED_VERSION = 12;
 // 展示資料全部是假的；區域名稱等協會提供真實清單後再換。
 const seed = {
   version: SEED_VERSION,
@@ -58,8 +58,9 @@ const seed = {
     {event_id:"evt-w1",user_id:"s7",can_view_roster:true,can_checkin:true,expires_at:null,assigned_by:"s6"}],
   events: [
     { id:"evt-0", title:"今日共修（展示）", theme:"掃碼報到測試用，開始時間＝打開展示版後一小時", starts_at:new Date(Date.now()+3600e3).toISOString(), registration_deadline:new Date(Date.now()+1800e3).toISOString(), location:"晁人文鼎協會", capacity:50, status:"published", registration_count:1, fee_note:"免費" },
-    { id:"evt-1", title:"城市留白｜閱讀與默想", theme:"從忙碌中重新聽見自己", starts_at:"2026-11-15T14:00:00+08:00", registration_deadline:"2026-11-13T23:59:00+08:00", location:"晁人文鼎協會", capacity:24, status:"published", registration_count:4, fee_note:"體驗活動 NT$300" },
+    { id:"evt-1", title:"城市留白｜閱讀與默想", theme:"從忙碌中重新聽見自己", starts_at:"2026-11-15T14:00:00+08:00", registration_deadline:"2026-11-13T23:59:00+08:00", location:"晁人文鼎協會", capacity:24, status:"published", registration_count:4, fee_mode:"single", fee_amount:300, fee_note:"體驗活動 NT$300" },
     { id:"evt-2", title:"24 節氣冥想體驗", theme:"給第一次接觸冥想的你", starts_at:"2026-12-06T10:00:00+08:00", registration_deadline:"2026-12-03T23:59:00+08:00", location:"線上＋實體", capacity:30, status:"draft", registration_count:1, fee_note:"免費" },
+    { id:"evt-3", title:"正念減壓八週課（展示・多費用方案）", theme:"示範多種費用方案：早鳥、一般、會員價", starts_at:"2026-12-20T09:30:00+08:00", registration_deadline:"2026-12-18T23:59:00+08:00", location:"晁人文鼎協會", capacity:40, status:"published", registration_count:0, fee_mode:"plans", fee_note:"多種方案" },
     { id:"evt-w1", title:"維諦｜身心整合工作坊", theme:"維諦主辦，共享給晁人", starts_at:"2026-11-22T13:30:00+08:00", registration_deadline:"2026-11-20T23:59:00+08:00", location:"維諦教室", capacity:20, status:"published", registration_count:1, fee_note:"免費", org_id:"weidi", visibility:"selected", shared_org_ids:["chaoren"] },
     { id:"evt-x1", title:"心理道｜讀書會", theme:"心理道內部活動", starts_at:"2026-11-29T19:00:00+08:00", registration_deadline:"2026-11-27T23:59:00+08:00", location:"線上", capacity:15, status:"published", registration_count:0, fee_note:"免費", org_id:"xinlidao", visibility:"org", shared_org_ids:[] }
   ].map(e => ({ org_id:"chaoren", visibility:"org", shared_org_ids:[], ...e })),
@@ -79,6 +80,12 @@ const seed = {
     { id:"r6", event_id:"evt-0", contact_id:"c2", attendance_status:"registered", payment_status:"free", registered_at:"2026-10-18", cancelled_at:null },
     { id:"r7", event_id:"evt-w1", contact_id:"c3", attendance_status:"registered", payment_status:"free", registered_at:"2026-11-05", cancelled_at:null }
   ],
+  // 多費用方案（展示）：單場活動 evt-3，group_id＝活動自己的 id
+  fee_plans: [
+    { id:"fp1", group_id:"evt-3", org_id:"chaoren", name:"早鳥價", amount:2800, eligibility:"12/10 前報名", session_ids:[], quota:10, opens_at:null, closes_at:null, sort_order:1, is_active:true },
+    { id:"fp2", group_id:"evt-3", org_id:"chaoren", name:"一般價", amount:3200, eligibility:"", session_ids:[], quota:null, opens_at:null, closes_at:null, sort_order:2, is_active:true },
+    { id:"fp3", group_id:"evt-3", org_id:"chaoren", name:"會員價", amount:2500, eligibility:"限協會會員", session_ids:[], quota:null, opens_at:null, closes_at:null, sort_order:3, is_active:true }
+  ],
   sponsorships: [
     { id:"sp1", contact_id:"c1", item:"2026 清明", amount:200, paid:true, paid_at:"2026-04-02", note:"" },
     { id:"sp2", contact_id:"c2", item:"2026 清明", amount:200, paid:false, paid_at:null, note:"" },
@@ -89,7 +96,7 @@ const seed = {
 };
 
 // 雲端模式未登入前不能帶著展示資料，否則未登入的人也看得到假會員畫面。
-let state = live ? {role:"none",region_id:null,regions:[],staff:[],events:[],contacts:[],registrations:[],campaigns:[],audit:[]} : loadDemo();
+let state = live ? {role:"none",region_id:null,regions:[],staff:[],events:[],contacts:[],registrations:[],campaigns:[],audit:[],fee_plans:[]} : loadDemo();
 if(!live) pruneDemoTags();
 
 function loadDemo(){
@@ -308,7 +315,9 @@ async function handleAuthLink(){
 async function loadPublicEvent(){
   // 載入所有公開活動：連結裡的活動找不到時，至少能列出目前可報名的活動，不讓學員卡在死路
   const {data}=await supabase.from("public_events").select("*").order("starts_at");
-  state={role:"public",eventsLoaded:true,region_id:null,regions:[],staff:[],events:data||[],contacts:[],registrations:[],campaigns:[],audit:[]};
+  // 多費用方案：公開 view（資料庫還沒跑 migration 時回錯誤，就當作沒有方案）
+  const plans=await supabase.from("public_fee_plans").select("*").order("sort_order");
+  state={role:"public",eventsLoaded:true,region_id:null,regions:[],staff:[],events:data||[],contacts:[],registrations:[],campaigns:[],audit:[],fee_plans:plans.error?[]:plans.data||[]};
 }
 
 async function loadLiveData(){
@@ -337,11 +346,13 @@ async function loadLiveData(){
   const tagsOk = profile.data?.role === "admin" || (Array.isArray(profile.data?.platform_permissions) && profile.data.platform_permissions.includes("tags"));
   const tags = tagsOk ? await supabase.from("tag_stats").select("*") : {data:[]};
   const applications = profile.data?.role === "admin" ? await supabase.from("student_applications").select("*").eq("status","pending").order("created_at") : {data:[]};
+  // 多費用方案：工作人員讀得到（RLS）；資料庫還沒跑 migration 時回錯誤，就當作沒有方案
+  const feePlans = await supabase.from("fee_plans").select("*").order("sort_order");
   // 全平台權限（2026-11-17）：資料庫還沒加欄位時是 undefined，當作沒有
   const pp=Array.isArray(profile.data?.platform_permissions)?profile.data.platform_permissions:[];
   const weeklySrc=profile.data?.role!=="admin"&&pp.includes("weekly")?await supabase.rpc("weekly_report_source"):{data:null};
   let savedOrg=null; try{ savedOrg=localStorage.getItem("chaoren-crm-org"); }catch{}
-  state={user_id:session.user.id,platform_permissions:pp,region_ids:Array.isArray(profile.data?.region_ids)?profile.data.region_ids:[],weeklySource:weeklySrc.data||null,role:profile.data?.role||"none",org:savedOrg,orgs:orgs.error?[]:orgs.data||[],memberships:myOrgs.error?legacyMembership(profile.data):myOrgs.data||[],assignments:myAssign.error?[]:myAssign.data||[],eventsLoaded:true,region_id:profile.data?.region_id||null,permissions:profile.data?.permissions??null,display_name:profile.data?.display_name||session.user.email,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],clickStats:clickStats.data||[],applications:applications.data||[],tags:tags.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:auditActor(x.actor_id,staff.data),action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
+  state={user_id:session.user.id,platform_permissions:pp,region_ids:Array.isArray(profile.data?.region_ids)?profile.data.region_ids:[],weeklySource:weeklySrc.data||null,role:profile.data?.role||"none",org:savedOrg,orgs:orgs.error?[]:orgs.data||[],memberships:myOrgs.error?legacyMembership(profile.data):myOrgs.data||[],assignments:myAssign.error?[]:myAssign.data||[],eventsLoaded:true,region_id:profile.data?.region_id||null,permissions:profile.data?.permissions??null,display_name:profile.data?.display_name||session.user.email,regions:regions.data||[],staff:staff.data||[],sponsorships:sponsorships.data||[],clickStats:clickStats.data||[],applications:applications.data||[],tags:tags.data||[],events:events.data||[],contacts:contacts.data||[],registrations:registrations.data||[],roster:rosterRows.data||[],campaigns:campaigns.data||[],fee_plans:feePlans.error?[]:feePlans.data||[],audit:(audit.data||[]).map(x=>({at:x.created_at,actor:auditActor(x.actor_id,staff.data),action:x.action,target:`${x.target_type}:${x.target_id||""}`}))};
   showUser(profile.data?.display_name||session.user.email);
   $("#logoutBtn").hidden=state.role==="none";
 }
@@ -534,6 +545,15 @@ function registerFeeDemo(r){
   if(r.amount==null&&["pending","paid"].includes(r.payment_status)){ const a=feeAmount(state.events.find(x=>x.id===r.event_id)); if(a>0) r.amount=a; }
   syncFeeDemo(r);
 }
+// demo：plans 模式驗證方案（回傳 {plan} 或 {error}），用於鎖金額快照
+function demoPlanSnapshot(event,fee_plan_id){
+  const plan=plansForEvent(state.fee_plans,event).find(p=>p.id===fee_plan_id);
+  if(!plan) return {error:"請先選擇費用方案"};
+  if(plan.opens_at&&new Date()<new Date(plan.opens_at)) return {error:"這個費用方案目前未開放"};
+  if(plan.closes_at&&new Date()>new Date(plan.closes_at)) return {error:"這個費用方案目前未開放"};
+  if(plan.quota!=null&&state.registrations.filter(r=>r.fee_plan_id===plan.id&&!r.cancelled_at).length>=plan.quota) return {error:"這個費用方案名額已滿，請選其他方案"};
+  return {plan};
+}
 // 活動／課程管理右上角「匯出」：只列這一頁的類別，勾選一或多場（可依狀態、關鍵字篩選），合併成一個 CSV；多場時每列前面加名稱與日期
 function exportPicker(kind){
   const K=KIND_LABELS[kind]||"免費活動", mine=visibleEvents().filter(e=>kindOf(e)===kind&&canExportOf(e));
@@ -638,7 +658,7 @@ function rosterPage(){
     return `<tr data-roster-row data-status="${st}" data-pay="${escapeHtml(r.payment_status||"pending")}" data-search="${escapeHtml([r.name,r.member_no,r.phone_last3,r.region_name].join(" ").toLowerCase())}">
       <td><strong>${escapeHtml(r.name)}</strong> <span class="muted">${escapeHtml(r.member_no||"")}</span>${famTag(r)}</td><td>${escapeHtml(r.region_name||"未分區")}</td><td>${escapeHtml(rosterPhone(r))}</td>
       <td><span class="pill${st==="cancelled"?" off":""}">${ROSTER_STATUS[st]}</span>${r.source==="walk-in"?` <small class="muted">現場報名</small>`:""}<br><small class="muted">${when(r)}</small></td>
-      ${free?"":`<td>${payLabel(r)}</td>
+      ${free?"":`<td>${payLabel(r)}${feeModeOf(e)==="plans"&&!r.cancelled_at&&(r.fee_plan_name||r.amount!=null)?`<br><small class="muted">${escapeHtml(r.fee_plan_name||"")}${r.amount!=null?` 應繳 ${amountText(r.amount)}`:""}</small>`:""}</td>
       <td>${canPayReg(e,r)&&!r.cancelled_at?`<button class="secondary small" data-action="reg-pay" data-id="${r.registration_id||r.id}" data-event="${id}">繳費</button>`:""}</td>`}${ansCells(r)}</tr>`; };
   const ansOpts=qs.filter(q=>["single","yesno","multi"].includes(q.type)).flatMap(q=>questionOptions(q).map(o=>[`${q.id}|${o}`,`${q.label.slice(0,16)}：${o}（${filterByAnswer(allRegs.filter(r=>!r.cancelled_at),q.id,o).length}）`]));
   return `${pageHead(escapeHtml(eventLabel(e)),`${K}・${fmtDate(e.starts_at)}・${escapeHtml(e.location||"")}・報名 ${count("attended")+count("waiting")}／${e.capacity}`,actions)}
@@ -1162,16 +1182,16 @@ function register(){
     const tab=(k,l)=>`<a class="cat-tab${cat===k?" on":""}" href="#register${k==="all"?"":"?cat="+k}">${l}</a>`;
     const bc={"報名中":"ok","已額滿":"full","已截止":"off","已取消":"off"};
     const card=e=>{const st=eventState(e),n=eventSessions(state.events,e).length;
-      return `<a class="event-card" href="#register?event=${e.id}"><div class="ev-cover"${e.image_url?` style="background-image:url(&quot;${escapeHtml(e.image_url)}&quot;)"`:""}>${e.image_url?"":`<span class="ev-cover-ph">SW-II</span>`}<span class="ev-badge ${bc[st]||""}">${st}</span></div><div class="ev-body"><h3>${escapeHtml(e.title)}</h3><div class="ev-meta">📅 ${n>1?`${fmtDate(e.starts_at)} 起・共 ${n} 場`:fmtDate(e.starts_at)}</div>${e.location?`<div class="ev-meta">📍 ${escapeHtml(e.location)}</div>`:""}${e.fee_note?`<div class="ev-meta">💲 ${escapeHtml(e.fee_note)}</div>`:""}</div></a>`;};
+      return `<a class="event-card" href="#register?event=${e.id}"><div class="ev-cover"${e.image_url?` style="background-image:url(&quot;${escapeHtml(e.image_url)}&quot;)"`:""}>${e.image_url?"":`<span class="ev-cover-ph">SW-II</span>`}<span class="ev-badge ${bc[st]||""}">${st}</span></div><div class="ev-body"><h3>${escapeHtml(e.title)}</h3><div class="ev-meta">📅 ${n>1?`${fmtDate(e.starts_at)} 起・共 ${n} 場`:fmtDate(e.starts_at)}</div>${e.location?`<div class="ev-meta">📍 ${escapeHtml(e.location)}</div>`:""}<div class="ev-meta">💲 ${escapeHtml(feeDisplay(e))}</div></div></a>`;};
     return `<section class="home">${wanted?`<div class="notice">找不到這場活動，連結可能已過期或已下架。以下是目前開放的活動：</div>`:""}<h1 class="home-title">近期活動／課程</h1><div class="cat-tabs">${tab("all","全部")}${tab("event","活動")}${tab("course","課程")}</div>${shown.length?`<div class="event-grid">${shown.map(card).join("")}</div>`:`<p class="empty">目前沒有開放報名的活動。</p>`}</section>`;
   }
   const sessions=eventSessions(state.events,event), multi=sessions.length>1;
   const info=dmBlock(event)+(multi
-    ?`<h2>場次</h2>${sessions.map(s=>`<div class="kpi-line"><span>${s.session_name?`<strong>${escapeHtml(s.session_name)}</strong><br>`:""}${fmtDate(s.starts_at)}<br><small class="muted">${escapeHtml(s.location||"")}</small></span><strong>${eventState(s)}</strong></div>`).join("")}<div class="kpi-line"><span>費用</span><strong>${escapeHtml(event.fee_note)}</strong></div>`
-    :`<h2>活動資訊</h2>${hostName(event)?`<div class="kpi-line"><span>主辦</span><strong>${escapeHtml(hostName(event))}</strong></div>`:""}<div class="kpi-line"><span>時間</span><strong>${fmtDate(event.starts_at)}</strong></div><div class="kpi-line"><span>地點</span><strong>${escapeHtml(event.location)}</strong></div><div class="kpi-line"><span>費用</span><strong>${escapeHtml(event.fee_note)}</strong></div>`);
+    ?`<h2>場次</h2>${sessions.map(s=>`<div class="kpi-line"><span>${s.session_name?`<strong>${escapeHtml(s.session_name)}</strong><br>`:""}${fmtDate(s.starts_at)}<br><small class="muted">${escapeHtml(s.location||"")}</small></span><strong>${eventState(s)}</strong></div>`).join("")}<div class="kpi-line"><span>費用</span><strong>${escapeHtml(feeDisplay(event))}</strong></div>`
+    :`<h2>活動資訊</h2>${hostName(event)?`<div class="kpi-line"><span>主辦</span><strong>${escapeHtml(hostName(event))}</strong></div>`:""}<div class="kpi-line"><span>時間</span><strong>${fmtDate(event.starts_at)}</strong></div><div class="kpi-line"><span>地點</span><strong>${escapeHtml(event.location)}</strong></div><div class="kpi-line"><span>費用</span><strong>${escapeHtml(feeDisplay(event))}</strong></div>`);
   const tracking=["utm_source","utm_medium","utm_campaign","utm_content"].map(k=>`<input type="hidden" name="${k}" value="${escapeHtml(q.get(k)||"")}">`).join("");
   const outdoorFields=outdoor?`<input type="hidden" name="campaign_type" value="outdoor"><input type="hidden" name="lead_city" value="${escapeHtml(leadCity)}"><input type="hidden" name="source_theme" value="${escapeHtml(sourceTheme)}"><div class="field full"><label>你是從哪裡認識我們？</label><select name="contact_mode"><option ${contactMode==="正式參加者"?"selected":""}>正式參加者</option><option ${contactMode==="現場圍觀者"?"selected":""}>現場圍觀者</option><option ${contactMode==="親友介紹"?"selected":""}>親友介紹</option></select></div><div class="field full"><h3>30 秒自我狀態了解</h3><p class="muted">這不是醫療診斷，只協助你了解最近的狀態。</p></div><div class="field full"><label>最近是否難入睡、睡不飽或醒來仍疲累？</label><select name="sleep_issue" required><option value="">請選擇</option><option>經常</option><option>偶爾</option><option>很少</option></select></div><div class="field full"><label>最近是否容易緊繃、煩躁或腦袋停不下來？</label><select name="stress_issue" required><option value="">請選擇</option><option>經常</option><option>偶爾</option><option>很少</option></select></div><label class="field full"><span><input type="checkbox" name="weekly_practice_interest"> 我願意每週留一小段時間練習放鬆。</span></label><label class="field full"><span><input type="checkbox" name="online_trial_interest" checked> 我想預約免費、限額的新手線上體驗課。</span></label>`:"";
-  return `${demoLinePicker()}${pageHead(escapeHtml(multi?event.title:eventLabel(event)),escapeHtml(event.theme||""))}<section class="two-col"><article class="card">${info}<details class="share-box"><summary>分享這個活動</summary><p class="muted" style="margin-top:8px">分享報名 QR Code${multi?"（所有場次共用這一張）":""}</p><div id="qr" aria-label="活動報名 QR Code"></div><div class="link-box"><input id="linkText" readonly aria-label="報名網址" value="${escapeHtml(shareLink(event))}"><button type="button" class="secondary small" data-action="copy-link">複製</button></div></details></article><article class="card" id="regAction">${registerAction(event,sessions,`<form id="registrationForm">${multi?"":`<input type="hidden" name="event_id" value="${event.id}">`}${tracking}<div class="form-grid">${multi?sessionPicker(sessions):""}<div class="field"><label>姓名 *</label><input name="name" required maxlength="40"></div>${phoneField("手機","",{required:true,autocomplete:"tel"})}${genderField()}${cityField()}<div class="field full"><label>Email</label><input name="email" type="email"></div><div class="field full"><label>有興趣的主題</label><select name="interest"><option>閱讀</option><option>冥想</option><option>身心放鬆</option><option>節氣生活</option></select></div>${outdoorFields}${useRegForm(event,sessions)?regFormBlock(event,{guest:true}):""}<label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="${STUDENT_HOME}privacy.html" target="_blank">個資告知</a>，資料僅用於活動與會員服務。</span></label><label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收後續活動與課程訊息，可隨時撤回。</span></label><button class="field full" type="submit">使用 LINE 身分送出報名</button></div></form>`)}</article></section>`;
+  return `${demoLinePicker()}${pageHead(escapeHtml(multi?event.title:eventLabel(event)),escapeHtml(event.theme||""))}<section class="two-col"><article class="card">${info}<details class="share-box"><summary>分享這個活動</summary><p class="muted" style="margin-top:8px">分享報名 QR Code${multi?"（所有場次共用這一張）":""}</p><div id="qr" aria-label="活動報名 QR Code"></div><div class="link-box"><input id="linkText" readonly aria-label="報名網址" value="${escapeHtml(shareLink(event))}"><button type="button" class="secondary small" data-action="copy-link">複製</button></div></details></article><article class="card" id="regAction">${registerAction(event,sessions,`<form id="registrationForm">${multi?"":`<input type="hidden" name="event_id" value="${event.id}">`}${tracking}<div class="form-grid">${multi?sessionPicker(sessions):""}<div class="field"><label>姓名 *</label><input name="name" required maxlength="40"></div>${phoneField("手機","",{required:true,autocomplete:"tel"})}${genderField()}${cityField()}<div class="field full"><label>Email</label><input name="email" type="email"></div><div class="field full"><label>有興趣的主題</label><select name="interest"><option>閱讀</option><option>冥想</option><option>身心放鬆</option><option>節氣生活</option></select></div>${outdoorFields}${planPicker(event)}${useRegForm(event,sessions)?regFormBlock(event,{guest:true}):""}<label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="${STUDENT_HOME}privacy.html" target="_blank">個資告知</a>，資料僅用於活動與會員服務。</span></label><label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收後續活動與課程訊息，可隨時撤回。</span></label><button class="field full" type="submit">使用 LINE 身分送出報名</button></div></form>`)}</article></section>`;
 }
 
 // 報名頁右側：先用 LINE 確認身分。會員一鍵報名（不用再填資料）、已報名顯示狀態與取消；不是會員才顯示報名表。
@@ -1179,7 +1199,30 @@ let regMember=null; // {eventId, status:"checking"|"member"|"guest", name, regis
 const STAFF_ROLES=["admin","event_staff","region_lead","accountant"];
 // 同名多場次的勾選清單：已報名、截止或額滿的場次不能勾
 function sessionPicker(sessions,mine=new Set()){
-  return `<div class="field full"><label>選擇場次 *（可複選）</label>${sessions.map(s=>{const st=eventState(s),done=mine.has(s.id);return `<label class="session-option"><input type="checkbox" name="session" value="${s.id}" ${st!=="報名中"||done?"disabled":""}><span>${s.session_name?`<strong>${escapeHtml(s.session_name)}</strong><br>`:""}${fmtDate(s.starts_at)}・${escapeHtml(s.location||"")}</span><small class="muted">${done?"已報名":st}</small></label>`}).join("")}</div>`;
+  return `<div class="field full"><label>選擇場次 *（可複選）</label>${sessions.map(s=>{const st=eventState(s),done=mine.has(s.id);return `<label class="session-option"><input type="checkbox" name="session" value="${s.id}" data-action="plan-pick" ${st!=="報名中"||done?"disabled":""}><span>${s.session_name?`<strong>${escapeHtml(s.session_name)}</strong><br>`:""}${fmtDate(s.starts_at)}・${escapeHtml(s.location||"")}</span><small class="muted">${done?"已報名":st}</small></label>`}).join("")}</div>`;
+}
+// 方案是否額滿（demo 無 sold_out 欄位時用報名數即時算；學員公開 view 會帶 sold_out）
+function planSoldOut(p){
+  if(p.sold_out!==undefined) return p.sold_out;
+  return p.quota!=null && state.registrations.filter(r=>r.fee_plan_id===p.id&&!r.cancelled_at).length>=p.quota;
+}
+// 報名頁的費用方案選單（plans 模式才顯示）；選了會即時算應繳
+function planPicker(event){
+  if(feeModeOf(event)!=="plans") return "";
+  const plans=plansForEvent(state.fee_plans,event);
+  if(!plans.length) return `<div class="notice">這個活動的費用方案還在設定中，請稍後再報名或洽工作人員。</div>`;
+  return `<div class="field full"><label>費用方案 *</label><div class="plan-picker">${plans.map(p=>{const full=planSoldOut(p);return `<label class="plan-opt${full?" sold-out":""}"><input type="radio" name="fee_plan" value="${p.id}" data-amount="${p.amount}" data-action="plan-pick" ${full?"disabled":""}><span>${escapeHtml(p.name)}${p.eligibility?`<br><small class="muted">${escapeHtml(p.eligibility)}</small>`:""}${full?`<br><small class="muted">名額已滿</small>`:""}</span><span class="plan-amt">${amountText(p.amount)||"NT$0"}</span></label>`}).join("")}</div><div class="fee-due" data-fee-due></div></div>`;
+}
+// 即時顯示應繳：單場＝方案金額；多場＝方案金額×勾選場數（依場次計費）
+function updateFeeDue(el){
+  const form=el.closest("form"); if(!form) return;
+  const box=form.querySelector("[data-fee-due]"); if(!box) return;
+  const picked=form.querySelector("[name=fee_plan]:checked");
+  if(!picked){ box.textContent=""; return; }
+  const amt=Number(picked.dataset.amount)||0, hasSessions=!!form.querySelector("[name=session]");
+  const count=hasSessions?form.querySelectorAll("[name=session]:checked").length:1;
+  if(!count){ box.textContent="請先勾選場次，再看應繳金額"; return; }
+  box.innerHTML=`應繳：<strong>${amountText(amt*count)||"免費"}</strong>${hasSessions&&count>1?`（每場 ${amountText(amt)||"NT$0"} × ${count} 場）`:""}`;
 }
 function registerAction(event,sessions,formHtml){
   const m=regMember?.eventId===event.id?regMember:{status:"checking"};
@@ -1189,15 +1232,16 @@ function registerAction(event,sessions,formHtml){
     const famNote=(m.family||[]).length?`<p class="muted">取消報名只會取消你自己；家人要取消請洽工作人員。</p>`:"";
     if(m.registered&&!m.editing) return `<h2>會員報名</h2><div class="notice">✓ ${escapeHtml(m.name)}，你已報名這場活動，${remindText()}。</div>${regFormSummary(event,m)}${famNote}<div class="actions" style="margin-top:14px"><a class="button" href="#myevents">查看我的報名資料</a>${eventState(event)==="報名中"?`<button class="secondary" data-action="edit-reg-form">修改報名資料</button>`:""}<button class="secondary" data-action="cancel-registration" data-event="${event.id}">取消報名</button></div>`;
     if(eventState(event)!=="報名中") return `<h2>報名</h2><div class="notice">目前${eventState(event)}，暫停接受報名。</div>`;
-    return `<h2>${m.registered?"修改報名資料":"會員報名"}</h2><p>${escapeHtml(m.name)}，你已經是會員，基本資料不用再填。</p><form id="regFormMember" data-event="${event.id}"><div class="form-grid">${regFormBlock(event,{contact:m.contact||{},answers:m.answers||{},familyNow:m.family||[]})}<button class="big field full" type="submit">${m.registered?"更新報名資料":"送出報名"}</button>${m.registered?`<button type="button" class="secondary field full" data-action="cancel-edit-reg-form">取消修改</button>`:""}</div></form>`;
+    return `<h2>${m.registered?"修改報名資料":"會員報名"}</h2><p>${escapeHtml(m.name)}，你已經是會員，基本資料不用再填。</p><form id="regFormMember" data-event="${event.id}"><div class="form-grid">${m.registered?"":planPicker(event)}${regFormBlock(event,{contact:m.contact||{},answers:m.answers||{},familyNow:m.family||[]})}<button class="big field full" type="submit">${m.registered?"更新報名資料":"送出報名"}</button>${m.registered?`<button type="button" class="secondary field full" data-action="cancel-edit-reg-form">取消修改</button>`:""}</div></form>`;
   }
   if(sessions.length>1&&m.status==="member"){
     const mine=m.regIds||new Set(), regd=sessions.filter(s=>mine.has(s.id)), canPick=sessions.some(s=>!mine.has(s.id)&&eventState(s)==="報名中");
-    return `<h2>會員報名</h2><p>${escapeHtml(m.name)}，你已經是會員，不用再填資料。</p>${regd.length?`<div class="notice">✓ 你已報名：<ul class="plain">${regd.map(s=>`<li>${s.session_name?`${escapeHtml(s.session_name)}・`:""}${fmtDate(s.starts_at)}・${escapeHtml(s.location||"")}　<button class="secondary small" data-action="cancel-registration" data-event="${s.id}">取消這場</button></li>`).join("")}</ul></div>`:""}${canPick?`<form id="quickRegisterForm" style="margin-top:14px"><div class="form-grid">${sessionPicker(sessions,mine)}<button class="big field full" type="submit">報名勾選的場次</button></div></form><p class="muted" style="margin-top:10px">報名後，${remindText()}。</p>`:`<div class="actions" style="margin-top:14px"><a class="button" href="#myevents">查看我的報名資料</a></div>`}`;
+    return `<h2>會員報名</h2><p>${escapeHtml(m.name)}，你已經是會員，不用再填資料。</p>${regd.length?`<div class="notice">✓ 你已報名：<ul class="plain">${regd.map(s=>`<li>${s.session_name?`${escapeHtml(s.session_name)}・`:""}${fmtDate(s.starts_at)}・${escapeHtml(s.location||"")}　<button class="secondary small" data-action="cancel-registration" data-event="${s.id}">取消這場</button></li>`).join("")}</ul></div>`:""}${canPick?`<form id="quickRegisterForm" data-event="${event.id}" style="margin-top:14px"><div class="form-grid">${sessionPicker(sessions,mine)}${planPicker(event)}<button class="big field full" type="submit">報名勾選的場次</button></div></form><p class="muted" style="margin-top:10px">報名後，${remindText()}。</p>`:`<div class="actions" style="margin-top:14px"><a class="button" href="#myevents">查看我的報名資料</a></div>`}`;
   }
   if(sessions.length>1) return `<h2>LINE 登入＋簡短報名</h2>${live&&m.loggedOut?`<div class="notice">已經是會員？<button type="button" class="secondary small" data-action="line-login-register">用 LINE 登入一鍵報名</button> 或 <a href="#signin">帳號密碼登入</a></div>`:""}${formHtml}`;
   if(m.status==="member"&&m.registered) return `<h2>會員報名</h2><div class="notice">✓ ${escapeHtml(m.name)}，你已報名這場活動，${remindText()}。</div><div class="actions" style="margin-top:14px"><a class="button" href="#myevents">查看我的報名資料</a><button class="secondary" data-action="cancel-registration" data-event="${event.id}">取消報名</button></div>`;
   if(eventState(event)!=="報名中") return `<h2>報名</h2><div class="notice">目前${eventState(event)}，暫停接受報名。</div>`;
+  if(m.status==="member"&&feeModeOf(event)==="plans") return `<h2>會員報名</h2><p>${escapeHtml(m.name)}，你已經是會員，選擇費用方案後送出。</p><form id="planRegisterForm" data-event="${event.id}"><div class="form-grid">${planPicker(event)}<button class="big field full" type="submit">送出報名</button></div></form><p class="muted" style="margin-top:10px">報名後，${remindText()}。</p>`;
   if(m.status==="member") return `<h2>會員報名</h2><p>${escapeHtml(m.name)}，你已經是會員，不用再填資料。</p><button class="big" style="width:100%" data-action="quick-register" data-event="${event.id}">一鍵報名</button><p class="muted" style="margin-top:10px">報名後，${remindText()}。</p>`;
   return `<h2>LINE 登入＋簡短報名</h2>${live&&m.loggedOut?`<div class="notice">已經是會員？<button type="button" class="secondary small" data-action="line-login-register">用 LINE 登入一鍵報名</button> 或 <a href="#signin">帳號密碼登入</a></div>`:""}${formHtml}`;
 }
@@ -1231,13 +1275,26 @@ async function quickRegister(btn){
   await refreshEventCounts(); regMember={...regMember,registered:true};
   registeredView(eventId,data.already?"你已經報名過了":"報名完成");
 }
+// 會員選費用方案一鍵報名（單場 plans 模式）
+async function submitPlanRegister(formEl){
+  const eventId=formEl.dataset.event, plan=formEl.querySelector("[name=fee_plan]:checked");
+  if(!plan) return toast("請選擇費用方案");
+  const btn=formEl.querySelector("button[type=submit]"); btn.disabled=true; btn.textContent="報名中…";
+  const data=await memberApi("register",{event_id:eventId,fee_plan_id:plan.value}); if(data.pending)return;
+  if(data.error){ btn.disabled=false; btn.textContent="送出報名"; return toast(data.error); }
+  if(data.code==="NOT_MEMBER"){ regMember={eventId,status:"guest"}; return render(); }
+  await refreshEventCounts(); regMember={...regMember,registered:true};
+  registeredView(eventId,data.already?"你已經報名過了":"報名完成");
+}
 // 會員一次報名多個場次：逐場送出，某場額滿或截止不影響其他場
 async function quickRegisterMany(form,ids){
   if(!ids.length) return toast("請至少勾選一個場次");
+  const ev=state.events.find(e=>e.id===ids[0]), plan=form.querySelector("[name=fee_plan]:checked");
+  if(ev&&feeModeOf(ev)==="plans"&&!plan) return toast("請選擇費用方案");
   const btn=form.querySelector("button[type=submit]"); btn.disabled=true; btn.textContent="報名中…";
   const results=[];
   for(const id of ids){
-    const data=await memberApi("register",{event_id:id}); if(data.pending)return;
+    const data=await memberApi("register",{event_id:id,fee_plan_id:plan?plan.value:null}); if(data.pending)return;
     if(data.code==="NOT_MEMBER"){ regMember={eventId:regMember?.eventId,status:"guest"}; return render(); }
     results.push({id,error:data.error||null});
   }
@@ -1371,8 +1428,10 @@ async function submitRegFormMember(formEl){
   const event=state.events.find(e=>e.id===formEl.dataset.event); if(!event) return;
   const payload=readRegForm(formEl), c=regMember?.contact||{};
   const err=checkRegPayload(event,payload,{birth_date:Boolean(c.birth_date),national_id:Boolean(c.has_national_id)}); if(err) return toast(err);
+  const plan=formEl.querySelector("[name=fee_plan]:checked");
+  if(feeModeOf(event)==="plans"&&!regMember?.registered&&!plan) return toast("請選擇費用方案");
   const btn=formEl.querySelector("button[type=submit]"); btn.disabled=true; btn.textContent="送出中…";
-  const data=await memberApi("register_form",{event_id:event.id,...payload}); if(data.pending)return;
+  const data=await memberApi("register_form",{event_id:event.id,...payload,fee_plan_id:plan?plan.value:null}); if(data.pending)return;
   if(data.error){ btn.disabled=false; btn.textContent=regMember?.registered?"更新報名資料":"送出報名"; return toast(data.error); }
   if(data.code==="NOT_MEMBER"){ regMember={eventId:event.id,status:"guest"}; return render(); }
   await refreshEventCounts();
@@ -1585,9 +1644,11 @@ function demoMemberApi(action,payload){
     let reg=state.registrations.find(r=>r.event_id===event.id&&r.contact_id===me.id);
     if(reg&&!reg.cancelled_at)return {ok:true,already:true,name:me.name,eventTitle:event.title};
     if(event.registration_count>=event.capacity)return {error:"活動已額滿"};
+    let snap=null;
+    if(feeModeOf(event)==="plans"){ snap=demoPlanSnapshot(event,payload.fee_plan_id); if(snap.error) return {error:snap.error}; }
     if(reg) Object.assign(reg,{attendance_status:"registered",cancelled_at:null,registered_at:new Date().toISOString()});
     else state.registrations.push(reg={id:crypto.randomUUID(),event_id:event.id,contact_id:me.id,attendance_status:"registered",payment_status:"pending",source:"line",registered_at:new Date().toISOString(),cancelled_at:null});
-    registerFeeDemo(reg);
+    if(snap) Object.assign(reg,{amount:snap.plan.amount,fee_plan_id:snap.plan.id,fee_plan_name:snap.plan.name}); else registerFeeDemo(reg);
     event.registration_count=(event.registration_count||0)+1; persist();
     return {ok:true,already:false,name:me.name,eventTitle:event.title};
   }
@@ -1622,12 +1683,14 @@ function demoRegisterForm(me,payload){
   if(had+fam.length>form.family_max) return {error:form.family_max?`這場活動最多可以幫 ${form.family_max} 位家人報名`:"這場活動不開放幫家人報名"};
   let reg=regs.find(r=>r.contact_id===me.id); const already=Boolean(reg&&!reg.cancelled_at);
   if(regs.filter(r=>!r.cancelled_at).length+(already?0:1)+fam.length>event.capacity) return {error:"名額不足，無法全部報名（含家人）"};
+  let snap=null;
+  if(feeModeOf(event)==="plans"&&!already){ snap=demoPlanSnapshot(event,payload.fee_plan_id); if(snap.error) return {error:snap.error}; }
   const now=new Date().toISOString(), p=x.value;
   if("emergency_name" in p) Object.assign(me,{emergency_name:p.emergency_name,emergency_relation:p.emergency_relation,emergency_phone:p.emergency_phone});
   if(p.birth_date&&!me.birth_date) me.birth_date=p.birth_date;
   if(p.national_id&&!me.national_id){ me.national_id=p.national_id; me.national_id_masked=maskNationalId(p.national_id); }
-  if(!reg){ reg={id:crypto.randomUUID(),event_id:event.id,contact_id:me.id,attendance_status:"registered",payment_status:"pending",source:"line",registered_at:now,cancelled_at:null,answers:a.value}; state.registrations.push(reg); registerFeeDemo(reg); }
-  else if(!already){ Object.assign(reg,{attendance_status:"registered",cancelled_at:null,registered_at:now,answers:a.value}); registerFeeDemo(reg); }
+  if(!reg){ reg={id:crypto.randomUUID(),event_id:event.id,contact_id:me.id,attendance_status:"registered",payment_status:"pending",source:"line",registered_at:now,cancelled_at:null,answers:a.value}; state.registrations.push(reg); if(snap) Object.assign(reg,{amount:snap.plan.amount,fee_plan_id:snap.plan.id,fee_plan_name:snap.plan.name}); else registerFeeDemo(reg); }
+  else if(!already){ Object.assign(reg,{attendance_status:"registered",cancelled_at:null,registered_at:now,answers:a.value}); if(snap) Object.assign(reg,{amount:snap.plan.amount,fee_plan_id:snap.plan.id,fee_plan_name:snap.plan.name}); else registerFeeDemo(reg); }
   else reg.answers=a.value;
   me.last_interaction_at=now;
   if(fam.length) reg.group_id=reg.group_id||reg.id;
@@ -1701,7 +1764,7 @@ async function loadMe(){
   const row=(label,value)=>`<div class="kpi-line"><span>${label}</span><strong>${value?escapeHtml(value):`<span class="muted">未填</span>`}</strong></div>`;
   const pillClass={attended:"",registered:"",cancelled:" off",absent:" warn"};
   const head=`<section class="card profile-head student-card"><div class="avatar" aria-hidden="true">${escapeHtml((c.name||"?").slice(0,1))}</div><div><h1>${escapeHtml(c.name)}</h1><p class="muted">會員編號 ${escapeHtml(c.member_no||"")}・${escapeHtml(c.region_name||"尚未分區")}${c.display_name&&!studentMode()?`・LINE：${escapeHtml(c.display_name)}`:""}</p>${studentMode()?`<button class="secondary small" data-action="student-logout">登出</button>`:""}</div></section>`;
-  const feePill=r=>(r.payment_status==="pending"&&!isFreeEvent(r.events))?` <span class="pill warn">待繳費</span>`:"";
+  const feePill=r=>{ if(r.payment_status!=="pending"||isFreeEvent(r.events)) return ""; const amt=amountText(r.amount); return ` <span class="pill warn">待繳費${amt?` ${amt}`:""}</span>`; };
   const profile=`<section class="card student-card"><div class="card-title"><h2>個人資料</h2><button class="secondary small" data-action="edit-profile">修改資料</button></div>${row("姓名",c.name)}${row("手機",showPhone(c.phone))}${row("Email",c.email)}${row("性別",c.gender)}${row("生日",c.birth_date)}${row("居住縣市",c.residence_city)}${row("地址",c.address)}${row("接收活動訊息",c.marketing_consent?"已同意":"未同意")}</section>
     <p style="text-align:center;margin:12px 0 0"><a href="#myevents">查看我的活動 →</a></p>`;
   const events=`<section class="card student-card"><h2>即將參加</h2>${upcoming.length?`<ul class="student-list">${upcoming.map(r=>item(eventLabel(r.events),`${fmtDate(r.events.starts_at)}・${escapeHtml(r.events.location||"")}`,`<span class="pill">已報名</span>${feePill(r)}`)).join("")}</ul>`:`<p class="muted">目前沒有即將參加的活動。</p>`}</section>
@@ -2113,7 +2176,7 @@ function eventForm(id,newKind){
     <div class="field full"><label>場次</label><div id="sessionRows">${rows.map(sessionRow).join("")}</div><div class="actions"><button type="button" class="secondary" data-action="add-session">＋ 新增場次</button></div><small class="muted">只有一場就不用填場次名稱。兩場以上會共用一張報名 QR，學員報名時勾選要參加哪幾場；每場各自計算名額、各自報到。</small></div>
     <div class="field"><label>報名截止 *</label><input name="registration_deadline" type="datetime-local" required value="${toLocalInput(e.registration_deadline)}"></div>
     <div class="field"><label>地點 *</label><input name="location" required value="${v("location")}"></div>
-    <div class="field"><label>費用說明</label><input name="fee_note" value="${v("fee_note")}"></div>
+    ${feeModeBlock(e,rows)}
     ${eventOrgFields(e)}
     ${formEditor(e,rows.length)}
     <div class="field"><label>狀態</label><select name="status">${Object.entries(EVENT_STATUS_LABELS).map(([k,label])=>`<option value="${k}" ${e.status===k?"selected":""}>${label}</option>`).join("")}</select></div>
@@ -2123,6 +2186,54 @@ function eventForm(id,newKind){
 // 編輯活動裡的一個場次：已存在的場次帶 data-id，新增的沒有
 function sessionRow(s={}){
   return `<div class="session-row" data-id="${s.id||""}" data-regs="${s.registration_count||0}"><div class="field"><label>場次名稱</label><input name="s_name" maxlength="60" placeholder="例如：放鬆實驗室" value="${escapeHtml(s.session_name||"")}"></div><div class="field"><label>開始時間 *</label><input name="s_start" type="datetime-local" required value="${toLocalInput(s.starts_at)}"></div><div class="field"><label>結束時間</label><input name="s_end" type="datetime-local" value="${toLocalInput(s.ends_at)}"></div><div class="field"><label>名額 *</label><input name="s_capacity" type="number" min="1" max="3000" required value="${s.capacity??24}"></div><button type="button" class="secondary small" data-action="remove-session">移除</button></div>`;
+}
+// ───── 費用（免費／單一費用／多種費用方案）編輯 ─────
+function feeModeBlock(e,rows){
+  const mode=feeModeOf(e), g=e.series_id||e.id;
+  const plans=(state.fee_plans||[]).filter(p=>p.group_id===g).sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
+  return `<div class="field full fee-block"><label>費用</label>
+    <div class="fee-modes">${[["free","免費"],["single","單一費用"],["plans","多種費用方案"]].map(([k,l])=>`<label class="radio-pill"><input type="radio" name="fee_mode" value="${k}" data-action="fee-mode" ${mode===k?"checked":""}> ${l}</label>`).join("")}</div>
+    <div data-fee="single" ${mode==="single"?"":"hidden"}><div class="form-grid">
+      <div class="field"><label>金額（數字，免費填 0）</label><input name="fee_amount" type="number" min="0" max="10000000" value="${e.fee_amount??""}"></div>
+      <div class="field"><label>費用說明（補充文字，選填）</label><input name="fee_note" value="${escapeHtml(e.fee_note||"")}"></div>
+    </div></div>
+    <div data-fee="plans" ${mode==="plans"?"":"hidden"}>
+      <div id="planRows">${plans.map(p=>feePlanRow(p,rows)).join("")}</div>
+      <div class="actions"><button type="button" class="secondary" data-action="add-plan">＋ 新增方案</button></div>
+      <small class="muted">多場次「依場次計費」：方案金額是每一場的價格，學員勾幾場就付幾場。名額留空＝不限。</small>
+    </div></div>`;
+}
+function feePlanRow(p={},sessions=[]){
+  const multi=(sessions||[]).length>1;
+  const sessBox=multi?`<div class="field full"><label>適用場次（不勾＝全部場次）</label><div class="plan-sessions">${sessions.filter(s=>s.id).map(s=>`<label><input type="checkbox" data-p="session" value="${s.id}" ${(p.session_ids||[]).includes(s.id)?"checked":""}> ${escapeHtml(s.session_name||fmtDate(s.starts_at))}</label>`).join("　")}</div></div>`:"";
+  return `<div class="plan-row" data-id="${p.id||""}">
+    <div class="field"><label>方案名稱 *</label><input data-p="name" maxlength="60" value="${escapeHtml(p.name||"")}" placeholder="例如：早鳥價"></div>
+    <div class="field"><label>金額（每場） *</label><input data-p="amount" type="number" min="0" max="10000000" value="${p.amount??""}"></div>
+    <div class="field"><label>名額（選填）</label><input data-p="quota" type="number" min="0" max="100000" value="${p.quota??""}"></div>
+    <div class="field full"><label>資格說明（選填）</label><input data-p="eligibility" maxlength="200" value="${escapeHtml(p.eligibility||"")}" placeholder="例如：限協會會員"></div>
+    <div class="field"><label>開放時間（選填）</label><input data-p="opens_at" type="datetime-local" value="${toLocalInput(p.opens_at)}"></div>
+    <div class="field"><label>截止時間（選填）</label><input data-p="closes_at" type="datetime-local" value="${toLocalInput(p.closes_at)}"></div>
+    ${sessBox}
+    <div class="actions"><button type="button" class="danger small" data-action="remove-plan">刪除方案</button></div>
+  </div>`;
+}
+function syncFeeMode(){
+  const mode=document.querySelector("#eventForm [name=fee_mode]:checked")?.value||"single";
+  const s=document.querySelector("#eventForm [data-fee=single]"), p=document.querySelector("#eventForm [data-fee=plans]");
+  if(s) s.hidden=mode!=="single"; if(p) p.hidden=mode!=="plans";
+}
+// 從畫面讀出目前的場次列（給方案「適用場次」勾選用）
+function currentSessionRows(){
+  return [...document.querySelectorAll("#sessionRows .session-row")].map(r=>({id:r.dataset.id||"",session_name:r.querySelector("[name=s_name]").value,starts_at:r.querySelector("[name=s_start]").value}));
+}
+// 讀出方案編輯區；空名稱的列略過
+function readPlansEditor(){
+  return [...document.querySelectorAll("#planRows .plan-row")].map(r=>{
+    const get=k=>r.querySelector(`[data-p=${k}]`)?.value||"";
+    const session_ids=[...r.querySelectorAll("[data-p=session]:checked")].map(c=>c.value);
+    const clean=cleanFeePlan({name:get("name"),amount:get("amount"),eligibility:get("eligibility"),quota:get("quota"),opens_at:get("opens_at"),closes_at:get("closes_at"),session_ids});
+    return clean?{id:r.dataset.id||null,...clean}:null;
+  }).filter(Boolean);
 }
 // ───── 報名問卷與家庭報名（活動編輯）─────
 // 題目 id 建立後就不變（答案用 id 對應），改題目文字不影響已收到的答案
@@ -2229,7 +2340,15 @@ async function saveEvent(data){
   const visibility=VISIBILITY_LABELS[data.visibility]?data.visibility:"org";
   const shared_org_ids=visibility==="selected"?[...document.querySelectorAll("#eventForm [name=shared_org]:checked")].map(x=>x.value).filter(x=>x!==org_id):[];
   if(visibility==="selected"&&!shared_org_ids.length)return toast("請勾選要分享給哪些單位，或把共享改成「單位內部」");
-  const shared={org_id,visibility,shared_org_ids,title:data.title.trim(),theme:data.theme||"",registration_deadline:iso(data.registration_deadline),location:data.location,fee_note:data.fee_note||"免費",status:data.status,kind:data.kind==="course"?"course":"event"};
+  // 費用：免費／單一費用（數字金額＋補充文字）／多種費用方案
+  const feeMode=["free","single","plans"].includes(data.fee_mode)?data.fee_mode:"single";
+  let fee_amount=null, fee_note="免費";
+  if(feeMode==="single"){
+    fee_amount=data.fee_amount===""||data.fee_amount==null?null:Math.max(0,Math.min(10000000,Math.round(Number(data.fee_amount))||0));
+    fee_note=(data.fee_note||"").trim()||(fee_amount!=null?feeDisplay({fee_mode:"single",fee_amount}):"免費");
+  } else if(feeMode==="plans"){ fee_note="多種方案"; }
+  const shared={org_id,visibility,shared_org_ids,title:data.title.trim(),theme:data.theme||"",registration_deadline:iso(data.registration_deadline),location:data.location,fee_mode:feeMode,fee_amount,fee_note,status:data.status,kind:data.kind==="course"?"course":"event"};
+  if(feeMode==="plans"&&!readPlansEditor().length) return toast("多種費用方案：請至少新增一個方案，或改回單一費用／免費");
   // 活動 DM：只有真的換圖／移除時才寫入 image_url，資料庫還沒加欄位前，一般編輯不受影響
   let image_url=before?.image_url||null;
   if(data.remove_image) image_url=null;
@@ -2254,25 +2373,53 @@ async function saveEvent(data){
   const current=state.events.find(e=>e.id===data.event_id);
   const series_id=rows.length>1?(seriesOf(state.events,current||{}).find(e=>e.series_id)?.series_id||crypto.randomUUID()):null;
   const removed=(data.removed_sessions||"").split(",").filter(Boolean);
+  // 多費用方案：讀出方案列（存完活動、拿到場次 id 後再寫 fee_plans）
+  const planRows=feeMode==="plans"?readPlansEditor():[];
+  const savedIds=[];
   if(live){
     for(const id of removed){ const {error}=await supabase.rpc("admin_delete_event",{p_event_id:id,p_confirm_title:null}); if(error)return toast("移除場次失敗："+error.message); }
     for(const r of rows){
       const fields={...shared,session_name:r.session_name,starts_at:r.starts_at,ends_at:r.ends_at,capacity:r.capacity,series_id};
-      const {error}=r.id?await supabase.from("events").update(fields).eq("id",r.id):await supabase.from("events").insert(fields);
-      if(error){ await loadLiveData(); return toast("儲存失敗："+error.message); }
+      if(r.id){ const {error}=await supabase.from("events").update(fields).eq("id",r.id); if(error){ await loadLiveData(); return toast("儲存失敗："+error.message); } savedIds.push(r.id); }
+      else { const {data:ins,error}=await supabase.from("events").insert(fields).select("id").single(); if(error){ await loadLiveData(); return toast("儲存失敗："+error.message); } savedIds.push(ins.id); }
     }
+    const err=await syncFeePlans({live:true,feeMode,group_id:series_id||savedIds[0],org_id,planRows});
+    if(err) return toast(err);
     await loadLiveData();
   } else {
     state.events=state.events.filter(e=>!removed.includes(e.id));
     for(const r of rows){
       const fields={...shared,session_name:r.session_name,starts_at:r.starts_at,ends_at:r.ends_at,capacity:r.capacity,series_id};
-      if(r.id) Object.assign(state.events.find(e=>e.id===r.id),fields); else state.events.push({id:crypto.randomUUID(),...fields,registration_count:0});
+      if(r.id){ Object.assign(state.events.find(e=>e.id===r.id),fields); savedIds.push(r.id); }
+      else { const nid=crypto.randomUUID(); state.events.push({id:nid,...fields,registration_count:0}); savedIds.push(nid); }
     }
+    await syncFeePlans({live:false,feeMode,group_id:series_id||savedIds[0],org_id,planRows});
   }
   audit(`${data.event_id?"編輯":"建立"}${K}`,shared.title+(rows.length>1?`（${rows.length} 場）`:"")); persist(); closeModal();
   // 在編輯表單把類型改成另一類時，跳到那一類的管理頁，才看得到剛存的這筆
   const home=KIND_ROUTES[shared.kind]; if(["events","courses"].includes(route())&&route()!==home) location.hash=home; else render();
   toast(`${K}已${data.event_id?"更新":"建立"}`);
+}
+// 把方案編輯區的結果寫回 fee_plans：非 plans 模式＝清掉這組的方案；plans 模式＝新增/更新/刪除。
+// 回傳錯誤字串（live 寫入失敗）或 undefined。
+async function syncFeePlans({live:isLive,feeMode,group_id,org_id,planRows}){
+  if(!group_id) return;
+  const existing=(state.fee_plans||[]).filter(p=>p.group_id===group_id);
+  const keep=new Set(planRows.map(p=>p.id).filter(Boolean));
+  if(isLive){
+    for(const ex of existing){ if(!keep.has(ex.id)){ const {error}=await supabase.from("fee_plans").delete().eq("id",ex.id); if(error) return "費用方案刪除失敗："+error.message; } }
+    if(feeMode==="plans"){
+      for(const [i,p] of planRows.entries()){
+        const fields={group_id,org_id,name:p.name,amount:p.amount,eligibility:p.eligibility,quota:p.quota,session_ids:p.session_ids,opens_at:p.opens_at,closes_at:p.closes_at,sort_order:i+1,is_active:true};
+        const {error}=p.id?await supabase.from("fee_plans").update(fields).eq("id",p.id):await supabase.from("fee_plans").insert(fields);
+        if(error) return "費用方案儲存失敗："+error.message;
+      }
+    }
+    return;
+  }
+  // demo：整組重寫
+  state.fee_plans=(state.fee_plans||[]).filter(p=>p.group_id!==group_id);
+  if(feeMode==="plans") planRows.forEach((p,i)=>state.fee_plans.push({id:p.id||crypto.randomUUID(),group_id,org_id,name:p.name,amount:p.amount,eligibility:p.eligibility,quota:p.quota,session_ids:p.session_ids,opens_at:p.opens_at,closes_at:p.closes_at,sort_order:i+1,is_active:true}));
 }
 
 // ───── Excel／CSV 匯入（總管理）─────
@@ -2556,6 +2703,10 @@ async function onClick(event){
   if(action==="edit-event"){ event.preventDefault(); return eventForm(btn.dataset.id,btn.dataset.kind); }
   if(action==="manual-print"){ const f=$("#manualFrame"); try{ f.contentWindow.focus(); f.contentWindow.print(); }catch{ window.open(f.src,"_blank","noopener"); } return; }
   if(action==="add-session") return addSessionRow();
+  if(action==="fee-mode") return syncFeeMode();
+  if(action==="plan-pick") return updateFeeDue(btn);
+  if(action==="add-plan"){ const box=$("#planRows"); box.insertAdjacentHTML("beforeend",feePlanRow({},currentSessionRows())); return box.lastElementChild.querySelector("[data-p=name]").focus(); }
+  if(action==="remove-plan") return btn.closest(".plan-row").remove();
   if(action==="add-family") return addFamilyCard(btn);
   if(action==="remove-family") return removeFamilyCard(btn);
   if(action==="edit-reg-form"){ if(regMember) regMember.editing=true; return render(); }
@@ -2740,7 +2891,7 @@ document.addEventListener("change",event=>{
 });
 
 async function onSubmit(event){
-  if(!["assignForm","rejectCampaignForm","eventForm","campaignForm","registrationForm","quickRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","regPayForm","tagCreateForm","tagEditForm","tagCategoryForm","tagExportForm","tagAssignForm","ctagCreateForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","staffDeleteForm","deleteContactForm","deleteEventForm","regFormMember","profileForm","signinForm","activateForm","studentLinkForm","studentPwForm","applyForm"].includes(event.target.id))return;
+  if(!["assignForm","rejectCampaignForm","eventForm","campaignForm","registrationForm","quickRegisterForm","planRegisterForm","loginForm","anonymizeForm","inviteForm","contactForm","signupForm","sponsorForm","markPaidForm","regPayForm","tagCreateForm","tagEditForm","tagCategoryForm","tagExportForm","tagAssignForm","ctagCreateForm","batchSponsorForm","setPasswordForm","forgotForm","staffEditForm","staffDeleteForm","deleteContactForm","deleteEventForm","regFormMember","profileForm","signinForm","activateForm","studentLinkForm","studentPwForm","applyForm"].includes(event.target.id))return;
   event.preventDefault(); const data=Object.fromEntries(new FormData(event.target));
   if(event.target.id==="contactForm") return saveContact(data);
   if(event.target.id==="profileForm") return saveProfile(event.target,data);
@@ -2762,6 +2913,7 @@ async function onSubmit(event){
   if(event.target.id==="batchSponsorForm") return saveBatchSponsor(data);
   if(event.target.id==="eventForm") return saveEvent(data);
   if(event.target.id==="regFormMember") return submitRegFormMember(event.target);
+  if(event.target.id==="planRegisterForm") return submitPlanRegister(event.target);
   if(event.target.id==="campaignForm"){
     const audience=["all","selected","broadcast"].includes(data.audience)?data.audience:"event";
     if(!campaignAudiences(who(),orgList()).includes(audience)) return toast("你沒有權限選這種發送對象");
@@ -2838,6 +2990,10 @@ function sessionIds(form){
 async function submitRegistration(data,ids){
   if(!ids.length) return toast("請至少勾選一個場次");
   if(!GENDERS.includes(data.gender))return toast("請選擇性別");
+  // 多費用方案：plans 模式要先選方案；把 fee_plan 正規化成 fee_plan_id 一路帶下去
+  const planEvent=state.events.find(e=>e.id===ids[0]);
+  if(planEvent&&feeModeOf(planEvent)==="plans"&&!data.fee_plan) return toast("請選擇費用方案");
+  data.fee_plan_id=data.fee_plan||null; delete data.fee_plan;
   // 有問卷的單場活動：先在手機上檢查問卷；資料先放進 data，LINE 登入回來後才不會不見
   const formEvent=ids.length===1&&state.events.find(e=>e.id===ids[0]);
   let regPayload=null;
@@ -2861,7 +3017,7 @@ async function submitRegistration(data,ids){
   } else { const error=demoRegister(data); if(error) return toast(error); }
   let famNote="";
   if(regPayload){
-    const r=await memberApi("register_form",{event_id:data.event_id,...regPayload}); if(r.pending) return;
+    const r=await memberApi("register_form",{event_id:data.event_id,...regPayload,fee_plan_id:data.fee_plan_id||null}); if(r.pending) return;
     famNote=r.error?`。報名已完成，但問卷沒有存到（${escapeHtml(r.error)}），請回到活動頁按「修改問卷」補填`:r.family?`，也幫 ${r.family} 位家人報名了`:"";
     await refreshEventCounts();
   }
@@ -2893,9 +3049,12 @@ function demoRegister(data){
     const existing=state.registrations.find(r=>r.event_id===data.event_id&&r.contact_id===contact.id); const e=state.events.find(x=>x.id===data.event_id);
     if(existing&&!existing.cancelled_at) return "你已經報名過這場活動";
     if(eventState(e)!=="報名中") return `目前${eventState(e)}`;
+    let snap=null;
+    if(feeModeOf(e)==="plans"){ snap=demoPlanSnapshot(e,data.fee_plan_id); if(snap.error) return snap.error; }
     if(existing) Object.assign(existing,{attendance_status:"registered",cancelled_at:null,registered_at:new Date().toISOString()});
     else state.registrations.push({id:crypto.randomUUID(),event_id:data.event_id,contact_id:contact.id,attendance_status:"registered",payment_status:"pending",registered_at:new Date().toISOString(),cancelled_at:null,lead_city:data.lead_city||null,contact_mode:data.contact_mode||null,sleep_issue:data.sleep_issue||null,stress_issue:data.stress_issue||null,weekly_practice_interest:data.weekly_practice_interest==="on",online_trial_interest:data.online_trial_interest==="on",...snsAttribution(data)});
-    registerFeeDemo(existing||state.registrations[state.registrations.length-1]);
+    const newReg=existing||state.registrations[state.registrations.length-1];
+    if(snap) Object.assign(newReg,{amount:snap.plan.amount,fee_plan_id:snap.plan.id,fee_plan_name:snap.plan.name}); else registerFeeDemo(newReg);
     e.registration_count++;
     return null;
 }

@@ -483,16 +483,80 @@ export function eventLabel(event) {
   return event.session_name ? `${event.title}｜${event.session_name}` : event.title;
 }
 
+// 費用模式：free／single／plans。舊活動沒有 fee_mode 欄位時當作 single（照 fee_note 判斷）。
+export function feeModeOf(event) {
+  const m = event?.fee_mode;
+  return m === "free" || m === "plans" ? m : "single";
+}
+
 // 從費用說明抓金額（例如「體驗活動 NT$300」→ 300；「免費」→ null）
+// 單一費用模式若有數字欄位 fee_amount，優先用它（較準，不會抓到年份等雜數）。
 export function feeAmount(event) {
+  if (feeModeOf(event) === "single" && event?.fee_amount != null && event.fee_amount !== "") {
+    return Number(event.fee_amount);
+  }
   const m = String(event?.fee_note || "").replace(/,/g, "").match(/\d+/);
   return m ? Number(m[0]) : null;
 }
 
-// 免費活動／課程：費用說明空白、寫「免費」或金額 0；這種場次的名單不需要繳費功能
+// 免費活動／課程：這種場次的名單不需要繳費功能。
+// free 模式＝免費；plans 模式有付費方案＝不免費；single 照費用說明/金額判斷。
 export function isFreeEvent(event) {
+  const mode = feeModeOf(event);
+  if (mode === "free") return true;
+  if (mode === "plans") return false;
   const amount = feeAmount(event), note = String(event?.fee_note || "").trim();
   return amount === 0 || (amount == null && (!note || note.includes("免費")));
+}
+
+// 費用方案（每場價格）：報名 N 場的應繳＝方案金額 × N（依場次計費，決策1）。
+export function planFee(plan, sessionCount = 1) {
+  const a = Number(plan?.amount);
+  return Number.isFinite(a) ? a * Math.max(1, sessionCount) : 0;
+}
+
+// 金額顯示（給畫面用）：免費→「免費」；single→有數字給「NT$X」否則給費用說明文字；plans→「多種方案」。
+export function feeDisplay(event) {
+  const mode = feeModeOf(event);
+  if (mode === "free") return "免費";
+  if (mode === "plans") return "多種方案";
+  const a = feeAmount(event);
+  if (a != null) return a === 0 ? "免費" : `NT$${a.toLocaleString("en-US")}`;
+  return String(event?.fee_note || "免費").trim() || "免費";
+}
+
+// 一個活動（場次）可選的費用方案：同一系列（series_id；單場用活動 id）、啟用中、適用這個場次（session_ids 空＝全部）。
+export function plansForEvent(plans, event) {
+  if (!event) return [];
+  const g = event.series_id || event.id;
+  return (plans || [])
+    .filter(p => p.group_id === g && p.is_active !== false && (!(p.session_ids || []).length || p.session_ids.includes(event.id)))
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || String(a.name || "").localeCompare(String(b.name || "")));
+}
+
+// 整理一筆後台填的方案（統一上下限與型別）；沒填名稱回 null（當空列略過）。
+export function cleanFeePlan(raw = {}) {
+  const name = String(raw.name || "").trim().slice(0, 60);
+  if (!name) return null;
+  const clampInt = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(Number(v) || 0)));
+  const quota = raw.quota === "" || raw.quota == null ? null : clampInt(raw.quota, 0, 100000);
+  return {
+    name,
+    amount: clampInt(raw.amount, 0, 10000000),
+    eligibility: String(raw.eligibility || "").trim().slice(0, 200),
+    quota,
+    session_ids: Array.isArray(raw.session_ids) ? raw.session_ids.filter(Boolean) : [],
+    opens_at: raw.opens_at ? new Date(raw.opens_at).toISOString() : null,
+    closes_at: raw.closes_at ? new Date(raw.closes_at).toISOString() : null
+  };
+}
+
+// 應繳金額的文字（報名列／我的活動用快照）：有金額給「NT$X」否則空字串。
+export function amountText(amount) {
+  if (amount == null || amount === "") return "";
+  const a = Number(amount);
+  if (!Number.isFinite(a)) return "";
+  return a > 0 ? `NT$${a.toLocaleString("en-US")}` : "免費";
 }
 
 export function campaignEligible(contact) {
