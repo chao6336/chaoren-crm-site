@@ -1,4 +1,4 @@
-import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, feeModeOf, feeDisplay, amountText, planFee, plansForEvent, cleanFeePlan, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations, defaultStudentPassword } from "./lib.js?v=20261124-20";
+import { SPONSORSHIPS_ENABLED, ROLE_LABELS, GENDERS, CITIES, visibleContact, eventState, eventSessions, seriesOf, eventLabel, shareUrl, isEventId, isPaidStatus, campaignEligible, toCsv, dashboardStats, ageFrom, maskNationalId, isValidNationalId, scopeContacts, scopeRegistrations, canManageEvents, canBrowseMembers, rosterFor, checkinWindow, checkinProblem, findLegacyContact, ATTENDANCE_LABELS, IMPORT_FIELDS, guessColumns, prepareImportRow, sponsorshipSummary, toCsv as rowsToCsv, COUNTRY_CODES, normalizePhone, displayPhone, splitPhone, outdoorLeadTags, snsAttribution, eventTagsAfterCheckin, checkProfile, historyStatus, studentAuthEmail, checkNewPassword, weekStart, weeklyReport, addUtm, LINK_RE, canHandlePayments, canManageMoney, canCheckin, PERMS, ROLE_PERMS, permsOf, permsToSave, feeAmount, isFreeEvent, feeModeOf, feeDisplay, amountText, planFee, plansForEvent, cleanFeePlan, courseTagsAfterPayment, tagExpiryLabel, tagExpiresAt, parseValidDays, parseTagNames, tagPickerOptions, TAG_PICK_MAX, filterTags, parseTagCsv, matchContactsByKeys, ORGS, ORG_ROLE_LABELS, ORG_PERMS, ORG_ROLE_PERMS, VISIBILITY_LABELS, eventOrg, membershipOf, orgPermsOf, hasOrgPerm, canSeeEventRoster, canCheckinEvent, canManageEventOf, canPayEvent, canPayRegistration, eventsInOrgView, assignedEvents, orgsOf, orgViewer, defaultAssignmentExpiry, orgPermsToSave, rosterForEvents, assignmentFor, canAssignIn, PLATFORM_PERMS, cleanPlatformPerms, hasPlatformPerm, CAMPAIGN_STATUS_LABELS, canWriteCampaign, canUseMessages, campaignAudiences, canDraftForEvent, canEditCampaign, canSendCampaign, canRejectCampaign, QUESTION_TYPES, cleanForm, formEnabled, questionOptions, visibleQuestions, checkAnswers, answerText, RELATIONS, checkFamilyMember, checkRegistrantExtra, groupRoster, filterByAnswer, IMPORT_EXTRA_FIELDS, guessFormColumns, prepareImportAnswers, regionScopeOf, canCheckinRegistration, rosterScopeFor, platformUiKeys, platformPermsToSave, checkinArchived, CONTACT_SORTS, sortContacts, recentRegistrations, defaultStudentPassword } from "./lib.js?v=20261124-21";
 
 const config = window.CRM_CONFIG || {};
 const live = !config.demoMode && config.supabaseUrl && config.supabasePublishableKey;
@@ -221,7 +221,7 @@ function phoneField(label,value="",{required=false,autocomplete=""}={}){
   const options=COUNTRY_CODES.map(([c,text])=>`<option value="${c}" ${c===code?"selected":""}>${text}</option>`).join("")+`<option value="other" ${code==="other"?"selected":""}>其他（號碼請以 + 開頭）</option>`;
   return `<div class="field"><label>${label}${required?" *":""}</label><div class="phone-input"><select name="phone_code" aria-label="國碼">${options}</select><input name="phone" inputmode="tel" ${required?"required":""} ${autocomplete?`autocomplete="${autocomplete}"`:""} placeholder="912345678" value="${escapeHtml(local)}"></div></div>`;
 }
-// 2026-11-24：同一支手機只能有一位會員（資料庫 PHONE_DUPLICATE）；註冊、申請、後台新增時手機／生日／縣市／Email 必填
+// 2026-11-24：同一支手機只能有一位會員（資料庫 PHONE_DUPLICATE）；註冊、申請、後台新增時手機／生日／縣市必填，Email 選填（年長學員多無 Email；用 Email 當登入帳號時才要）
 const PHONE_TAKEN_MSG="這支手機已經是會員了，不能重複建立。請先搜尋這支手機，確認是不是同一個人。";
 const isPhoneDup=e=>/PHONE_DUPLICATE|contacts_phone_unique/.test(String(e?.message||e||""));
 const phoneOwner=(phone,exceptId)=>phone&&state.contacts.find(c=>c.id!==exceptId&&!c.anonymized_at&&c.phone===phone);
@@ -1515,7 +1515,7 @@ function apply(){
       <div class="field full"><label>登入帳號用</label><div class="actions"><label><input type="radio" name="login_type" value="phone" checked> 手機</label><label><input type="radio" name="login_type" value="email"> Email</label></div></div>
       <div class="field"><label>姓名 *</label><input name="name" required maxlength="40" autocomplete="name"></div>
       ${phoneField("手機",'',{required:true,autocomplete:"tel"})}
-      <div class="field"><label id="applyEmailLabel">Email *</label><input name="email" type="email" required maxlength="120" autocomplete="email"></div>
+      <div class="field"><label id="applyEmailLabel">Email（選填）</label><input name="email" type="email" maxlength="120" autocomplete="email"></div>
       ${genderField()}
       <div class="field"><label>出生年月日 *</label><input name="birth_date" type="date" required min="1900-01-01"></div>
       ${cityField("",true)}
@@ -1529,8 +1529,8 @@ function apply(){
 async function submitApply(form,data){
   const ph=readPhone(data); if(ph.error||!ph.phone) return toast(ph.error||"請填寫手機");
   const checked=checkProfile({...data,phone:ph.phone}); if(checked.error) return toast(checked.error);
-  const miss=missingRequired(checked.value); if(miss) return toast(miss);
   const type=data.login_type==="email"?"email":"phone";
+  const miss=missingRequired(checked.value,{emailOptional:type!=="email"}); if(miss) return toast(miss);
   if(type==="email"&&!checked.value.email) return toast("用 Email 當帳號時，請填寫 Email");
   const problem=checkNewPassword(data.password,data.again); if(problem) return toast(problem);
   if(!data.privacy) return toast("請先同意個資告知");
@@ -1795,7 +1795,7 @@ function signupForm(data,next){
     <div class="field"><label>出生年月日 *</label><input name="birth_date" type="date" required min="1900-01-01"></div>
     <div class="field"><label>所屬區域</label><select name="region_id"><option value="">不確定</option>${(data.regions||[]).map(r=>`<option value="${r.id}">${escapeHtml(r.name)}</option>`).join("")}</select></div>
     ${cityField("",true)}
-    <div class="field"><label>Email *</label><input name="email" type="email" required maxlength="120" autocomplete="email"></div>
+    <div class="field"><label>Email（選填）</label><input name="email" type="email" maxlength="120" autocomplete="email"></div>
     <label class="field full"><span><input type="checkbox" name="privacy" required> 我已閱讀並同意<a href="${STUDENT_HOME}privacy.html" target="_blank">個資告知</a>。</span></label>
     <label class="field full"><span><input type="checkbox" name="marketing"> 我同意接收活動與課程訊息，可隨時撤回。</span></label>
     <button class="field full big">${next==="scan"?"送出並完成報到":"送出"}</button></div></form></article>`;
@@ -1804,7 +1804,7 @@ function signupForm(data,next){
 async function submitSignup(data){
   if(!GENDERS.includes(data.gender))return toast("請選擇性別");
   const ph=readPhone(data); if(ph.error) return toast(ph.error); data.phone=ph.phone;
-  const miss=missingRequired(data); if(miss) return toast(miss);
+  const miss=missingRequired(data,{emailOptional:true}); if(miss) return toast(miss);
   const btn=$("#signupForm button"); if(btn)btn.disabled=true;
   const result=await memberApi("signup",{...data,privacy:data.privacy==="on",marketing:data.marketing==="on"}); if(result.pending)return;
   if(result.error){ if(btn)btn.disabled=false; return toast(result.error); }
@@ -2878,7 +2878,7 @@ document.addEventListener("change",event=>{
   if(event.target.name==="audience"&&event.target.closest("#campaignForm")){ document.querySelectorAll("#campaignForm [data-audience]").forEach(el=>el.hidden=el.dataset.audience!==event.target.value); return updateAudienceCount(); }
   if(event.target.name==="event_id"&&event.target.closest("#campaignForm")) return updateAudienceCount();
   if(event.target.name==="login_type"){ const f=event.target.closest("#signinForm,#loginForm"); if(f) f.querySelectorAll("[data-login]").forEach(el=>el.hidden=el.dataset.login!==event.target.value); }
-  if(event.target.name==="login_type"&&event.target.closest("#applyForm")) $("#applyEmailLabel").textContent=event.target.value==="email"?"Email *（登入帳號）":"Email *";
+  if(event.target.name==="login_type"&&event.target.closest("#applyForm")){ const isEmail=event.target.value==="email"; $("#applyEmailLabel").textContent=isEmail?"Email *（登入帳號）":"Email（選填）"; const em=$("#applyForm [name=email]"); if(em) em.required=isEmail; }
   if(event.target.id==="regionFilter"||event.target.id==="contactSort"){ const q=new URLSearchParams(); const r=$("#regionFilter")?.value, s=$("#contactSort")?.value; if(r)q.set("region",r); if(s&&s!=="member_no")q.set("sort",s); location.hash="contacts"+(q.toString()?"?"+q:""); }
   if(event.target.id==="demoUser")switchDemoUser(event.target.value);
   if(event.target.id==="orgPicker")switchOrg(event.target.value);
